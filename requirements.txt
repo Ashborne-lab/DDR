@@ -4,5 +4,3 @@ pandas
 scikit-learn
 streamlit
 plotly
-streamlit-components-v1
-pathlib
