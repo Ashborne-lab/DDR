@@ -1,0 +1,66 @@
+Multimedia Appendix 1: List of diabetes-related keywords for
+the Twitter API tweet extraction
+English keywords
+glucose
+insulin
+blood glucose
+#glucose
+#insulin
+#bloodglucose
+insulin pump
+diabetes
+t1d
+#insulinpump
+#diabetes
+#t1d
+type 1
+t2d
+type 2
+#type1
+#t2d
+#type2
+#bloodsugar
+#dsma
+#type2diabetes
+#doc
+#bgnow
+#wearenotwaiting
+#insulin4all
+dblog
+diyps
+hba1c
+#dblog
+#diyps
+#hba1c
+#cgm
+#freestylelibre
+diabetic
+#gbdoc
+freestyle libre
+#diabetic
+#gdm
+finger prick
+gestational diabetes
+continuous glucose monitoring
+#fingerprick
+#gestational
+#continuousglucosemonitoring
+#changingdiabetes
+#thisisdiabetes
+#lifewithdiabetes
+#diabetesadvocate
+#stopdiabetes
+#diabadass
+#diabetesawareness
+#diabeticproblems
+#justdiabeticthings
+#t1dlookslikeme
+#diaversary
+#diabetestest
+#t2dlookslikeme
+pwd
+#duckfiabetes
+#GBDoc
+#pwd
+#kissmyassdiabetes
+S1: List of diabetes-related keywords for the Twitter API tweet extraction

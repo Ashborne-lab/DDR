@@ -1,0 +1,1579 @@
+Med7: a transferable clinical natural language processing model
+for electronic health records
+Andrey Kormilitzina,1, Nemanja Vacia, Qiang Liua, Alejo Nevado-Holgadoa
+aDepartment of Psychiatry, Warneford Hospital, Oxford, OX3 7JX, UK
+Abstract
+The ﬁeld of clinical natural language processing has been advanced signiﬁcantly since the in-
+troduction of deep learning models. The self-supervised representation learning and the transfer
+learning paradigm became the methods of choice in many natural language processing applica-
+tion, in particular in the settings with the dearth of high quality manually annotated data. Elec-
+tronic health record systems are ubiquitous and the majority of patients’ data are now being col-
+lected electronically and in particular in the form of free text. Identiﬁcation of medical concepts
+and information extraction is a challenging task, yet important ingredient for parsing unstruc-
+tured data into structured and tabulated format for downstream analytical tasks. In this work we
+introduced a named-entity recognition model for clinical natural language processing. The model
+is trained to recognise seven categories: drug names, route, frequency, dosage, strength, form,
+duration. The model was ﬁrst self-supervisedly pre-trained by predicting the next word, using
+a collection of 2 million free-text patients’ records from MIMIC-III corpora and then ﬁne-tuned
+on the named-entity recognition task. The model achieved a lenient (strict) micro-averaged F1
+score of 0.957 (0.893) across all seven categories. Additionally, we evaluated the transferability
+of the developed model using the data from the Intensive Care Unit in the US to secondary care
+mental health records (CRIS) in the UK. A direct application of the trained NER model to CRIS
+data resulted in reduced performance of F1=0.762, however after ﬁne-tuning on a small sample
+from CRIS, the model achieved a reasonable performance of F1=0.944. This demonstrated that
+despite a close similarity between the data sets and the NER tasks, it is essential to ﬁne-tune on
+the target domain data in order to achieve more accurate results.
+Keywords: clinical natural language processing, neural networks, self-supervised learning,
+noisy labelling, active learning
+1. Introduction
+Recent years have seen remarkable technological advances in digital platforms for medicine
+and healthcare. The majority of patients’ medical records are now being collected electronically
+and represent unparalleled opportunities for research, delivering better health care and improv-
+ing patients’ outcomes. However, a substantial amount of patients’ information is contained in
+a free-text form as summarised by clinicians, nurses and caregivers through the interview and
+1Corresponding author: andrey.kormilitzin@psych.ox.ac.uk
+Preprint submitted to Elsevier
+April 27, 2020
+arXiv:2003.01271v2  [cs.CL]  24 Apr 2020
+assessments. The textual medical records contain rich information about a patient’s history as
+it is expressed in natural language and allows to reﬂect nuanced details. However, free-texts
+pose certain challenges in their direct utilisation as opposed to structured and ready-to-use data
+sources. Manual processing of all patients’ free-texts records severely limits the utilisation of
+unstructured data and makes the process of data mining extremely expensive. On the other hand,
+machine learning algorithms are well poised to process a large amount of data, spot unusual in-
+teractions and extract meaningful information. Recent lines of research in the ﬁeld of natural
+language processing (NLP), such as deep contextualised word representations [1], Transformer-
+based architectures [2] and large language models [3], oﬀer new opportunities for clinical natural
+language processing with unstructured medical records [4]. However, despite recent technologi-
+cal advances, there are a number of challenges pertinent to the ﬁeld of clinical NLP which should
+be addressed in order to develop trustworthy models for information extraction. One of the fore-
+most challenges is the dearth of high quality annotated examples to robustly train generalisable
+models. Large amounts of medical data cannot be made publicly available for crowdsourcing
+annotations, similar to ImageNet [5, 6] or by means of Amazon Mechanical Turk, due to ethical
+consideration of patients privacy preservation and information security [7]. Therefore, most of
+the data annotations are made by a limited amount of domain experts, such as clinicians or nurses,
+and cannot be shared. Since 2006, the Informatics for Integrating Biology and the Bedside (i2b2)
+initiative [8] has been organising regular challenges on clinical natural language processing and
+the organisers have been providing a sample of carefully selected for each particular task fully
+anonymised annotated data. The data were sourced from the Medical Information Mart for In-
+tensive Care (MIMIC) electronic health records (EHR) database [9].
+Identiﬁcation of concepts of interest in free-texts is a sub-task of information extraction (IE),
+more commonly known as named-entity recognition (NER). The NER task seeks to classify
+words into predeﬁned categories [10] and to assign labels to them. A robust and accurate NER
+model for identiﬁcation of medical concepts, such as drug names, strength, frequency of ad-
+ministration, reported symptoms, diagnoses, health score and many more, is an essential and
+foundational component of any clinical IE system. However, in order to develop a reliable and
+generalisable NER model for real-world observational data, one should ﬁrst address a number of
+challenges.
+Despite the availability of both, annotated i2b2 data and the entire MIMIC electronic health
+records (EHR) database, the models developed using these data sources are not guaranteed to
+generalise robustly on other, yet similar EHR datasets, even on the same downstream tasks.
+Many supervised learning algorithms are based on the assumption that the training and test sets
+are sampled from the same distribution. However, when the target and the source domains are
+diﬀerent, it is expected that the model will underperform [11]. One of the potential solutions to
+transferability of a model trained to recognise concepts from labelled data in a source domain
+that also performs well on a diﬀerent but related target domain, regarded as domain adaptation
+[12, 13].
+In this study we address the aforementioned problems by implementing three strategies. First,
+the underlying deep neural network language model was self-supervisedly pre-trained on the
+entire MIMIC-III corpora comprising more than 2 million documents using the cloze-style ap-
+proach [14]. Second, using the weak-supervision method [15], we developed synthetic training
+data with noisy labels. Lastly, we synergistically incorporated all ingredients into an active learn-
+ing with human-in-the-loop approach to maximise the accuracy of the NER model.
+Additionally, we demonstrated that the developed NER model trained on a source domain
+from the intensive care MIMIC EHR data in the US, failed to generalise well on the target domain
+2
+sourced from the secondary care mental health Clinical Record Interactive Search system (CRIS)
+in the United Kingdom. We also showed that using domain adaption, the NER model could be
+adequately transferred from MIMIC to CRIS.
+2. Related work
+The topic of clinical natural language processing and information extraction has been actively
+researched over the past years, in particular with the introduction and adoption of electronic
+health records platforms. The methods have evolved from simple logic and rule-based systems
+to complex deep learning architectures [16, 17]. One of the common approaches to information
+extraction is by transforming free text data into coded representation via lookup tables, such as
+universal medical language system (UMLS) [18] or structured clinical vocabulary for use in an
+electronic health record (SNOMED CT). Some rule-based systems used semantic lexicons to
+identify concepts in biomedical literature [19] with more complex linguistic features. With the
+advances in machine learning algorithms, such methods as hidden Markov models and condi-
+tional random ﬁelds [20] were used to label entities for the NER task. In in last decade, deep
+learning methods have played an essential role in developing more capable models for natural
+language processing and in particular, in the biomedical domain. Word embeddings [21, 22]
+were introduced as numerical representation of textual data and were used as input layers to
+deep neural networks. For a comprehensive review on word embeddings for clinical applications
+please refer to [23]. More recently, the unsupervised model pre-training on a large collection of
+unlabelled data with further ﬁne-tuning on a downstream task, has taken oﬀand demonstrated its
+high potential [24]. Since the introduction of the Transformer-based deep neural network archi-
+tectures, such as BERT [3], Roberta [25], XLNet [26] and others, the transfer learning approach
+of reusing pre-trained models became the method of choice for the majority of NLP tasks. Some
+notable examples of pre-trained deep learning models for biomedical natural language processing
+are: BioBERT [27] for text-mining, ClinicalBERT [28, 29] for contextual word representations
+ﬁne-tuned on the electronic health records and predicting hospital readmission. Another open
+source Python library ’scispaCy’ [30] was recently introduced for biomedical natural language
+processing. In this work we developed an open source named-entity recognition model dedicated
+to identiﬁcation of seven categories related to medications mentioned in free-text electronic pa-
+tient records.
+3. Materials and Methods
+3.1. Data
+The annotated data set was sourced from MIMIC-III (Medical Information Mart for Inten-
+sive Care-III) electronic health records data base [9] as part of the Track 2 of The 2018 National
+NLP Clinical Challenges (n2c2) Shared Task on drug related concepts extraction, including ad-
+verse drug events (ADE) and reasons for prescription [31]. The data set comprised a collection
+of discharge letters from the Intensive Care Unit (ICU) and contained very rich and detailed in-
+formation about medications used for treatment. The data set was randomly split and provided
+by the organisers into training and test sets with 303 and 202 documents respectively. The doc-
+uments were annotated for nine categories: ADE, Dosage, Drug, Duration, Form, Frequency,
+Reason, Route and Strength. For the purpose of the current work we considered only seven
+drug-related categories and discarded two categories such as ADE and Reason. We aimed to
+3
+develop a model for medications and their related information extraction which will be beneﬁ-
+cial to biomedical community and be robustly used in a variety of downstream nature language
+processing tasks using free text medical records. The description of the data sets and annotation
+statistics are summarised in Table 1.
+Types of annotated entities
+Train
+Test
+Total
+Dosage
+4227
+2681
+6908
+Drug
+16257
+10575
+26832
+Duration
+592
+378
+970
+Form
+6657
+4359
+11016
+Frequency
+6281
+4012
+10293
+Route
+5460
+3513
+8973
+Strength
+6694
+4230
+10924
+Number of documents
+303
+202
+505
+Total number of words
+957972
+627771
+1585743
+Total number of unique words
+27602
+21729
+35763
+Table 1: Distribution of gold-annotated entities and text summary statistics of the training and test data sets. The number
+of unique tokens is computed by lowercasing words.
+In addition to MIMIC-III and 2018 n2c2 data sets, we evaluated the developed model on elec-
+tronic medical records sourced from the Clinical Record Interactive Search (UK-CRIS) platform,
+which is the largest secondary care mental health database in the United Kingdom. UK-CRIS
+contains more than 500 million clinical notes from 2.7 million de-identiﬁed patient records from
+12 National Health Service (NHS) Network Partners across the UK 2.
+3.2. Methods
+3.2.1. Text pre-processing
+In order to compare the performance of the developed medication extraction model using
+MIMIC-III (n2c2 2018) and UK-CRIS data, basic text cleaning and pre-processing steps were
+taken to standardise texts. UK-CRIS notes that were uploaded as scanned documents and trans-
+formed into electronic texts via optical character recognition (OCR) process, were cleaned from
+such artefacts as email addresses, non-ASCII characters, website URLs, HTML or XML tags.
+Additionally, standard escape sequences (’\t’, ’\n’ and ’\r’) were also removed and the oﬀsets
+of gold-annotated entities were adjusted accordingly.
+3.2.2. Self-supervised learning
+The main obstacle to developing an accurate information extraction model is the dearth of
+a suﬃcient amount of high-quality annotated data to train the model. In contrast to publicly
+available large manually annotated data sets for computer vision [5, 6] and for various natural
+language processing downstream tasks [32, 33, 34] manually annotated texts for clinical concepts
+extraction are quite rare [31]. The shortage of annotated clinical data is mainly due to privacy
+concerns and potential identiﬁcation of personal medical information of patients. Several lines
+of research have addressed the problem of learning from limited annotated data in the clinical
+2https://crisnetwork.co
+4
+domain [35, 36, 37] and pre-training of the underlying language model and word representations
+generally leads to better performance with less data [24].
+In this work, we used the spaCy’s 3 implementation of a cloze-style word reconstruction, sim-
+ilar to the masked language model objectives introduced in BERT [3], but instead of predicting
+the exact word identiﬁer from the vocabulary, the GloVe [22] word’s vector was predicted using
+a static embedding table with a cosine loss function. The pre-trained language model was then
+used to initialise the weights of convolutional neural network layers, rather than starting with ran-
+dom weights. We experimented with various combinations of hyperparameters of the language
+model, such as the number of rows and width of embedding tables and a depth of convolutional
+layers.
+3.2.3. Named entity recognition model
+The task of locating concepts of interest in unstructured text and their subsequent classiﬁca-
+tion into predeﬁned categories, for example: drug names, dosages or frequency of administration
+is a sub-task of information extraction and called named-entity recognition (NER). There are
+various implementations of NER systems, ranging from rule-based string matching approaches
+[10] to complex Transformer models [2] or their hybrid combinations. In this work the named-
+entity recognition model for extraction of medication information was implemented in Python
+3.7 using spaCy open source library for NLP tasks [38]. Although there exists a good number of
+NLP libraries, such as: NLTK [39], NLP4J [40], Stanford CoreNLP [41], Apache OpenNLP and
+a very recent open source collection of Transformer-based models from Hugging Face Inc. [42],
+the spaCy library is optimised for speed on CPUs, has an intuitive API and easily integrates with
+the active learning-based annotation tool Prodigy [43]. The architecture of SpaCy’s NER model
+is based on convolutional neural networks with tokens represented as hashed Bloom embeddings
+[44] of preﬁx, suﬃx and lemmatisation of individual words augmented with a transition-based
+chunking model [45]. We also experimented with various combinations of hyperparameters of
+the neural network architecture, dropout rates, batch compounding, learning rate and regularisa-
+tion schemes. We set aside 30 documents (10%) sampled at random from the training data as a
+validation set.
+3.2.4. Model training augmentation with bootstrapped noisy labels
+Several recent lines of research have demonstrated a clear beneﬁt in terms of achieving higher
+accuracy and better generalisation of neural networks trained with corrupted, noisy and syn-
+thetically augmented data [46, 47, 48, 49]. Training with data augmentation also alleviates the
+problem of learning from a limited amount of manually annotated data. Similar to the idea pre-
+sented in ’Snorkel’ [50], we designed a number of labelling functions (LF) by compiling a list
+of rules and keyword patterns for all seven named-entity categories. Additionally, we exploited
+a ’sense2vec’ approach [51] which was ﬁne-tuned on the entire MIMIC-III corpora to boot-
+strap keywords and patterns. ’Sense2vec’ is a more complex version of the ’Word2vec’ method
+[52] for representation of words as vectors. The major improvement over ’word2vec’ is that
+’sense2vec’ also learns from linguistic annotations of words for sense disambiguation in their
+embeddings.
+The resulting labelling functions were used to created a ’silver’ training set consisting of
+annotated data by string pattern matching. The NER model was then trained by using a combi-
+nation of gold and silver annotated examples in each batch. In order to prevent data leakage and
+3https://spacy.io
+5
+Conﬁguration
+Width
+Depth
+Time
+Size
+(default)
+96
+4
+73
+3.8
+128
+8
+90
+18.3
+256
+8
+118
+47.6
+256
+16
+164
+66.1
+Number of documents
+2,083,054
+Number of words
+3,129,334,419
+Table 2: Model pre-training characteristics for various combi-
+nations of convolutional layers dimensions. Time and the re-
+sulting model size are reported in minutes and megabytes (MB)
+respectively.
+0
+50
+100
+150
+200
+250
+300
+Epoch
+17.25
+17.50
+17.75
+18.00
+18.25
+18.50
+Loss
+Configuration
+(96, 4)
+(128, 8)
+(256, 8)
+(256, 16)
+Figure 1: The decaying loss of pre-trained models.
+a biased inﬂation of the performance metrics, such as precision and recall, the model was tested
+only on gold annotated data set comprising 202 documents (cf. Table 1) provided by the n2c2
+2018 challenge.
+3.2.5. Model evaluation
+In order to estimate the performance of the proposed named-entity recognition model, we
+used the evaluation schema proposed in SemEval’13 and outlined in Appendix A. The evaluation
+schema comprised a number of potential errors categories produced by the model and the model
+performance metrics, such as precision and recall were computed using the expressions A.1.
+Under the current evaluation schema, partial match was considered as an exact match between
+the gold-annotated and the predicted labels while no restriction was imposed on the boundaries
+of the tokens. The rationale behind this approach was obvious from the ambiguity in gold-
+annotations examples corresponding to the same concept. For example, both sequences ’for 3
+weeks’ and ’3 weeks’ were labelled as ’Duration’. In particular, 492 of 967 (71%) text spans
+labelled as ’Duration’ started with the word ’for’.
+We estimated both, strict and lenient metrics. Strict metrics accounts only for the exact match
+in both, surface strings and the corresponding labels, whereas the lenient metrics allow for partial
+matches. Speciﬁcally, strict and lenient metrics were obtained from A.1 with α = 0 and α = 1
+correspondingly. We reported both, micro and macro averaged precision and recall and their
+corresponding F1 scores.
+4. Results
+4.1. Model pre-training
+The pre-training task was performed on the entire MIMIC-III data set for 350 epochs using a
+number of conﬁgurations of the width and depth of the convolutional layers. Each conﬁguration
+was trained on a single GTX 2080 Ti GPU. CNN dimensions, summary statistics of the pre-
+training text corpus, the average running time per epoch in minutes and the model size in MB are
+summarised in Table 2. The corresponding training losses, logarithmically scaled, are plotted in
+Fig. 1.
+4.2. Rationale for collecting more training data
+6
+Fraction
+Accuracy
+Delta
+0%
+0.0
+baseline
+25%
+90.66
++90.66
+50%
+91.93
++1.27
+75%
+92.42
++0.49
+100%
+92.63
++0.21
+Table 3: Change in accuracy with more training data.
+Delta denotes a relative improvement.
+Generally, collecting more training data will
+improve the model accuracy and lead to better gen-
+eralisation. We simulated, using the Prodigy li-
+brary and ’train-curve’ recipe, an acquisition of
+more data by training of NER model on fractions
+(25%, 50%, 75% and 100%) of the training set and
+evaluating on the test set. We indeed observed (Ta-
+ble 3) a steady upward trend in improvement of ac-
+curacy while using more training data, especially
+in the last fraction of data which indicates the ad-
+vantages of further collecting more data.
+4.3. Named-entity recognition model
+The developed Med7 clinical named-entity recognition model was trained in total on 1212
+documents, comprising 303 silver training examples augmented with gold annotated data from
+the oﬃcial 303 documents from the n2c2 training data (cf. Table 1) and additionally manu-
+ally gold annotated 606 documents, randomly sampled from discharge letters of MIMIC-III en-
+suring that there are no documents present from the testing data. The manual annotation was
+performed using Prodigy, an active learning annotation tool, following the general procedure
+outlined in [53]. The baseline NER model for the active-learning support containing all seven
+categories was trained on the oﬃcial 303 documents. The baseline NER model was used within
+the Prodigy ’human-in-the-loop’ framework to suggest entities on unseen texts and a human an-
+notator accepted or corrected model predictions, creating gold annotated examples. We obtained
+the inter-annotator agreement F1 score of 0.924 between the gold n2c2 annotations and of our
+two annotators and F1 score of 0.989 between our annotators. The explicit toke-level confu-
+sion matrices along with summary statistics are presented in Table B.11, Table B.12 and Table
+B.13 accordingly. For generating silver training data, we used spaCy python library for keyword
+phrase matching with ’EntityRuler’ class along with linguistic pattern matching with exemplars
+from the training data set. Drug names, both generic and brand names, were sourced from pub-
+licly available online resources. Training results and evaluation statistics are summarised in Table
+4 and Table 5 correspondingly. A more detailed token-level confusion matrix showing the exact
+model predictions is summarised in Table A.9.
+Gold (n2c2)
+Silver
+Prodigy
+Total
+Dosage
+4227
+2792
+3437
+10456
+Drug
+16257
+10551
+12687
+39495
+Duration
+592
+462
+620
+1674
+Form
+6657
+4299
+5056
+16012
+Frequency
+6281
+4317
+5106
+15704
+Route
+5460
+3761
+4554
+13775
+Strength
+6694
+4328
+5246
+16268
+Number of documents
+303
+303
+606
+1212
+Table 4: The distribution of annotated text spans in three data sets used for training of the NER model.
+7
+Strict
+Lenient
+Precision
+Recall
+F1
+Precision
+Recall
+F1
+Dosage
+0.879
+0.831
+0.854
+0.957
+0.904
+0.931
+Drug
+0.954
+0.926
+0.941
+0.984
+0.956
+0.971
+Duration
+0.817
+0.733
+0.773
+0.953
+0.854
+0.901
+Form
+0.921
+0.886
+0.903
+0.983
+0.947
+0.965
+Frequency
+0.801
+0.784
+0.792
+0.989
+0.969
+0.979
+Route
+0.961
+0.943
+0.952
+0.973
+0.954
+0.964
+Strength
+0.927
+0.781
+0.848
+0.992
+0.836
+0.907
+Average (micro)
+0.916
+0.871
+0.893
+0.982
+0.933
+0.957
+Average (macro)
+0.897
+0.844
+0.869
+0.977
+0.919
+0.947
+Table 5: The evaluation results of the NER model on the test set with 202 documents.
+4.4. Translation to UK-CRIS data
+One of the challenges in developing a robust clinical information extraction system, is in its
+generalisability beyond the data distribution it was trained on. Accurate algorithms developed
+using data from a small number of medical centres, have demonstrated their poor generalisability
+when applied within a similar context to other medical centres. For example, in a recent study on
+the algorithmic approach to early detection of sepsis [54], the training data were sourced from
+electronic health records of two hospitals, while the data from a third hospital were used for test-
+ing the developed algorithm. It has been demonstrated and discussed in details [55] that a highly
+accurate predictive algorithm, validated on a fraction of data from the same two hospitals, failed
+to achieve the same level of accuracy when tested on the data from the third hospital, not in-
+cluded in the training process. Poor performance using the out-of-distribution (OOD) data poses
+a signiﬁcant challenge on wider applications of the developed models and is highly important
+when algorithms inform real-world decisions [56].
+Clinical concepts
+Train
+Test
+Total
+Dosage
+298
+48
+346
+Drug
+3253
+571
+3824
+Duration
+1006
+215
+1221
+Form
+410
+63
+473
+Frequency
+1604
+305
+1909
+Route
+208
+32
+240
+Strength
+1338
+276
+1614
+Number of texts
+536
+134
+670
+Table 6: Distribution of gold-annotated entities and text
+summary statistics of the OxCRIS training and test data sets.
+The number of unique tokens is computed by lowercasing
+words.
+We investigated how accurate the de-
+veloped Med7 model, trained on MIMIC-
+III electronic health records sourced from
+the Beth Israel Deaconess Medical Center in
+Massachusetts (United States), can be when
+applied to CRIS electronic health records in
+the United Kingdom.
+We selected a ran-
+dom sample of 670 documents from the Ox-
+ford Health NHS Foundation Trust (OFHT)
+instance of UK-CRIS Network and asked a
+clinician to annotate them for seven categories
+following the oﬃcial guidelines of the n2c2
+challenge.
+The token-level confusion matrix and the
+performance metrics of the Med7 model
+trained on n2c2 data from MIMIC-III and ap-
+plied to CRIS data from Oxford instance are
+presented in Table C.14 and in Table 7 correspondingly. Direct comparison to the results pre-
+sented in Table 5 (F1=0.762 vs. F1=0.944) clearly shows the problem of direct transferability of
+8
+NER models trained on diﬀerent data sources.
+Before ﬁne-tuning on OxCRIS
+After ﬁne-tuning on OxCRIS
+Precision
+Recall
+F1
+Precision
+Recall
+F1
+Dosage
+0.826
+0.396
+0.535
+0.656
+0.833
+0.734
+Drug
+0.912
+0.968
+0.939
+0.975
+0.977
+0.976
+Duration
+0.951
+0.107
+0.192
+0.883
+0.934
+0.908
+Form
+0.554
+0.611
+0.581
+0.924
+0.968
+0.946
+Frequency
+0.912
+0.332
+0.487
+0.941
+0.944
+0.942
+Route
+0.348
+0.719
+0.469
+0.882
+0.938
+0.909
+Strength
+0.938
+0.877
+0.906
+0.996
+0.917
+0.955
+Average (micro)
+0.864
+0.681
+0.762
+0.941
+0.947
+0.944
+Average (macro)
+0.778
+0.586
+0.609
+0.901
+0.932
+0.914
+Table 7: The lenient evaluation results of the Med7 model using 134 test documents sourced from OxCRIS - the Oxford
+Health NHS Foundation Trust from within the UK-CRIS electronic health records Network.
+5. Discussion
+The developed named-entity recognition model for clinical concepts in unstructured medical
+records was trained to recognise seven categories, such as drug names, including both generic
+and brand names, dosage of the drugs, their strength, the route of administration, prescription
+duration and the frequency. The data for model development and testing was sourced from
+the n2c2 challenge, comprising a collection of 303 and 202 documents for training and test-
+ing respectively, which represent a sample from the MIMIC-III electronic health records. We
+demonstrated (Section 4.2) that collecting more annotated examples would improve the model
+accuracy and therefore implemented two approaches for obtaining more annotations: noisy la-
+belling and active learning with ’human-in-the-loop’. For the noisy labelling, we create a list
+of unique patterns for each of the seven categories, sourced from the training corpus and from
+external resources available on the internet, and then used regular expression with string pattern
+matching to assign labels to tokens. Our two annotators were trained by closely following the
+oﬃcial 2018 n2c2 annotation guidelines and demonstrated a high level of inter-annotator agree-
+ment among themselves (F1=0.989) as well as a high-level of concordance (F1=0.924) with the
+gold-annotations provided by the organisers of 2018 n2c2 Challenge (cf. Table B.13).
+The overall (micro-averaged) performance of the NER model across all seven categories was
+F1=0.957 (0.893), with Precision=0.982 (0.916) and Recall=0.933 (0.871) for lenient (strict)
+estimates. More detailed breakdown of the performance for each of the categories is presented
+in Table 5. The performance for ’Duration’ and ’Frequency’ categories was poorer. There were
+intrinsically fewer cases of ’Duration’ (∼1.5%) appeared in texts and these concepts were also
+ambiguously annotated as mentioned in Section 3.2.5. A similar situation was also observed for
+the ’Frequency’ category, where in spite of a good number of the annotated examples (∼14%),
+the ambiguity in the presentation of text spans was higher, which resulted in a large number of
+partial matches (cf. Table A.9). Another reason for poor performance for both ’Duration’ and
+’Frequency’ was due to inconsistent annotations, where the same text string appeared in both
+categories.
+9
+Self-supervised pre-training of deep learning models has shown its eﬃciency in many NLP
+task. We experimented with a number of architectural variations of the width and depth of con-
+volutional layers as well as the size of the embedding rows. Empirically, and as conﬁrmed by
+other studies [57], larger models, with more parameters, tend to achieve better results. Interest-
+ingly, the larger model (Width=256, Depth=16, Embeddings=10000) outperformed the default
+one (Width=96, Depth=4, Embeddings=2000) by a small margin (F1256=0.893 vs F196=0.884)
+however, the diﬀerences were more visible for ’Duration’ (F1256=0.773 vs F196=0.729) and
+’Strength’ (F1256=0.848 vs F196=0.801). The better performance resulted at the expense of the
+training time, its size on a disk and the memory consumption. We publicly released the pre-
+trained neural network weights for various architectures through the dedicated GitHub reposi-
+tory4.
+Another objective of this work was to estimate the degree of transferability of the developed
+information extraction model to another clinical domain. We evaluated how the Med7 model,
+trained on a collection of discharge letters from the intensive care unit in the US (MIMIC),
+performed on the secondary care mental health medical records in the UK (CRIS). The Med7
+model was purposely designed to recognise non-context related medical concepts, such as drug
+names, strength, dosage, duration, route, form and frequency of administration and we expected
+to see a comparable level of the model performance across the both EHR systems. To consis-
+tently validate the transferability of the Med7 model, a random sample of 670 gold-annotated
+examples from OxCRIS were split into training (536) and test (134) data sets (cf. Table 6). We
+compared the performance of the Med7 model without and with ﬁne-tuning on OxCRIS. The
+direct application of Med7 on the testing set of 134 documents, resulted in a quite poor perfor-
+mance (F1=0.762). We investigated the cases where the model was predicting incorrectly and
+in the majority of them, the main reason for poor performance was due to diﬀerences in the lan-
+guage presentation of the concepts. For examples, the model largely missed concepts labelled
+as ’Frequency’ in OxCRIS, such as ”ON”, (”every night”), ”OD” (”every day”), ”BD” (”twice
+daily”), ”OM” (”every morning”), ”mane” and ”nocte”. Then, we ﬁne-tuned the Med7 model
+on the training set of OxCRIS (536 documents) and evaluated on the same testing set as before
+of 134 documents. Despite the small number of training examples in OxCRIS, leveraging the
+transfer learning approach of re-using the pre-trained Med7 model on MIMIC, resulted in higher
+accuracy (F1=0.944) comparable with training and testing on the same domain (cf. Table 7).
+One strength on this project is in the interoperability of the developed model with other
+generic deep learning NLP libraries, such as HuggingFace and Thinc as well as straightforward
+integration with pipelines developed under the spaCy framework. This allows to customise the
+Med7 model and include other pipeline components, such as negation detection, entity rela-
+tions extraction and to map the extracted concepts onto the universal medical language system
+(UMLS). Normalisation of concepts to UMLS categories will allow to systematically parse elec-
+tronic medical records into structured and consistent tabular form which will be ready for down-
+stream epidemiological analyses. Additionally, the developed model naturally integrates into
+the Prodigy annotation tool, which allows to eﬃciently collect more gold-annotated examples.
+It is also worth mentioning that the Med7 model is designed to run on standard CPUs, rather
+than expensive GPUs. This fact will allow researchers without access to expensive and complex
+infrastructure to develop fast and robust pipelines for clinical natural language processing.
+However, two limitations should be noted. First, is that some of the categories are naturally
+underrepresented which impacts the accuracy of the NER model. It was observed empirically
+4https://github.com/kormilitzin/med7
+10
+that the number of annotated ’Duration’ entities was intrinsically skewed in the medical records,
+in contrast to drug names and strength, making it more challenging to train a robust model to
+accurately identify these entities. Interestingly, the same pattern of the number of reported men-
+tions of the ’Duration’ category persists in both, MIMIC and OxCRIS data, which might be
+indicative of a general clinical reporting pattern. A second limitation of this study is related
+to a low number of the manually-annotated examples in OxCRIS, in order to run more rigours
+evaluations of the transferability of the Med7 model across all seven categories.
+Future research into the robust clinical information extraction system will need to further
+address the feasibility of deploying the model in the UK-CRIS Network Trust members and
+evaluate its transferability. The aim is to furnish clinical researchers with an open source and a
+robust tool for structuring free-text patients’ data for downstream analytical tasks.
+6. Conclusion
+In this work we developed and validated a clinical named-entity recognition model for free-
+text electronic health records. The model was developed using the MIMIC-III free-text data
+and trained on a combination of the manually annotated data from the 2018 n2c2 challenge, on
+a random sample from MIMIC-III with noisy labels and manually annotated data using active
+learning with Prodigy. To maximise the utilisation of a large amount of unstructured free-text
+data and alleviate the problem of training from limited data, we used self-supervised learning to
+pre-train the weights of the NER neural network model. We demonstrated that transfer learning
+plays an essential role in developing a robust model applicable across diﬀerent clinical domains
+and the developed Med7 model does not require an expensive infrastructure and can be used
+on standard machines with CPU. Further research is needed to improve recognition of naturally
+underrepresented concepts and we are planning to address this problem, as well as extracted
+concepts normalisation and UMLS linkage in our future releases of the Med7 model.
+Acknowledgments
+The study was funded by the National Institute for Health Research’s (NIHR) Oxford Health
+Biomedical Research Centre (BRC-1215-20005). This work was supported by the UK Clini-
+cal Records Interactive Search (UK-CRIS) system funded and developed by the NIHR Oxford
+Health BRC at Oxford Health NHS Foundation Trust and the Department of Psychiatry, Univer-
+sity of Oxford. AK, NV, QL, ANH are funded by the MRC Pathﬁnder Grant (MC-PC-17215).
+We are thankful to the organisers of the n2c2 2018 Challenge for providing annotated corpus and
+the annotation guidelines.
+The views expressed are those of the authors and not necessarily those of the UK National
+Health Service, the NIHR, or the UK Department of Health.
+We would also like to acknowledge the work and support of the Oxford CRIS Team: Tanya
+Smith, Head of Research Informatics and Biomedical Research Centre (BRC) CRIS Theme Lead
+and Lulu Kane, Adam Pill and Suzanne Fisher, CRIS Academic Support and Information Ana-
+lysts.
+Appendix A. The evaluation schema for extracted concepts
+In order to evaluate the output of the NER system, we adopted the notations developed for dif-
+ferent categories of errors [58] and the evaluation schema introduced in SemEval’13 (cf. Eq.A.1).
+11
+The following types of evaluation errors were considered (Table A.8):
+Error Type
+Gold Standard
+NER Prediction
+Text span
+Label
+Text span
+Label
+1
+Correct
+(COR)
+aspirin
+Drug
+aspirin
+Drug
+2
+Incorrect
+(INC)
+25
+Strength
+25
+Dosage
+3
+Partial
+(PAR)
+Augmentin
+Drug
+Augmentin XR
+Drug
+4
+Partial
+(PAR)
+for 3 weeks
+Duration
+3 weeks
+Duration
+5
+Partial
+(PAR)
+p.r.n.
+Frequency
+prn
+Frequency
+6
+Missing
+(MIS)
+tablet
+Form
+-
+-
+7
+Spurious
+(SPU)
+-
+-
+Codeine
+Drug
+Table A.8: A list of examples of typical errors produced by the NER model.
+where Correct(COR) represents a complete match of both, the annotation boundary and the
+entity type. Incorrect(INC) is the case where at least one of the predicted boundary or the entity
+type do not match. Partial(PAR) match corresponds to predicted entity boundary which overlaps
+with ground-truth annotation, but they are not exactly the same. Missing(MIS) the case where
+the ground-truth annotated boundary is not predicted by the NER, but the ground-truth string is
+present in the gold-annotated corpus. Spurious(SPU) corresponds to predicted entity boundary
+which does not exist in the gold-annotated corpus.
+Possible (POS) = COR + INC + PAR + MIS = TP + FN
+Actual (ACT) = COR + INC + PAR + S PU = TP + FP
+Precision = (COR + αPAR)/ACT
+Recall = (COR + αPAR)/POS
+(A.1)
+The detailed token-level confusion matrix of the model predictions following the error types
+deﬁned in A.1.
+Predicted categories
+Dosage
+Drug
+Duration
+Form
+Frequency
+Route
+Strength
+Missed
+Partial
+True categories
+Dosage
+2225
+0
+6
+10
+24
+1
+16
+200
+199
+Drug
+2
+9796
+0
+7
+0
+4
+1
+449
+316
+Duration
+6
+0
+277
+0
+8
+0
+2
+39
+46
+Form
+38
+31
+0
+3864
+1
+65
+6
+90
+264
+Frequency
+1
+3
+4
+5
+3144
+2
+0
+108
+745
+Route
+3
+4
+0
+43
+1
+3312
+1
+108
+41
+Strength
+38
+3
+0
+1
+2
+0
+3304
+650
+232
+Spurious
+20
+120
+6
+4
+7
+22
+3
+Table A.9: Token-level confusion matrix of the predicted entities versus the ground truth labels. Spurious examples
+correspond to predicted entity boundary and type which do not exist in ground-truth annotations and partial matches
+correspond to predicted entity boundary overlap with golden annotation, but they are not the same. Missing entities
+correspond to ground-truth annotation boundary which were not identiﬁed.
+12
+Appendix B. Inter-annotator agreement analysis
+We estimated the level of concordance between the gold-annotated corpus from the n2c2
+2018 challenge and two trained annotators. The annotators closely followed the same annotation
+guidelines as used in the challenge. Ten documents were sampled at random from 202 docu-
+ments comprising the test set. The distribution of gold-annotated tokens and by two annotators
+is presented in Table B.10.
+Types of annotated entities
+Gold (n2c2)
+Annotator 1
+Annotator 2
+Dosage
+128
+139
+139
+Drug
+519
+530
+526
+Duration
+28
+31
+32
+Form
+234
+246
+238
+Frequency
+193
+196
+201
+Route
+179
+167
+167
+Strength
+200
+212
+205
+Number of documents
+10
+10
+10
+Table B.10: The number of the gold and manually annotated entities for the inter-annotator agreement evaluation corpus,
+comprising ten randomly sampled texts from the test set of 202 documents.
+Annotator 1
+Dosage
+Drug
+Duration
+Form
+Frequency
+Route
+Strength
+Missed
+Partial
+Gold (n2c2)
+Dosage
+104
+0
+1
+3
+0
+0
+2
+17
+4
+Drug
+0
+473
+0
+3
+0
+1
+0
+27
+21
+Duration
+0
+0
+19
+0
+0
+0
+0
+2
+7
+Form
+1
+4
+0
+201
+0
+2
+0
+7
+21
+Frequency
+1
+0
+0
+0
+172
+0
+1
+2
+17
+Route
+2
+2
+0
+2
+0
+156
+0
+15
+2
+Strength
+2
+1
+0
+0
+0
+0
+171
+4
+28
+Spurious
+25
+29
+4
+16
+7
+6
+10
+Table B.11: Token-level confusion matrix of the annotator 1 versus the gold-standard annotations provided by 2018 n2c2
+challenge.
+Annotator 2
+Dosage
+Drug
+Duration
+Form
+Frequency
+Route
+Strength
+Missed
+Partial
+Gold (n2c2)
+Dosage
+104
+0
+1
+3
+0
+0
+2
+17
+4
+Drug
+0
+472
+0
+3
+0
+1
+0
+30
+20
+Duration
+0
+0
+19
+0
+0
+0
+0
+2
+7
+Form
+0
+3
+0
+201
+0
+2
+0
+9
+21
+Frequency
+0
+0
+1
+0
+172
+0
+0
+2
+18
+Route
+2
+2
+0
+2
+0
+156
+0
+15
+2
+Strength
+3
+1
+0
+0
+4
+0
+171
+3
+21
+Spurious
+26
+28
+4
+8
+7
+6
+10
+Table B.12: Token-level confusion matrix of the annotator 2 versus the gold-standard annotations provided by 2018 n2c2
+challenge
+13
+Annot. 1 vs. Gold
+Annot. 2 vs. Gold
+Annot. 1 vs. Annot. 2
+Pr
+Re
+F1
+Pr
+Re
+F1
+Pr
+Re
+F1
+Dosage
+0.777
+0.824
+0.801
+0.777
+0.824
+0.801
+0.986
+0.986
+0.986
+Drug
+0.935
+0.935
+0.935
+0.935
+0.935
+0.935
+0.998
+0.991
+0.994
+Duration
+0.812
+0.923
+0.867
+0.812
+0.929
+0.867
+0.969
+1.000
+0.984
+Form
+0.933
+0.941
+0.937
+0.933
+0.941
+0.937
+1.000
+0.967
+0.983
+Frequency
+0.945
+0.984
+0.964
+0.945
+0.984
+0.964
+0.975
+1.000
+0.987
+Route
+0.946
+0.883
+0.913
+0.946
+0.883
+0.913
+1.000
+1.000
+1.000
+Strength
+0.941
+0.946
+0.944
+0.941
+0.946
+0.944
+1.000
+0.962
+0.981
+Average (micro)
+0.921
+0.928
+0.924
+0.921
+0.928
+0.924
+0.994
+0.985
+0.989
+Average (macro)
+0.901
+0.921
+0.911
+0.901
+0.921
+0.911
+0.991
+0.986
+0.988
+Table B.13: The evaluation results of the inter-annotator agreement on a random selection of ten documents from the
+202 test texts. A pair-wise comparison between each of the annotators and the gold-annotated documents as well as the
+direct comparison between the both annotators.
+We examined the cases where our two annotators labelled the concepts of interests diﬀerently
+than those found in the gold-annotated data set provided by the n2c2 team.
+Appendix C. Fine-tuning on UK-CRIS
+Med7-predicted categories: before ﬁne-tuning on OxCRIS
+Dosage
+Drug
+Duration
+Form
+Frequency
+Route
+Strength
+Missed
+Partial
+Gold annotated
+Dosage
+18
+0
+0
+0
+0
+0
+12
+17
+1
+Drug
+0
+535
+0
+0
+0
+0
+0
+18
+15
+Duration
+0
+0
+18
+0
+1
+0
+0
+158
+1
+Form
+0
+2
+0
+34
+0
+1
+0
+20
+2
+Frequency
+0
+7
+0
+25
+86
+40
+1
+114
+7
+Route
+0
+0
+0
+3
+3
+23
+0
+6
+0
+Strength
+3
+0
+0
+0
+0
+0
+238
+31
+4
+Spurious
+1
+44
+1
+1
+8
+2
+3
+Table C.14: Token-level confusion matrix of the Med7 model trained on MIMIC-III and applied to 134 manually anno-
+tated documents from the Oxford instance (OxCRIS) of the UK-CRIS electronic medical records Network.
+Med7-predicted categories: after ﬁne-tuning on OxCRIS
+Dosage
+Drug
+Duration
+Form
+Frequency
+Route
+Strength
+Missed
+Partial
+Gold annotated
+Dosage
+39
+0
+0
+0
+0
+0
+1
+7
+1
+Drug
+0
+553
+0
+2
+0
+0
+0
+11
+4
+Duration
+0
+0
+177
+0
+1
+0
+0
+13
+20
+Form
+0
+0
+0
+61
+1
+1
+0
+0
+0
+Frequency
+1
+1
+0
+2
+279
+1
+0
+12
+6
+Route
+0
+0
+0
+0
+0
+30
+0
+2
+0
+Strength
+16
+1
+0
+0
+0
+0
+242
+6
+11
+Spurious
+4
+12
+26
+1
+16
+2
+0
+Table C.15: Token-level confusion matrix of the Med7 model trained on MIMIC-III and applied to 134 manually anno-
+tated documents from the Oxford instance (OxCRIS) of the UK-CRIS electronic medical records Network.
+14
+References
+[1] M. E. Peters, M. Neumann, M. Iyyer, M. Gardner, C. Clark, K. Lee, L. Zettlemoyer, Deep contextualized word
+representations, arXiv preprint arXiv:1802.05365 (2018).
+[2] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, Ł. Kaiser, I. Polosukhin, Attention is all
+you need, in: Advances in neural information processing systems, 2017, pp. 5998–6008.
+[3] J. Devlin, M.-W. Chang, K. Lee, K. Toutanova, Bert: Pre-training of deep bidirectional transformers for language
+understanding, arXiv preprint arXiv:1810.04805 (2018).
+[4] S. Velupillai, H. Suominen, M. Liakata, A. Roberts, A. D. Shah, K. Morley, D. Osborn, J. Hayes, R. Stewart,
+J. Downs, et al., Using clinical natural language processing for health outcomes research: overview and actionable
+suggestions for future advances, Journal of biomedical informatics 88 (2018) 11–19.
+[5] J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, L. Fei-Fei, ImageNet: A Large-Scale Hierarchical Image Database,
+in: CVPR09, 2009.
+[6] T. Lin, M. Maire, S. J. Belongie, L. D. Bourdev, R. B. Girshick, J. Hays, P. Perona, D. Ramanan, P. Doll’ar, C. L.
+Zitnick, Microsoft COCO: common objects in context, CoRR abs/1405.0312 (2014). arXiv:1405.0312.
+URL http://arxiv.org/abs/1405.0312
+[7] E. Entzeridou, E. Markopoulou, V. Mollaki, Public and physicians expectations and ethical concerns about elec-
+tronic health record: Beneﬁts outweigh risks except for information security, International journal of medical
+informatics 110 (2018) 98–107.
+[8]
+¨O. Uzuner, I. Goldstein, Y. Luo, I. Kohane, Identifying patient smoking status from medical discharge records,
+Journal of the American Medical Informatics Association 15 (1) (2008) 14–24.
+[9] A. E. Johnson, T. J. Pollard, L. Shen, H. L. Li-wei, M. Feng, M. Ghassemi, B. Moody, P. Szolovits, L. A. Celi,
+R. G. Mark, Mimic-iii, a freely accessible critical care database, Scientiﬁc data 3 (2016) 160035.
+[10] H. Sch¨utze, C. D. Manning, P. Raghavan, Introduction to information retrieval, in: Proceedings of the international
+communication of association for computing machinery conference, Vol. 4, 2008.
+[11] V. M. Patel, R. Gopalan, R. Li, R. Chellappa, Visual domain adaptation: A survey of recent advances, IEEE signal
+processing magazine 32 (3) (2015) 53–69.
+[12] Y. Ganin, E. Ustinova, H. Ajakan, P. Germain, H. Larochelle, F. Laviolette, M. Marchand, V. Lempitsky, Domain-
+adversarial training of neural networks, The Journal of Machine Learning Research 17 (1) (2016) 2096–2030.
+[13] I. Goodfellow, Y. Bengio, A. Courville, Deep learning, MIT press, 2016.
+[14] A. Baevski, S. Edunov, Y. Liu, L. Zettlemoyer, M. Auli, Cloze-driven pretraining of self-attention networks, arXiv
+preprint arXiv:1903.07785 (2019).
+[15] A. J. Ratner, B. Hancock, C. R´e, The role of massively multi-task and weak supervision in software 2.0., in: CIDR,
+2019.
+[16] H. Dalianis, Clinical text mining: Secondary use of electronic patient records, Springer, 2018.
+[17] S. Wu, K. Roberts, S. Datta, J. Du, Z. Ji, Y. Si, S. Soni, Q. Wang, Q. Wei, Y. Xiang, et al., Deep learning in clinical
+natural language processing: a methodical review, Journal of the American Medical Informatics Association 27 (3)
+(2020) 457–470.
+[18] O. Bodenreider, The uniﬁed medical language system (umls): integrating biomedical terminology, Nucleic acids
+research 32 (suppl 1) (2004) D267–D270.
+[19] H. Gurulingappa, A. M. Rajput, A. Roberts, J. Fluck, M. Hofmann-Apitius, L. Toldo, Development of a benchmark
+corpus to support the automatic extraction of drug-related adverse eﬀects from medical case reports, Journal of
+biomedical informatics 45 (5) (2012) 885–892.
+[20] G. Zhou, J. Su, Named entity recognition using an hmm-based chunk tagger, in: proceedings of the 40th Annual
+Meeting on Association for Computational Linguistics, Association for Computational Linguistics, 2002, pp. 473–
+480.
+[21] T. Mikolov, I. Sutskever, K. Chen, G. S. Corrado, J. Dean, Distributed representations of words and phrases and
+their compositionality, in: Advances in neural information processing systems, 2013, pp. 3111–3119.
+[22] J. Pennington, R. Socher, C. Manning, Glove: Global vectors for word representation, in: Proceedings of the 2014
+conference on empirical methods in natural language processing (EMNLP), 2014, pp. 1532–1543.
+[23] K. KS, S. Sangeetha, Secnlp: A survey of embeddings in clinical natural language processing, arXiv preprint
+arXiv:1903.01039 (2019).
+[24] J. Howard, S. Ruder, Universal language model ﬁne-tuning for text classiﬁcation, arXiv preprint arXiv:1801.06146
+(2018).
+[25] Y. Liu, M. Ott, N. Goyal, J. Du, M. Joshi, D. Chen, O. Levy, M. Lewis, L. Zettlemoyer, V. Stoyanov, Roberta: A
+robustly optimized bert pretraining approach, arXiv preprint arXiv:1907.11692 (2019).
+[26] Z. Yang, Z. Dai, Y. Yang, J. Carbonell, R. R. Salakhutdinov, Q. V. Le, Xlnet: Generalized autoregressive pretraining
+for language understanding, in: Advances in neural information processing systems, 2019, pp. 5754–5764.
+15
+[27] J. Lee, W. Yoon, S. Kim, D. Kim, S. Kim, C. H. So, J. Kang, Biobert: a pre-trained biomedical language represen-
+tation model for biomedical text mining, Bioinformatics 36 (4) (2020) 1234–1240.
+[28] K. Huang, J. Altosaar, R. Ranganath, Clinicalbert: Modeling clinical notes and predicting hospital readmission,
+arXiv preprint arXiv:1904.05342 (2019).
+[29] E. Alsentzer, J. R. Murphy, W. Boag, W.-H. Weng, D. Jin, T. Naumann, M. McDermott, Publicly available clinical
+bert embeddings, arXiv preprint arXiv:1904.03323 (2019).
+[30] M. Neumann, D. King, I. Beltagy, W. Ammar, Scispacy: Fast and robust models for biomedical natural language
+processing, arXiv preprint arXiv:1902.07669 (2019).
+[31] S. Henry, K. Buchan, M. Filannino, A. Stubbs, O. Uzuner, 2018 n2c2 shared task on adverse drug events and
+medication extraction in electronic health records, Journal of the American Medical Informatics Association 27 (1)
+(2019) 3–12.
+[32] E. Hovy, M. Marcus, M. Palmer, L. Ramshaw, R. Weischedel, Ontonotes: The 90% solution, in: Proceedings of
+the Human Language Technology Conference of the NAACL, Companion Volume: Short Papers, NAACL-Short
+06, Association for Computational Linguistics, USA, 2006, p. 5760.
+[33] P. Rajpurkar, J. Zhang, K. Lopyrev, P. Liang, SQuAD: 100,000+ Questions for Machine Comprehension of Text,
+arXiv e-prints (2016) arXiv:1606.05250arXiv:1606.05250.
+[34] A. L. Maas, R. E. Daly, P. T. Pham, D. Huang, A. Y. Ng, C. Potts, Learning word vectors for sentiment analysis,
+in: Proceedings of the 49th Annual Meeting of the Association for Computational Linguistics: Human Language
+Technologies, Association for Computational Linguistics, Portland, Oregon, USA, 2011, pp. 142–150.
+URL http://www.aclweb.org/anthology/P11-1015
+[35] M. Hofer, A. Kormilitzin, P. Goldberg, A. Nevado-Holgado, Few-shot learning for named entity recognition in
+medical text, arXiv preprint arXiv:1811.05468 (2018).
+[36] L. Gligic, A. Kormilitzin, P. Goldberg, A. Nevado-Holgado, Named entity recognition in electronic health records
+using transfer learning bootstrapped neural networks, Neural Networks 121 (2020) 132–139.
+[37] Y. Wang, S. Sohn, S. Liu, F. Shen, L. Wang, E. J. Atkinson, S. Amin, H. Liu, A clinical text classiﬁcation paradigm
+using weak supervision and deep representation, BMC medical informatics and decision making 19 (1) (2019) 1.
+[38] M. Honnibal, I. Montani, spaCy 2: Natural language understanding with Bloom embeddings, convolutional neural
+networks and incremental parsing, to appear (2017).
+[39] S. Bird, E. Klein, E. Loper, Natural Language Processing with Python, O’Reilly Media, 2009.
+[40] J. D. Choi, Dynamic feature induction: The last gist to the state-of-the-art, in: Proceedings of the 2016 Conference
+of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies,
+2016, pp. 271–281.
+[41] C. D. Manning, M. Surdeanu, J. Bauer, J. R. Finkel, S. Bethard, D. McClosky, The stanford corenlp natural lan-
+guage processing toolkit, in: Proceedings of 52nd annual meeting of the association for computational linguistics:
+system demonstrations, 2014, pp. 55–60.
+[42] T. Wolf, L. Debut, V. Sanh, J. Chaumond, C. Delangue, A. Moi, P. Cistac, T. Rault, R. Louf, M. Funtowicz, et al.,
+Transformers: State-of-the-art natural language processing, arXiv preprint arXiv:1910.03771 (2019).
+[43] I. Montani, M. Honnibal, Prodigy: A new annotation tool for radically eﬃcient machine teaching, Artiﬁcial Intel-
+ligence to appear (2018). arXiv:toappear.
+[44] J. Serr`a, A. Karatzoglou, Getting deep recommenders ﬁt: Bloom embeddings for sparse binary input/output net-
+works, in: Proceedings of the Eleventh ACM Conference on Recommender Systems, 2017, pp. 279–287.
+[45] G. Lample, M. Ballesteros, S. Subramanian, K. Kawakami, C. Dyer, Neural architectures for named entity recog-
+nition, arXiv preprint arXiv:1603.01360 (2016).
+[46] Q. Xie, E. Hovy, M.-T. Luong, Q. V. Le, Self-training with noisy student improves imagenet classiﬁcation, arXiv
+preprint arXiv:1911.04252 (2019).
+[47] N. Natarajan, I. S. Dhillon, P. K. Ravikumar, A. Tewari, Learning with noisy labels, in: Advances in neural infor-
+mation processing systems, 2013, pp. 1196–1204.
+[48] I. Provilkov, D. Emelianenko, E. Voita, Bpe-dropout: Simple and eﬀective subword regularization, arXiv preprint
+arXiv:1910.13267 (2019).
+[49] A. Anaby-Tavor, B. Carmeli, E. Goldbraich, A. Kantor, G. Kour, S. Shlomov, N. Tepper, N. Zwerdling, Not enough
+data? deep learning to the rescue!, arXiv preprint arXiv:1911.03118 (2019).
+[50] A. Ratner, S. H. Bach, H. Ehrenberg, J. Fries, S. Wu, C. R´e, Snorkel: Rapid training data creation with weak
+supervision, The VLDB Journal (2019) 1–22.
+[51] A. Trask, P. Michalak, J. Liu, sense2vec-a fast and accurate method for word sense disambiguation in neural word
+embeddings, arXiv preprint arXiv:1511.06388 (2015).
+[52] T. Mikolov, K. Chen, G. Corrado, J. Dean, Eﬃcient estimation of word representations in vector space, arXiv
+preprint arXiv:1301.3781 (2013).
+[53] N. Vaci, Q. Liu, A. Kormilitzin, F. De Crescenzo, A. Kurtulmus, J. Harvey, B. O’Dell, S. Innocent, A. Tomlin-
+son, A. Cipriani, et al., Natural language processing for structuring clinical text data on depression using uk-cris,
+16
+Evidence-Based Mental Health 23 (1) (2020) 21–26.
+[54] M. A. Reyna, C. S. Josef, R. Jeter, S. P. Shashikumar, M. B. Westover, S. Nemati, G. D. Cliﬀord, A. Sharma,
+Early prediction of sepsis from clinical data: the physionet/computing in cardiology challenge 2019, Critical Care
+Medicine 48 (2) (2020) 210.
+[55] J. Morrill, A. Kormilitzin, A. Nevado-Holgado, S. Swaminathan, S. Howison, T. Lyons, The signature-based model
+for early detection of sepsis from electronic health records in the intensive care unit, in: 2019 Computing in
+Cardiology Conference (CinC). IEEE, 2019.
+[56] J. Ren, P. J. Liu, E. Fertig, J. Snoek, R. Poplin, M. Depristo, J. Dillon, B. Lakshminarayanan, Likelihood ratios for
+out-of-distribution detection, in: Advances in Neural Information Processing Systems, 2019, pp. 14680–14691.
+[57] C. Raﬀel, N. Shazeer, A. Roberts, K. Lee, S. Narang, M. Matena, Y. Zhou, W. Li, P. J. Liu, Exploring the limits of
+transfer learning with a uniﬁed text-to-text transformer, arXiv preprint arXiv:1910.10683 (2019).
+[58] N. Chinchor, B. Sundheim, MUC-5 evaluation metrics, in: Fifth Message Understanding Conference (MUC-5):
+Proceedings of a Conference Held in Baltimore, Maryland, August 25-27, 1993, 1993.
+URL https://www.aclweb.org/anthology/M93-1007
+17

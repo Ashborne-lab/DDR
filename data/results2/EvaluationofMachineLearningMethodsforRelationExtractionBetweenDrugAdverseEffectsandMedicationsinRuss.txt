@@ -1,0 +1,69 @@
+[image]
+[image]
+•  Home
+•  what's PoS
+•  for organizers
+•  for chairpersons
+•  for authors
+•  for readers
+•  staff
+Volume 410 - The 5th International Workshop on Deep Learning in
+Computational Physics (DLCP2021) - Regular papers
+Evaluation of Machine Learning Methods for Relation Extraction
+Between Drug Adverse Effects and Medications in Russian Texts of
+Internet User Reviews
+A. Sboev*, A. Selivanov, R. Rybka, I. Moloshnikov and G. Rylkov
+*: corresponding author
+Full text: pdf
+Pre-published on: December 01, 2021
+Published on: January 12, 2022
+Abstract
+The research considers an automatic extraction of relations between
+mentions of medications and adverse drug reactions in Russian-
+language drug reviews. This text analyzing method might be useful
+for pharmacovigilance and medicines reprofiling. Its application to
+Russian-language reviews hasn't been studied yet due to the lack of
+corpora with relation annotation in Russian.
+The study is aimed at solving this problem. It is based on the
+original dataset gathered by our group. It consists of annotated
+relations between entities from the Russian Drug Review Corpus,
+that contains the Internet users' reviews on medications in Russian
+language. Computational experiments were carried out on
+developed corpora using classical machine learning methods, as
+well as a more advanced neural network model based on
+Transformer layers -- XLM-RoBERTa-sag. The list of applied
+classical machine learning methods consists of support vector
+machine, logistic regression, Naive Bayes classifier and gradient
+boosting. The concatenation of TF-IDF entity vectors of character n-
+grams was used as a text representation. Based on a set of
+experiments, the following hyperparameters of these methods were
+selected: the size of n-grams and the limitation on the frequency of
+occurrence of n-grams (too rare or too frequent n-grams were
+excluded from the feature vector). For XLM-RoBERTa-sag, the input
+data is represented as usual for such type of models (language
+models based on Transformer topology). The following input text
+representation types were considered during the experiments: a
+whole text, a text of target entity pairs; a text of target entity pairs
+with words between them; a text of target entity pairs and the
+whole input text, the latter input type is the one that maximizes
+accuracy. It is shown that XLM-RoBERTa-sag model achieves a
+result of 95%, according to the macro-averaged f1 metric, which is
+the state-of-the-art result of recognition of the relations between
+mentions of adverse drug reactions and medications in Russian-
+language online reviews. The Naive Bayes classifier with
+multivariate normal distribution achieves the best result among
+classical machine learning methods: 75%, which exceeds the result
+of random label generation by 21%.
+DOI: https://doi.org/10.22323/1.410.0006
+How to cite
+Metadata are provided both in article format (very similar to
+INSPIRE) as this helps creating very compact bibliographies which
+can be beneficial to authors and readers, and in proceeding format
+which is more detailed and complete.
+Open Access
+[image]Copyright owned by the author(s) under the term of the
+Creative Commons Attribution-NonCommercial-NoDerivatives 4.0
+International License.
+Communicate with the PoS editorial office | Cookie policy | Privacy
+policy
+Published by Sissa Medialab srl Partita IVA: IT01097780322

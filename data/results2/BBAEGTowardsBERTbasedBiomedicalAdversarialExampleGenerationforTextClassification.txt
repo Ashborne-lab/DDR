@@ -1,0 +1,849 @@
+Proceedings of the 2021 Conference of the North American Chapter of the
+Association for Computational Linguistics: Human Language Technologies, pages 5378–5384
+June 6–11, 2021. ©2021 Association for Computational Linguistics
+5378
+BBAEG: Towards BERT-based Biomedical Adversarial Example
+Generation for Text Classiﬁcation
+Ishani Mondal
+Microsoft Research
+Lavelle Road, Bangalore, India
+ishani340@gmail.com
+Abstract
+Healthcare predictive analytics aids medi-
+cal decision-making, diagnosis prediction and
+drug review analysis.
+Therefore, prediction
+accuracy is an important criteria which also
+necessitates robust predictive language mod-
+els.
+However, the models using deep learn-
+ing have been proven vulnerable towards in-
+signiﬁcantly perturbed input instances which
+are less likely to be misclassiﬁed by humans.
+Recent efforts of generating adversaries using
+rule-based synonyms and BERT-MLMs have
+been witnessed in general domain, but the ever-
+increasing biomedical literature poses unique
+challenges.
+We propose BBAEG (Biomedi-
+cal BERT-based Adversarial Example Genera-
+tion), a black-box attack algorithm for biomed-
+ical text classiﬁcation, leveraging the strengths
+of both domain-speciﬁc synonym replacement
+for biomedical named entities and BERT-
+MLM predictions, spelling variation and num-
+ber replacement. Through automatic and hu-
+man evaluation on two datasets, we demon-
+strate that BBAEG performs stronger attack
+with better language ﬂuency, semantic coher-
+ence as compared to prior work.
+1
+Introduction
+Recent studies have exposed the importance of
+biomedical NLP in the well-being of human-beings,
+analyzing the critical process of medical decision-
+making. However, the dialogue managing tools
+targeted for medical conversations (Zhang et al.,
+2020), (Campillos Llanos et al., 2017), (Kazi and
+Kahanda, 2019) between patients and healthcare
+providers in assisting diagnosis may generate cer-
+tain insigniﬁcant perturbations (spelling errors,
+paraphrasing), which when fed to the classiﬁer to
+determine the type of diagnosis required/detecting
+adverse drug effects/drug recommendation, might
+provide unreasonable performance. Insigniﬁcant
+∗The work started when the author was a student at IIT
+Kharagpur, India.
+perturbations might also creep in from the casual
+language expressed in the tweets (Zilio et al., 2020).
+Thus, the classiﬁer needs to be robust towards these
+perturbations.
+Generating adversarial examples in text is chal-
+lenging compared to computer vision tasks because
+of (i) discrete nature of input space and (ii) preser-
+vation of semantic coherence with original text.
+Initial works for attacking text models relied on
+introducing errors at the character level or manip-
+ulating words (Feng et al., 2018) to generate ad-
+versarial examples. But due to grammatical disﬂu-
+ency, these seem very unnatural. Some rule-based
+synonym replacement strategies (Alzantot et al.,
+2018), (Ren et al., 2019) have lead to more natu-
+ral looking examples. (Jin et al., 2019) proposed
+TextFooler, as a baseline to generate adversaries
+for text classiﬁcation models. But, the adversar-
+ial examples created by TextFooler rely heavily
+on word-embedding based word similarity replace-
+ment technique, and not overall sentence seman-
+tics. Recently, (Garg and Ramakrishnan, 2020)
+proposed BERT-MLM-based (Devlin et al., 2019)
+word replacements to create adversaries to better
+ﬁt the overall context.
+Despite these advancements, there is much less
+attention towards making robust predictions in crit-
+ical domains like biomedical, which comes with its
+unique challenges. (Araujo et al., 2020) has pro-
+posed two types of rule-based adversarial attacks in-
+spired by natural spelling errors and typos made by
+humans and synonym replacement in the biomedi-
+cal domain. Some challenges include: 1) Biomedi-
+cal named entities are usually multi-word phrases
+such as colorectal adenoma. During token replace-
+ment, we need the entire entity to be replaced, but
+the MLM model (token-level replacement) fails to
+generate correct synonym of entity ﬁtting in the
+context. So, we need a BioNER+Entity Linker
+(Martins et al., 2019), (Mondal et al., 2019) to link
+entity to ontology for generating correct synonyms.
+5379
+2) Due to several variations of representing medical
+entities such as Type I Diabetes could be expressed
+as ’Type One Diabetes’, we explore numeric entity
+expansion strategies for generating adversaries. 3)
+Spelling variations (keyboard swap, modiﬁcation).
+While we evaluate on two benchmark datasets, our
+method is general and is applicable for any biomed-
+ical classiﬁcation datasets.
+In this paper, we present BBAEG (Biomedi-
+cal BERT-based Adversarial Example Gener-
+ation)1, a novel black-box attack algorithm for
+biomedical text classiﬁcation task leveraging both
+the BERT-MLM model for non-named entity re-
+placements combined with NER linked synonyms
+for named entities to better ﬁt the overall context.
+In addition to replacing words with synonyms, we
+explore the mechanism of generating adversarial
+examples using typographical variations and nu-
+meric entity modiﬁcation. Our BBAEG attack beats
+the existing baselines by a wide margin on both
+automatic and human evaluation across datasets
+and models. To the best of our knowledge, we
+are the ﬁrst to introduce a novel algorithm for gen-
+erating adversarial examples for biomedical text
+whose success attack is higher than the existing
+baselines like TextFooler and BAE (Garg and Ra-
+makrishnan, 2020), (Li et al., 2020). The overall
+contributions of the paper include: 1) We explore
+several challenges of biomedical adversarial exam-
+ple generation. 2) We propose BBAEG, a biomed-
+ical adversarial example generation technique for
+text classiﬁcation combining the power of several
+perturbation techniques. 3) We introduce 3 type of
+attacks for this purpose on two biomedical text clas-
+siﬁcation datasets. 4) Through human evaluation,
+we show that BBAEG yields adversarial examples
+with improved naturalness.
+2
+Methodology
+Problem Deﬁnition:
+Given a set of n inputs
+(D, Y ) = [(D1, y1), . . .(Dn, yn)] and a trained
+classiﬁer M : D →Y , we assume the soft-label
+black-box setting where the attacker can only
+query the classiﬁer for output probabilities on
+a given input, and has no access to the model
+parameters, gradients or training data. For an input
+of length l consisting of words wi, where 1 ≤i ≤
+l, (Di = [w1, ..., wl], y), we want to generate an
+adversarial example Dadv such that M(Dadv) ̸= y.
+We would like Dadv to be grammatically correct,
+1https://github.com/Ishani-Mondal/BBAEG.git
+Algorithm 1: BBAEG Algorithm
+Input: D=[w1, ... wl], label = y, target classiﬁcation
+model M
+Output: Adversarial example of D = Dadv
+1 Initialization: Dadv ←D, Tag the entities in D,
+Named entities are in SNE and the rest in SNNE ;
+2 Compute token importance Ii ∀wi ∈D;
+3 for i in descending order of Ii do
+4
+L = {} ;
+5
+if (wi in SNE and (wi−t..wi+t) is a NE) then
+6
+Syns = synonyms of NE;
+7
+for s ∈Syns do
+8
+L[s] = Dadv[1:i−t−1][s]Dadv[i+t+1:l]
+9
+end for;
+10
+else if (wi in SNNE) then
+11
+Dadv = Dadv[1:i−1][M]Dadv[i+1:l];
+12
+T = top-K ﬁltered and semantically similar
+tokens for M ∈DM;
+13
+for t ∈T do
+14
+L[t] = Dadv[1:i−1][t]Dadv[i+1:l]
+15
+end for;
+16
+end if;
+17
+if ∃t ∈T such that M(L[t]) ̸= y then
+18
+Return: Dadv ←L[t′] where M(L[t]) ̸= y
+and L[t′] has maximum similarity with D
+19
+else
+20
+N1 = Rotate p characters in wi (p ≤l);
+21
+N2 = Random insertion of symbols
+before/end in wi;
+22
+Noise = N1 + N2 ;
+23
+for t ∈Noise do
+24
+L[t] = Dadv[1:i−1][t]Dadv[i+1:l]
+25
+end for;
+26
+if ∃t ∈T such that M(L[t]) ̸= y then
+27
+Return: Dadv ←L[t′] where M(L[t])
+̸= y and L[t′] has maximum
+similarity with D
+28
+else if wi contains numeric entity then
+29
+t = Replace wi by num2words ;
+30
+L[t] = Dadv[1:i−1][t]Dadv[i+1:l];
+31
+Return: Dadv ←L[t] if M(L[t]) ̸= y
+32
+else
+33
+Return: Dadv ←L[t′] where L[t′]
+causes max reduction in y probability
+34
+end if;
+35
+end if;
+36 end for;
+37 Return Dadv ←None
+semantically similar to D (Sim(D, Dadv) ≥α),
+where α denotes the similarity threshold.
+BBAEG Algorithm:
+Our proposed BBAEG algorithm consists of four
+steps: 1) Tagging the biomedical entities on D and
+prepare two classes NE (named entities) and Non-
+NE (non-named entities) 2) Ranking the important
+words for perturbation 3) Choosing perturbation
+schemes 4) Final adversaries generation.
+1) Named Entity Tagging: For each input in-
+stance Di (Line 1 in Algorithm), we apply
+5380
+sciSpacy2
+with en-ner-bc5cdr-md
+to extract
+biomedical named entities (drugs and diseases),
+followed by its Entity Linker (Drugs to DrugBank
+(Wishart et al., 2017), Disease to MESH3)).
+After linking the NE to respective ontologies, we
+use pyMeshSim4 (for disease) and DrugBank
+(for drugs) to obtain synonyms. In each Di of
+size l (w1, w2, ...[wi...wi+2], ...wl), multi-word
+expressions (wi...wi+2) are named entities. We
+put them in Named Entities Set (SNE) and other
+words in non-Named Entity set (SNNE).
+2) Ranking of important words:
+We
+estimate
+token importance Ii of each wi ∈D, by deleting wi
+from D and computing the decrease in probability
+of predicting the correct label y (Line 2), similar
+to (Jin et al., 2019). Thus, we receive a set for
+each token which contains the tokens in decreasing
+order of their importance.
+3) Choosing perturbation schemes:
+Consider
+the input Di, we describe a sieve-based approach
+of perturbing Di. Sieves are ordered by precision,
+with the most precise sieve appearing ﬁrst.
+Sieve 1 : In the ﬁrst sieve, we propose to alter the
+synonyms of the tokens in SNE (Line 5-9) using
+Ontology linking and the words in SNNE (Line
+10-15) using BERT-MLM predicted tokens. This
+stems from the fact that synonym replacement
+of the non-named entities using BERT-MLM
+generates reasonable predictions considering the
+surrounding context (Garg and Ramakrishnan,
+2020).
+If the token is a part of SNE, replace
+them with the domain-speciﬁc synonyms one
+by one, but if the token is part of SNNE, then
+replace those words by the top-K BERT-MLM
+predictions. To achieve high semantic similarity
+with the original text, we ﬁlter the set of top
+K tokens (K is a pre-deﬁned constant) (Line
+12) predicted by BERT-MLM for the masked
+token, using a Sentence-Transformer (Reimers and
+Gurevych, 2019) based sentence similarity scorer.
+Additionally, we ﬁlter out predicted tokens that do
+not belong to the same part of speech as original
+token. If this sieve generates adversaries for Di,
+then Dadv is being returned.
+2https://allenai.github.io/scispacy/
+3https://meshb.nlm.nih.gov/
+4https://github.com/luozhhub/pyMeSHSim
+Sieve 2: (Line 20-28) If the ﬁrst sieve does not gen-
+erate adversary, we introduce two typographical
+noise in the input 1) Spelling Noise-N1: Rotating
+random p characters (Line 20) 2) Spelling Noise-
+N2: insertion of symbols to the beginning or end
+(Line 21). If this sieve generates adversaries for
+Di, then Dadv is being returned.
+Sieve 3: (Line 29-31) If Sieve 2 does not generate
+adversary, we replace the numeric entities by
+expanding the numeric digit. For example: PMD1
+can be rewritten as PMD One, Covid19 as Covid
+nineteen. If this sieve generates adversaries for Di,
+then Dadv is being returned.
+4) Final adversaries generation: For each of the
+three sieves, among all the winning adversaries,
+the one which is the most similar to original text
+as measured by (Reimers and Gurevych, 2019) is
+returned. If the sieves do not generate adversaries,
+we return the perturbed example which causes max-
+imum reduction in the probability of output.
+3
+Experimental setup
+Datasets and Experimental Details: We evaluate
+BBAEG on two different biomedical text classi-
+ﬁcation datasets: 1) Adverse Drug Event (ADE)
+Detection (Gurulingappa et al., 2012) and 2) Twit-
+ter ADE dataset (Rosenthal et al., 2017) for the
+task of classifying whether the sentence contains
+mention of ADE (binary).
+We use 6 classiﬁcation models as M:
+Hi-
+erarchical Attention Model (Yang et al., 2016),
+BERT (Devlin et al., 2019), RoBERTa (Liu et al.,
+2019), BioBERT (Lee et al., 2019), Clinical-BERT
+(Huang et al., 2019), SciBERT (Beltagy et al.,
+2019). We ﬁne-tune these models on the train-
+ing data (of each corpus) using Adam Optimizer
+(Kingma and Ba, 2015) with learning rate of
+0.00002, 10 epochs and perform adversarial attack
+on the test data. For the BBAEG non-NER syn-
+onym attacks, we use BERT-base-uncased MLM to
+predict the masked tokens. We consider top K=10
+synonyms from the BERT-MLM predictions and
+set threshold α of 0.75 for cosine similarity be-
+tween (Reimers and Gurevych, 2019) embeddings
+of the adversarial and input text, we set p=2 char-
+acters for rotation to introduce noise in input. For
+more details refer to the appendix.
+5381
+Twitter ADE Corpus
+ADE
+Before-attack
+After-attack
+%
+Before-attack
+After-attack
+%
+HAN-TF
+0.80
+0.33
+0.10
+0.83
+0.46
+0.09
+HAN-BAE
+0.80
+0.35
+0.08
+0.83
+0.43
+0.06
+HAN-Ours
+0.80
+0.36
+0.05
+0.83
+0.31
+0.11
+BERT-base-TF
+0.83
+0.52
+0.12
+0.85
+0.59
+0.11
+BERT-base-BAE
+0.83
+0.50
+0.16
+0.85
+0.60
+0.15
+BERT-base-BBAEG
+0.83
+0.44
+0.12
+0.85
+0.54
+0.13
+RoBERTa-base-TF
+0.82
+0.66
+0.26
+0.86
+0.75
+0.28
+RoBERTa-base-BAE
+0.82
+0.63
+0.23
+0.86
+0.74
+0.24
+RoBERTa-base-BBAEG
+0.82
+0.57
+0.19
+0.86
+0.70
+0.23
+SciBERT-TF
+0.85
+0.45
+0.11
+0.88
+0.53
+0.13
+SciBERT-BAE
+0.85
+0.43
+0.11
+0.88
+0.56
+0.11
+SciBERT-BBAEG
+0.85
+0.38
+0.10
+0.88
+0.50
+0.08
+BioBERT-TF
+0.86
+0.51
+0.18
+0.87
+0.51
+0.09
+BioBERT-BAE
+0.86
+0.48
+0.13
+0.87
+0.48
+0.13
+BioBERT-BBAEG
+0.86
+0.37
+0.13
+0.87
+0.45
+0.07
+ClinicalBERT-TF
+0.81
+0.47
+0.17
+0.81
+0.54
+0.15
+ClinicalBERT-BAE
+0.81
+0.48
+0.16
+0.81
+0.58
+0.22
+ClinicalBERT-BBAEG
+0.81
+0.46
+0.17
+0.81
+0.50
+0.19
+Table 1: Before-attack and after-attack accuracies of the models along with the % of perturbed words in the input
+space. Best attack and least % of perturbations are shown in bold for each dataset.
+Adverse Drug Event (ADE) Corpus (Adversaries : ADE Present →ADE Not present)
+Original:
+Successful challenge with clozapine in a history of pulmonary eosinophilia ailment.
+BAE (Using BERT-MLM):
+Successful challenge with hydrochloride in a history of pulmonary disease ailment.
+BBAEG (Best Combination):
+Successful challenge with clozapinum in a history of Loefﬂer Syndrome ailment.
+Original:
+A 21-year-old patient developed rhabdomyolysis during 19th week of treatment with clozapine for schizophrenia.
+BBAEG (Spelling Noise-N2):
+A 21-year-old patient developed rhabdomyolysis during 19th week of treatment with inoclozapine for cdschizophrenia.
+BBAEG (Spelling Noise-N1):
+A 21-year-old patient developed rhabdomyolysis during 19th week of treatment with clpazoine for schizoerhpnia.
+BBAEG (Synonyms):
+A 21-year-old patient developed rhabdomyolysis during 19th week of treatment with Clozapinum for dementia Praecox.
+BBAEG (Number Replacement):
+A twenty-one-year-old patient developed rhabdomyolysis during nineteenth week of treatment with clozapine for schizophrenia.
+Table 2: shows the adversaries generated by BBAEG on handpicked examples from test set of ADE corpus. The
+different adversaries generated by baselines and BBAEG are shown. Also, the adversaries generated using different
+ablation of sieves [Spellings in Blue and Number in green, synonyms by attack algorithms in red] are shown.
+4
+Results
+Automatic Evaluation Results: We examine the
+success of adversarial attack using two criteria: (1)
+Performance Drop (Adrop): Difference between
+original (accuracy on original test set) and after-
+attack accuracy (accuracy on the perturbed test set)
+(2) Perturbation of input (%): Percentage of
+perturbed words in adversary generated. Success
+of attack is directly and indirectly proportional
+with criteria 1 and 2 respectively.
+Effectiveness: Table 1 shows the results of
+BBAEG attack on two datasets across all the mod-
+els. During our experiments with HAN (general
+deep learning model), we observe that the attack
+is the most successful compared to BERT-variants,
+RoBERTa and the existing baselines, in terms of
+both the criteria (1 and 2). Also, using BioBERT
+and Sci-BERT (35-45% and 40-50% accuracy drop
+respectively), the attack is the most successful.
+This stems from the fact that the vocabularies used
+in the datasets have already been explored during
+pre-training by the contextual embeddings, thus
+more sensitive towards small perturbations. More-
+over, it has been clearly observed that unlike BERT
+and HAN, RoBERTa is very less susceptible to
+adversarial attacks (10-20% accuracy drop), per-
+turbing 20-25% words in the input space.
+We
+also observe that BERT-MLM-based synonym re-
+placement techniques for non-NER, combined with
+multi-word NER synonym replacement using en-
+tity linking outperforms TextFooler(TF) and BAE-
+based approaches in terms of accuracy drop.
+Ablation Analysis: In Table 3, we perform an abla-
+tion analysis on the different perturbation schemes
+and the effect of the attack using each of the sieves
+by making use of two ﬁne-tuned contextual embed-
+ding model as the target model for ADE classiﬁca-
+tion. Synonym replacement (S1) (average 35% ac-
+curacy drop) and character rotation (S2-1) (average
+38% accuracy drop) seems to be the most promis-
+ing approach for success attacks on biomedical text
+classiﬁcation. Moreover, we conduct a deeper anal-
+ysis to gain an insight of how much the synonyms
+of NER vs Non-NER entities contribute towards
+prediction change. We have found that the multi-
+5382
+Twitter ADE
+ADE
+Accuracy Drop (Semantic Similarity)
+Accuracy Drop (Semantic Similarity)
+BioBERT-BBAEG (best variation)
+0.43 (0.893)
+0.42 (0.906)
+- w/o Synonym Replacement (S1)
+0.39 (0.899)
+0.40 (0.919)
+- w/o Spelling Noise N1 (S2-1)
+0.37 (0.901)
+0.35 (0.912)
+- w/o Spelling Noise N2 (S2-2)
+0.34 (0.913)
+0.31 (0.891))
+- w/o Number Replacement (S3)
+0.30 (0.920)
+0.27 (0.915)
+SciBERT-BBAEG (best variation)
+0.45 (0.879)
+0.38 (0.881)
+- w/o Synonym Replacement (S1)
+0.42 (0.901)
+0.35 (0.912)
+- w/o Spelling Noise N1 (S2-1)
+0.39 (0.915)
+0.36 (0.901)
+- w/o Spelling Noise N2 (S2-2)
+0.31 (0.891)
+0.31 (0.847)
+- w/o Number Replacement (S3)
+0.32 (0.911)
+0.36 (0.903)
+Table 3: Ablation analysis of the sieves (S1-S3) on accuracy drop and average semantic similarities between
+adversaries and original text.
+Twitter ADE
+ADE
+Accuracy
+Naturalness
+Accuracy
+Naturalness
+TextFooler (TF)
+0.85
+3.78
+0.78
+3.55
+BAE Algorithm
+0.88
+3.95
+0.84
+3.89
+BBAEG (Our Method)
+0.94
+4.23
+0.90
+4.56
+Table 4: Human Evaluation on both the datasets.
+word NERs during replacement generates natural-
+looking examples (compared to MLM-based entity
+replacement such as pulmonary eosinophillia is
+replaced by Loefﬂer Syndrome (for BBAEG) by
+normalizing to MESH vocabulary, while replaced
+by disease in BAE predictions as shown in Table
+2 and they seem very unnatural. This proves that
+high semantic similarity does not always ensure
+generation of proper grammatical adversaries.
+Human Evaluation: Apart from automatic evalu-
+ation, we also perform human evaluation of our
+BBAEG attacks on the BERT classiﬁer. We per-
+form similar kind of human evaluation by two
+biomedical domain-experts on randomly selected
+100 generated adversarial examples (from each of
+the different attack algorithms) on each of the two
+datasets. For each sample, 50 annotations were
+collected. Similar setup was performed by (Garg
+and Ramakrishnan, 2020) during evaluation. The
+main two criteria for evaluation of the perturbed
+samples are as follows:
+1) Naturalness : How much the adversaries gener-
+ated is semantically similar to the original text con-
+tent, preserving grammatical correctness on Likert
+Scale (1-5)? To evaluate the naturalness of the ad-
+versarial examples, we ﬁrst present the annotators
+with 50 different set of original data samples to
+understand data distribution.
+2) Accuracy of generated instances: on the bi-
+nary classiﬁcation of presence of Adverse Drug
+Reaction (ADR) on the adversarial examples. We
+enumerate the average scores of two annotators
+(for TextFooler (TF), BAE and our BBAEG) and
+present those in Table 4.
+During ablation analysis, we observe that the
+synonym replaced perturbed samples looked more
+natural to the human evaluators compared to the
+spelling perturbed samples and number replaced
+entities.
+When considered jointly, the number
+replaced and synonym replaced samples seemed
+more natural to the annotators compared to spelling
+perturbed samples. This arises due to the fact that
+the number replaced entities when thrown to the
+annotators they could easily interpret the meaning
+correctly when given in combination with the orig-
+inal sample. For instance, in the examples shown
+in table 2, the number replaced samples (21-year
+old →twenty-one-year old) look more natural and
+easily interpretable compared to spelling perturbed
+samples (clozapine →clpazoine).
+5
+Conclusion and Future Work
+In this paper, we propose a new technique for gen-
+erating adversarial examples combining contextual
+perturbations based on BERT-MLM, synonym re-
+placement of biomedical entities, typographical
+errors and numeric entity expansion. We explore
+several classiﬁcation models to demonstrate the ef-
+ﬁcacy of our method. Experiments conducted on
+two benchmark biomedical datasets demonstrate
+the strength and effectiveness of our attack. As a
+future work, we would like to explore more about
+retraining the models with the perturbed samples
+in order to improve model robustness.
+Acknowledgement
+The author would like to thank the annotators for
+hard work, and also the anonymous reviewers for
+their insightful comments and feedback.
+5383
+References
+Moustafa Alzantot, Yash Sharma, Ahmed Elgohary,
+Bo-Jhang Ho, Mani Srivastava, and Kai-Wei Chang.
+2018. Generating natural language adversarial ex-
+amples. In Proceedings of the 2018 Conference on
+Empirical Methods in Natural Language Processing,
+pages 2890–2896, Brussels, Belgium. Association
+for Computational Linguistics.
+Vladimir Araujo, Andres Carvallo, C. Aspillaga, and
+Denis Parra. 2020.
+On adversarial examples for
+biomedical nlp tasks. ArXiv, abs/2004.11157.
+Iz Beltagy, Arman Cohan, and Kyle Lo. 2019. Scibert:
+Pretrained contextualized embeddings for scientiﬁc
+text. CoRR, abs/1903.10676.
+Leonardo Campillos Llanos, Sophie Rosset, and Pierre
+Zweigenbaum. 2017.
+Automatic classiﬁcation of
+doctor-patient questions for a virtual patient record
+query task. In BioNLP 2017, pages 333–341, Van-
+couver, Canada,. Association for Computational Lin-
+guistics.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2019.
+BERT: Pre-training of
+deep bidirectional transformers for language under-
+standing.
+In Proceedings of the 2019 Conference
+of the North American Chapter of the Association
+for Computational Linguistics: Human Language
+Technologies, Volume 1 (Long and Short Papers),
+pages 4171–4186, Minneapolis, Minnesota. Associ-
+ation for Computational Linguistics.
+Shi Feng, Eric Wallace, Mohit Iyyer, Pedro Rodriguez,
+Alvin Grissom II, and Jordan L. Boyd-Graber. 2018.
+Right answer for the wrong reason: Discovery and
+mitigation. CoRR, abs/1804.07781.
+Siddhant Garg and Goutham Ramakrishnan. 2020.
+Bae: Bert-based adversarial examples for text clas-
+siﬁcation. In EMNLP.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus
+Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. 2012.
+Development of a bench-
+mark corpus to support the automatic extraction of
+drug-related adverse effects from medical case re-
+ports. Journal of Biomedical Informatics, 45(5):885
+– 892. Text Mining and Natural Language Process-
+ing in Pharmacogenomics.
+Kexin
+Huang,
+Jaan
+Altosaar,
+and
+Rajesh
+Ran-
+ganath. 2019.
+Clinicalbert:
+Modeling clinical
+notes and predicting hospital readmission.
+CoRR,
+abs/1904.05342.
+Di Jin, Zhijing Jin, Joey Tianyi Zhou, and Peter
+Szolovits. 2019.
+Is BERT really robust?
+natural
+language attack on text classiﬁcation and entailment.
+CoRR, abs/1907.11932.
+Nazmul Kazi and Indika Kahanda. 2019.
+Automat-
+ically generating psychiatric case notes from digi-
+tal transcripts of doctor-patient conversations.
+In
+Proceedings of the 2nd Clinical Natural Language
+Processing Workshop, pages 140–148, Minneapo-
+lis, Minnesota, USA. Association for Computational
+Linguistics.
+Diederik P. Kingma and Jimmy Ba. 2015.
+Adam:
+A method for stochastic optimization.
+CoRR,
+abs/1412.6980.
+Jinhyuk
+Lee,
+Wonjin
+Yoon,
+Sungdong
+Kim,
+Donghyeon Kim,
+Sunkyu Kim,
+Chan Ho So,
+and Jaewoo Kang. 2019.
+Biobert: a pre-trained
+biomedical
+language
+representation
+model
+for
+biomedical text mining. CoRR, abs/1901.08746.
+Linyang Li, Ruotian Ma, Qipeng Guo, Xiangyang Xue,
+and Xipeng Qiu. 2020. BERT-ATTACK: Adversar-
+ial attack against BERT using BERT. In Proceed-
+ings of the 2020 Conference on Empirical Methods
+in Natural Language Processing (EMNLP), pages
+6193–6202, Online. Association for Computational
+Linguistics.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man-
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis,
+Luke Zettlemoyer, and Veselin Stoyanov. 2019.
+Roberta: A robustly optimized BERT pretraining ap-
+proach. CoRR, abs/1907.11692.
+Pedro Henrique Martins, Zita Marinho, and André
+F. T. Martins. 2019.
+Joint learning of named en-
+tity recognition and entity linking. In Proceedings
+of the 57th Annual Meeting of the Association for
+Computational Linguistics: Student Research Work-
+shop, pages 190–196, Florence, Italy. Association
+for Computational Linguistics.
+Ishani Mondal,
+Sukannya Purkayastha,
+Sudeshna
+Sarkar, Pawan Goyal, Jitesh Pillai, Amitava Bhat-
+tacharyya,
+and Mahanandeeshwar Gattu. 2019.
+Medical entity linking using triplet network. In Pro-
+ceedings of the 2nd Clinical Natural Language Pro-
+cessing Workshop, pages 95–100, Minneapolis, Min-
+nesota, USA. Association for Computational Lin-
+guistics.
+Nils Reimers and Iryna Gurevych. 2019.
+Sentence-
+bert:
+Sentence embeddings using siamese bert-
+networks. CoRR, abs/1908.10084.
+Shuhuai Ren, Yihe Deng, Kun He, and Wanxiang Che.
+2019. Generating natural language adversarial ex-
+amples through probability weighted word saliency.
+In Proceedings of the 57th Annual Meeting of the
+Association for Computational Linguistics, pages
+1085–1097, Florence, Italy. Association for Compu-
+tational Linguistics.
+Sara Rosenthal, Noura Farra, and Preslav Nakov. 2017.
+SemEval-2017 task 4: Sentiment analysis in Twit-
+ter.
+In Proceedings of the 11th International
+Workshop on Semantic Evaluation (SemEval-2017),
+pages 502–518, Vancouver, Canada. Association for
+Computational Linguistics.
+5384
+David Wishart, Yannick Djoumbou, An Chi Guo, Elvis
+Lo, Ana Marcu, Jason Grant, Tanvir Sajed, Daniel
+Johnson, Carin Li, Zinat Sayeeda, Nazanin Assem-
+pour, Ithayavani Iynkkaran, Yifeng Liu, Adam Ma-
+ciejewski, Nicola Gale, Alex Wilson, Lucy Chin,
+Ryan Cummings, Diana Le, and Michael Wilson.
+2017. Drugbank 5.0: A major update to the drug-
+bank database for 2018. Nucleic acids research, 46.
+Zichao Yang, Diyi Yang, Chris Dyer, Xiaodong He,
+Alex Smola, and Eduard Hovy. 2016.
+Hierarchi-
+cal attention networks for document classiﬁcation.
+pages 1480–1489.
+Yuanzhe Zhang, Z. Jiang, T. Zhang, Shiwan Liu, Jiarun
+Cao, Kang Liu, Shengping Liu, and Jun Zhao. 2020.
+Mie: A medical information extractor towards medi-
+cal dialogues. In ACL.
+L. Zilio, Liana Braga Paraguassu, Luis Antonio Leiva
+Hercules, G. Ponomarenko, Laura Berwanger, and
+Maria José Bocorny Finatto. 2020. A lexical sim-
+pliﬁcation tool for promoting health literacy.
+In
+READI.

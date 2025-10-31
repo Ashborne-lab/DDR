@@ -1,0 +1,270 @@
+Skip to main content
+Advertisement
+[image]
+Log in
+Menu
+Find a journal Publish with us Track your research
+Search
+ Cart
+1. Home 
+2. Book
+[image] 
+Clinical Text Mining
+Secondary Use of Electronic Patient Records
+•  Book
+•  Open Access
+•  © 2018
+ You have full access to this open access Book
+Download book PDF 
+Accessibility Information
+ Discover the latest articles, books and news in related subjects.
+Clinical Text Mining
+Download book PDF 
+Overview
+Authors:
+•  Hercules Dalianis 0
+1. Hercules Dalianis
+1. DSV-Stockholm University, Kista, Sweden
+View author publications
+Search author on: PubMed   Google Scholar
+•  Provides a comprehensive overview of technical and ethical
+issues arising in clinical text mining
+•  Presents both the general background and structure of patient
+records, as well as various natural language processing and
+machine learning methodologies
+•  Written for graduate students in health informatics,
+computational linguistics, and information retrieval
+•  
+286k Accesses
+•  
+382 Citations
+•  
+10 Altmetric
+Buy print copy
+ Softcover Book USD 59.99
+Price excludes VAT (USA)
+ Buy Softcover Book 
+•  Compact, lightweight edition
+•  Dispatched in 3 to 5 business days
+•  Free shipping worldwide - see info
+ Hardcover Book USD 59.99
+Price excludes VAT (USA)
+ Buy Hardcover Book 
+•  Durable hardcover edition
+•  Dispatched in 3 to 5 business days
+•  Free shipping worldwide - see info
+Tax calculation will be finalised at checkout
+About this book
+This open access book describes the results of natural language
+processing and machine learning methods applied to clinical text
+from electronic patient records.
+It is divided into twelve chapters. Chapters 1-4 discuss the history
+and background of the original paper-based patient records, their
+purpose, and how they are written and structured. These initial
+chapters do not require any technical or medical background
+knowledge. The remaining eight chapters are more technical in
+nature and describe various medical classifications and
+terminologies such as ICD diagnosis codes, SNOMED CT, MeSH,
+UMLS, and ATC. Chapters 5-10 cover basic tools for natural
+language processing and information retrieval, and how to apply
+them to clinical text. The difference between rule-based and
+machine learning-based methods, as well as between supervised and
+unsupervised machine learning methods, are also explained. Next,
+ethical concerns regarding the use of sensitive patient records
+forresearch purposes are discussed, including methods for de-
+identifying electronic patient records and safely storing patient
+records. The book’s closing chapters present a number of
+applications in clinical text mining and summarise the lessons
+learned from the previous chapters.
+The book provides a comprehensive overview of technical issues
+arising in clinical text mining, and offers a valuable guide for
+advanced students in health informatics, computational linguistics,
+and information retrieval, and for researchers entering these fields.
+Similar content being viewed by others
+[image]
+Efficacy Analysis of Technology Approaches Toward
+Auto-assignment of Clinical Codes to the US Patient
+Medical Record
+Chapter © 2020
+[image]
+Machine Learning for Structured Clinical Data
+Chapter © 2018
+[image]
+Development of a Model for Generating Clinical
+Recommendations for a Patient Based on
+Unstructured Text Data
+Chapter © 2025
+Explore related subjects
+•  Data Mining and Knowledge Discovery
+•  Health Informatics
+•  Natural Language Processing (NLP)
+•  Information Storage and Retrieval
+Search within this book
+Search
+Table of contents (12 chapters)
+1. Front Matter
+Pages i-xvii
+Download chapter PDF 
+2. Introduction
+•  Hercules Dalianis
+Pages 1-4Open Access
+Download chapter PDF 
+3. The History of the Patient Record and the Paper
+Record
+•  Hercules Dalianis
+Pages 5-12Open Access
+Download chapter PDF 
+4. User Needs: Clinicians, Clinical Researchers and
+Hospital Management
+•  Hercules Dalianis
+Pages 13-19Open Access
+Download chapter PDF 
+5. Characteristics of Patient Records and Clinical
+Corpora
+•  Hercules Dalianis
+Pages 21-34Open Access
+Download chapter PDF 
+6. Medical Classifications and Terminologies
+•  Hercules Dalianis
+Pages 35-43Open Access
+Download chapter PDF 
+7. Evaluation Metrics and Evaluation
+•  Hercules Dalianis
+Pages 45-53Open Access
+Download chapter PDF 
+8. Basic Building Blocks for Clinical Text Processing
+•  Hercules Dalianis
+Pages 55-82Open Access
+Download chapter PDF 
+9. Computational Methods for Text Analysis and
+Text Classification
+•  Hercules Dalianis
+Pages 83-96Open Access
+Download chapter PDF 
+10. Ethics and Privacy of Patient Records for Clinical
+Text Mining Research
+•  Hercules Dalianis
+Pages 97-108Open Access
+Download chapter PDF 
+11. Applications of Clinical Text Mining
+•  Hercules Dalianis
+Pages 109-148Open Access
+Download chapter PDF 
+12. Networks and Shared Tasks in Clinical Text
+Mining
+•  Hercules Dalianis
+Pages 149-152Open Access
+Download chapter PDF 
+13. Conclusions and Outlook
+•  Hercules Dalianis
+Pages 153-157Open Access
+Download chapter PDF 
+14. Back Matter
+Pages 159-181
+Download chapter PDF 
+Back to top 
+Authors and Affiliations
+•  DSV-Stockholm University, Kista, Sweden
+Hercules Dalianis
+About the author
+Hercules Dalianis, Master of Science in engineering (civilingenjör)
+with speciality in electrical engineering, graduated in 1984 at the
+Royal Institute of Technology, KTH, Stockholm, Sweden, and
+received his PhD/Teknologie doktor in 1996 also at KTH. Since
+2011 he is professor in Computer and Systems Sciences at
+Stockholm University, Sweden. Since 1988 he has carried out
+research in natural language processing and information retrieval,
+and during the last ten years he has applied these methods on text
+from electronic patient records, resulting in the research area
+clinical text mining.
+Accessibility Information
+Accessibility information for this book is coming soon. We're
+working to make it available as quickly as possible. Thank you for
+your patience.
+Bibliographic Information
+•  Book Title: Clinical Text Mining
+•  Book Subtitle: Secondary Use of Electronic Patient Records
+•  Authors: Hercules Dalianis
+•  DOI: https://doi.org/10.1007/978-3-319-78503-5
+•  Publisher: Springer Cham
+•  eBook Packages: Computer Science, Computer Science (R0)
+•  Copyright Information: The Editor(s) (if applicable) and The
+Author(s) 2018
+•  Hardcover ISBN: 978-3-319-78502-8Published: 24 May 2018
+•  Softcover ISBN: 978-3-030-08715-9Published: 05 January
+2019
+•  eBook ISBN: 978-3-319-78503-5Published: 14 May 2018
+•  Edition Number: 1
+•  Number of Pages: XVII, 181
+•  Number of Illustrations: 26 b/w illustrations, 28 illustrations
+in colour
+•  Topics: Information Storage and Retrieval, Health
+Informatics, Natural Language Processing (NLP), Health
+Informatics, Natural Language Processing (NLP), Data Mining
+and Knowledge Discovery
+Keywords
+•  Data Mining
+•  Text Mining
+•  Health Informatics
+•  Health Care Information Systems
+•  Medical Terminologies
+•  Natural Language Processing
+•  Text Analysis
+•  Support Vector Machines
+•  Open Access
+Publish with us
+Policies and ethics 
+Back to top 
+Buy print copy
+ Softcover Book USD 59.99
+Price excludes VAT (USA)
+ Buy Softcover Book 
+•  Compact, lightweight edition
+•  Dispatched in 3 to 5 business days
+•  Free shipping worldwide - see info
+ Hardcover Book USD 59.99
+Price excludes VAT (USA)
+ Buy Hardcover Book 
+•  Durable hardcover edition
+•  Dispatched in 3 to 5 business days
+•  Free shipping worldwide - see info
+Tax calculation will be finalised at checkout
+Search
+Search by keyword or author
+Search
+Navigation
+•  Find a journal
+•  Publish with us
+•  Track your research
+Discover content
+•  Journals A-Z
+•  Books A-Z
+Publish with us
+•  Journal finder
+•  Publish your research
+•  Language editing
+•  Open access publishing
+Products and services
+•  Our products
+•  Librarians
+•  Societies
+•  Partners and advertisers
+Our brands
+•  Springer
+•  Nature Portfolio
+•  BMC
+•  Palgrave Macmillan
+•  Apress
+•  Discover
+•  Your privacy choices/Manage cookies
+•  Your US state privacy rights
+•  Accessibility statement
+•  Terms and conditions
+•  Privacy policy
+•  Help and support
+•  Legal notice
+•  Cancel contracts here
+34.106.106.208
+Not affiliated
+[image]
+© 2025 Springer Nature

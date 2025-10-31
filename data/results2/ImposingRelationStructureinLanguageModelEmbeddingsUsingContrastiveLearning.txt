@@ -1,0 +1,1337 @@
+Proceedings of the 25th Conference on Computational Natural Language Learning (CoNLL), pages 337–348
+November 10–11, 2021. ©2021 Association for Computational Linguistics
+337
+Imposing Relation Structure in Language-Model Embeddings
+Using Contrastive Learning
+Christos Theodoropoulos
+KU Leuven
+christos.theodoropoulos@kuleuven.be
+James Henderson
+Idiap Research Institute
+james.henderson@idiap.ch
+Andrei Catalin Coman
+EPFL, Idiap Research Institute
+andrei.coman@idiap.ch
+Marie-Francine Moens
+KU Leuven
+sien.moens@kuleuven.be
+Abstract
+Though language model text embeddings have
+revolutionized NLP research, their ability to
+capture high-level semantic information, such
+as relations between entities in text, is limited.
+In this paper, we propose a novel contrastive
+learning framework that trains sentence em-
+beddings to encode the relations in a graph
+structure. Given a sentence (unstructured text)
+and its graph, we use contrastive learning to
+impose relation-related structure on the token-
+level representations of the sentence obtained
+with a CharacterBERT (El Boukkouri et al.,
+2020) model. The resulting relation-aware sen-
+tence embeddings achieve state-of-the-art re-
+sults on the relation extraction task using only
+a simple KNN classiﬁer, thereby demonstrat-
+ing the success of the proposed method. Addi-
+tional visualization by a tSNE analysis shows
+the effectiveness of the learned representation
+space compared to baselines. Furthermore, we
+show that we can learn a different space for
+named entity recognition, again using a con-
+trastive learning objective, and demonstrate
+how to successfully combine both representa-
+tion spaces in an entity-relation task.
+1
+Introduction
+Pretrained language models (LMs), such as BERT
+(Devlin et al., 2018), RoBERTa (Liu et al., 2019)
+and GPT-3 (Brown et al., 2020), capture contex-
+tualized information effectively and are used in a
+wide variety of natural language processing (NLP)
+tasks. They have revolutionized NLP research. The
+main mechanism of these models is multi-head
+self-attention (Vaswani et al., 2017), which enables
+capturing patterns of semantic and syntactic inter-
+est in text. However, their ability to encapsulate
+high level semantic information, such as relations
+in the text, and domain-speciﬁc knowledge, is lim-
+ited because they are trained on very large corpora
+using the main objectives of language modeling.
+In many NLP tasks, pretrained LM embeddings
+are used as model input. A common strategy is
+to concatenate the embeddings that are extracted
+from different LMs and let the model decide which
+part of the information is useful for the task. This
+empirical approach does not provide strong intu-
+ition and results in poor explainability capabilities
+because most of the task-speciﬁc models are black
+boxes.
+In this study, we present a novel contrastive learn-
+ing (CL) framework to leverage the embedding
+space of CharacterBERT and impose a relation
+structure on the embeddings. The proposed frame-
+work receives a sentence and a graph that repre-
+sents the text relations in a structured way, and
+the CL paradigm is applied to impose this struc-
+ture on the token embeddings of the Character-
+BERT text encoder. Different graph formulations
+that represent the text relations are explored. The
+main goal is to create a common embedding space
+where relations can be easily detected. To evaluate
+progress towards this goal, we use the ADE dataset
+(Gurulingappa et al., 2012), which is widely used
+for relation extraction (RE) (Zhao and Grishman,
+2005; Jiang and Zhai, 2007; Sun et al., 2011; Plank
+and Moschitti, 2013) and named entity recogni-
+tion (NER) tasks (Curran and Clark, 2003; Florian
+et al., 2006; Nadeau and Sekine, 2007; Florian
+et al., 2010) in the challenging ﬁeld of information
+extraction (IE) from biomedical text.
+To evaluate the efﬁcacy of our approach, a sim-
+ple baseline neural network classiﬁer for RE, us-
+338
+ing the pretrained CharacterBERT medical version
+representations, is trained. The representations of
+the CharacterBERT tuned version after applying
+CL are used to train the same classiﬁer, which
+vastly outperforms the baseline classiﬁer. A tSNE
+(Van der Maaten and Hinton, 2008) analysis illus-
+trates that meaningful relation-related clusters can
+be identiﬁed in the learned embedding space. This
+provides a second strong indication that structure
+can be effectively imposed on LM embeddings us-
+ing our proposed framework.
+Even if the main focus of this work is not solving
+the IE problem directly, to further explore the capa-
+bilities of the relation-aware representation space,
+we train a simple KNN classiﬁer for RE that is com-
+petitive with state-of-the-art performance. Strict
+evaluation (Bekoulis et al., 2018b; Taillé et al.,
+2020) of the RE task presupposes correct detec-
+tion of the boundaries and the entity type of each
+argument in the relation. Hence, we apply the CL
+paradigm to learn a distinct embedding space for
+the entities and use a KNN classiﬁer to solve the
+NER task. Finally, we perform a strict evaluation
+of the complete entity-relation extraction task. This
+transparent, computationally inexpensive and intu-
+itively simple approach has comparable results to
+the state-of-the-art models. This achievement illus-
+trates how informative and meaningful the learned
+embedding spaces are.
+In summary, our key contributions are:
+• We propose a novel CL framework for impos-
+ing a relation-related structure on LM embed-
+dings.
+• We investigate different ways to model texts
+and graphs and show the effectiveness of em-
+bedding relations in pairs of token embed-
+dings.
+• We exploit the capabilities of the learned rep-
+resentation spaces by using them in the IE
+task and achieve competitive results to state-
+of-the-art models, even if we use transparent
+and intuitively simple KNN classiﬁers.
+The paper is structured as follows. Section 2
+presents the ADE dataset and the data preprocess-
+ing steps, and section 3 explains the framework in
+detail. In section 4, we evaluate the quality of the
+framework in baseline setups. The tSNE analysis
+is presented in section 5. In section 6, we use the
+framework to solve the IE task and compare the
+results to state-of-the-art models.
+2
+Dataset
+This study focuses on biomedical text, and ADE
+dataset is used. The sentences are annotated with
+labels for drugs and adverse effects, as well as
+the relations among these entities. Adverse effects
+(AEs) cover a range of signs, symptoms, diseases,
+disorders, abnormalities, organ damage and even
+death caused by that drug. The corpus is annotated
+at the sentence-level, so non-local relations (be-
+tween entities of different sentences) do not exist.
+2.1
+Data Preprocessing
+The input of the main CL framework consists of the
+encoded padded sentence and the relation graph,
+which is extracted from the sentence. The graphs
+are used only in the training setup. To prepare the
+input for CharacterBERT, tokenization is applied
+to each sentence using the character-CNN module
+(Peters et al., 2018). The BERT tokenizer handles
+out-of-vocabulary (OOV) words by splitting these
+words into word pieces. However, the existence
+of word pieces can be an obstacle in creating and
+testing the CL experiments of this study from the
+implementation point of view. Additionally, word
+pieces may add biases to the model (El Boukkouri
+et al., 2020), especially in biomedical text where
+most of the drugs and many adverse effects are
+OOV words. Hence, CharacterBERT is chosen
+instead of BERT.
+For each sentence, a knowledge graph is ob-
+tained to model the relations between the drugs
+and the adverse effects. The graph nodes are ini-
+tialized with embeddings that are extracted by the
+ﬁnal layer of the pretrained medical version of
+CharacterBERT. The graph convolutional network
+(GCN) (Kipf and Welling, 2016), which is a key
+layer of the main proposed CL framework (Fig. 1,
+Fig. 2), receives two inputs: an NxF matrix (N:
+number of nodes, F: number of features) with the
+embeddings (features) of each node and an adja-
+cency matrix NxN, which models the connections
+(edges) of the undirected graph. Generally, the
+adjacency matrices are very sparse if we consider
+all the tokens and create the whole graph because
+the relations are rare and there are many singleton
+nodes. Alternatively, the tokens that are part of a
+relation can only be used, and the essential sub-
+graph is extracted. For example, in the sentence
+"Methods: we report two cases of pseudoporphyria
+caused by naproxen and oxaprozin." There are two
+AE relations between AE pseudoporphyria and the
+339
+drugs naproxen and oxaprozin. Hence, by creat-
+ing the subgraph, only these AE and drug tokens
+are included, and the singleton nodes (rest of the
+sentence tokens) are removed.
+The drug and the AE entities may consist of
+more than one word. There are two methods to
+model this case. On the one hand, the whole phrase
+can be represented as one node in the graph by av-
+eraging the embeddings of each distinct word of
+the phrase. On the other hand, each node refers
+to the last word of the entity. For example, if the
+initial relation is between the drug "gabapentin"
+and the adverse effect "renal impairment", then in
+the graph, the relation [gabapentin, impairment] is
+modeled. The latter approach is mainly adopted
+in nonspan-based relation extraction models (Bek-
+oulis et al., 2018b; Zhao et al., 2020). In this study,
+the second approach is adopted because it gives the
+ﬂexibility in applying contrastive learning at the
+token and relation levels.
+The normalization of the adjacency matrix is
+essential for aggregating and propagating the infor-
+mation in the graph effectively (Kipf and Welling,
+2016) and is described by the following equations:
+Ahat = A + I,
+(1)
+Anorm = D−0.5 ∗Ahat ∗D−0.5,
+(2)
+where A is the initial adjacency matrix, I is the
+identity matrix and D is the degree matrix.
+Initially, the whole corpus is stored in one text
+ﬁle. Hence, the data should be transformed and
+stored using a different more ﬂexible format. For
+each sentence of the dataset, a distinct JSON ﬁle is
+created and contains a list with the tokens 1, a list
+with named entity (NE) tags adopting the BIO en-
+coding scheme (Sang and Veenstra, 1999; Ratinov
+and Roth, 2009), a list with token index pairs that
+are members of an existing relation, the padded
+encoded version of the sentence, the attention mask
+vector of the sentence, a list with the embeddings
+of each node of the graph and the normalized adja-
+cency matrix.
+2.2
+Dataset Statistics
+The ADE dataset is not ofﬁcially split into training,
+validation, and test sets. Hence, we evaluate our
+models using 10-fold cross-validation similar to Li
+et al. (2017). We use the same splits as Eberts and
+1The sentence tokenization is performed using the SpaCy
+library.
+Ulges (2020). As Taillé et al. (2020) stresses, many
+works on the IE task do not report the data prepro-
+cessing and detailed statistics of the datasets. This
+is an obstacle for a sanity check and reproducibility.
+The ADE dataset consists of 4,272 sentences, with
+5,063 drug entities (1,048 unique drugs), 5,776 AE
+entities (2,983 unique AEs) and 6,821 relations.
+We report the statistics of each split (Table 1) and
+propose using this particular split for a fair compar-
+ison 2.
+Split
+Training Set
+Test Set
+Relation Count
+Entity Count
+Relation Count
+Entity Count
+1
+6,155
+9,769
+666
+1,070
+2
+6,097
+9,713
+724
+1,126
+3
+6,133
+9,748
+688
+1,091
+4
+6,164
+9,771
+657
+1,068
+5
+6,173
+9,785
+648
+1,054
+6
+6,089
+9,713
+732
+1,126
+7
+6,155
+9,768
+666
+1,071
+8
+6,117
+9,754
+704
+1,085
+9
+6,133
+9,760
+688
+1,079
+10
+6,173
+9,770
+648
+1,069
+Mean
+6,139
+9,755
+682
+1,084
+Table 1: Statistics of 10-fold splits - ADE dataset
+3
+Framework
+In essence, contrastive learning is a paradigm for
+learning representations which capture some aux-
+iliary information by training them to distinguish
+positive from negative instances of this auxiliary in-
+formation. Our framework is inspired by the recent
+publications on image view-based CL of visual rep-
+resentation (Khosla et al., 2020; Zhang et al., 2020;
+Henaff, 2020; Chen et al., 2020; He et al., 2020),
+but differs from the existing work by the applica-
+tion of CL to the graph and text modalities. Our
+work is also inspired by the semantic bootstrapping
+hypothesis (Pinker, 1996), which proposes that chil-
+dren acquire their native language through expo-
+sure to sentences of the language (i.e., a language
+model) paired with structured representations of
+their meaning (Abend et al., 2017).
+The main CL framework for imposing relation-
+aware structure on the token embeddings is tested
+under two different settings. The difference in each
+setting is related to the modeling of the graph and
+the level of applying the CL paradigm. To solve
+the end-to-end IE task, a second model is proposed
+for learning a distinct embedding space where the
+named entities are projected.
+2To facilitate further research, the preprocessed data and
+the code will be publicly available in the ofﬁcial repository of
+the paper.
+340
+3.1
+Model Architectures
+In the ﬁrst setting (Fig. 1), we apply the CL method
+to the embeddings of graph nodes in their graph
+context and the embeddings of sentence tokens in
+their sentence context. We call this variation in
+the main CL framework CLGS. The positive and
+sampled negative graph representations are com-
+puted by a graph convolutional network (GCN)
+(Kipf and Welling, 2016; Schlichtkrull et al., 2018)
+layer followed by a pooling layer. We model the
+graph considering only the tokens that are part of
+a relation (subgraphs). To obtain one representa-
+tion for the graph, average and maximum pooling
+strategies are tried. Tanh (range: [-1, 1]) is chosen
+as the activation function of the GCN layer because
+the text encoder also extracts negative embeddings.
+Hence, a similar range of embedding values should
+be extracted from the graph. The sentence is passed
+to the text encoder (CharacterBERT), which has the
+ﬁrst six layers frozen. CharacterBERT is initialized
+with the pretrained weights (medical version). A
+pooling layer follows, to create a representation for
+the whole sentence. Taking the average, maximum
+embedding vector and the [CLS] token representa-
+tion are tested as pooling strategies. The addition
+of a projection layers before applying CL is a com-
+mon approach (Chen et al., 2020; Zhang et al.,
+2020). ReLU is used as the activation function of
+the projection layers to introduce nonlinearity. By
+adding the projection layers, there is the danger
+that the task will be solved mainly in the projection
+layers, while the ﬁnal goal is pushing structured
+relation-aware information in the text encoder. Fi-
+nally, CL is applied to the resulting pair of graph
+and sentence representations, so that the pooled
+sentence token embeddings are trained to carry the
+information in the pooled graph node embeddings.
+In the second setting, we apply the CL method to
+the embeddings of graph relations and the embed-
+dings of pairs of sentence tokens. This variation
+in the CL framework is called CLDR. The graph
+is simpliﬁed to the extreme level. Each relation
+is modeled completely independently in the graph,
+and the relation representations are extracted by
+concatenation of the nodes that are connected in
+the disjoint graphs (Fig. 2). This graph modeling
+makes the CL at the relation level a more tractable
+task. In addition, sampling negative graphs can be
+implemented more easily in a more controlled way.
+In this setting, because the graphs only have two
+nodes, the adjacency matrix should not be normal-
+GCN
+CharacterBERT
+Pooling
+Pooling
+Projection
+Projection
+Nodes 
+Embeddings
+Z x (N x 768)
+Normalized 
+Adjacency Matrix
+Z x (N x N)
+Padded Encoded 
+Sentence
+(1 x W)
+Attention 
+Masks
+(1 x W)
+G
+S
+LS - G 
+Pre-trained
+First 6 layers 
+frozen
+Z: number of sampled graphs
+W x 768
+1 x 768
+1 x 512
+Z x 512
+Z x (1 x 768)
+Z x (N x 768)
+[CLS],
+Mean,
+Max
+Mean,
+Max
+Sentence
+Representation
+Graph
+Representations
+Figure 1: CL framework CLGS - 1st Setting
+ized in a balanced way. If the adjacency matrix
+is
+  0.5 0.5
+0.5 0.5
+
+, then the ﬁnal node embeddings will
+be the same for the two nodes that form the graph.
+Hence, we suggest focusing more on the self-loop
+of each node to keep its predeﬁned contextualized
+information up to a certain level 3. The ﬁnal adja-
+cency matrix has the following format
+ λ
+1−λ
+1−λ
+λ
+
+,
+where λ is a hyperparameter of the model. The
+λ parameter deﬁnes the balance of focusing on
+the self-loop of each node and its neighbor (con-
+nected node). Intuitively, a λ value equal to 0.8 is a
+good choice for focusing attention on the self-loop
+and having distinct embeddings for the connected
+nodes. ReLU is used as the activation function of
+the GCN layer.
+GCN
+CharacterBERT
+Concatenated
+Relation
+Representations
+Nodes 
+Embeddings
+R x Z x (2 x 768)
+Normalized 
+Adjacency Matrix
+R x Z x (2 x 2)
+Padded Encoded 
+Sentence
+(1 x W)
+Attention 
+Masks
+(1 x W)
+RG
+RS
+LRel 
+Pre-trained
+First 6 layers 
+frozen
+Z: number of sampled graphs
+W x 768
+R x Z x (2 x 768)
+Relation 
+Representations
+Graph side
+Concatenated
+Relation
+Representations
+Relation 
+Representations
+Sentence side
+R x Z x (1 x 1536)
+R x (1 x 1536)
+R: number of relations 
+in the sentence
+ReLU
+R x (1 x 1536)
+Figure 2: CL framework CLDR - 2nd Setting
+3We remind that the nodes are initialized with embeddings
+extracted from the pretrained CharacterBERT medical version.
+341
+On the text side, the pair of tokens that form
+a relation in the disjoint graphs are chosen, and
+the concatenation of their representations is used
+as the ﬁnal relation representation. Finally, CL
+is applied on the relation level, so that the pairs
+of sentence token embeddings are trained to carry
+the information in the pairs of related graph node
+embeddings.
+A distinct model (called CLNER) for learning
+meaningful representations for named entities is
+designed (Fig. 3). CharacterBERT captures con-
+textualised information very well. Hence, only one
+dense layer is added after CharacterBERT. Then
+a random sampling for the named entities is per-
+formed in a balanced way. A pool of sampled
+entities of the batch is selected and CL is applied
+on the token level.
+CharacterBERT
+Attention 
+Masks
+B x (1 x W)
+Padded Encoded 
+Sentence
+B x (1 x W)
+Pre-trained
+First 6 layers 
+frozen
+Dense
+B x (W x 768)
+B x (W x 768)
+Sampling
+S x 768
+NE
+LNE
+Named Entity
+Representations
+B: batch size
+S: Number of samples
+ in the batch level
+Figure 3: Model CLNER for learning named entity rep-
+resentations
+3.2
+Sampling Strategy
+Hard negative sampling is important to effectively
+apply the CL paradigm. The negative graphs are
+created by randomly selecting tokens that are not
+part of an adverse effect entity, keeping the cor-
+rect drug tokens, and vice versa. Hence, hard in-
+correct drug and adverse effects relation pairs are
+introduced to the graph. The positive and negative
+graphs of each sentence have the same number of
+relations but not necessarily the same number of
+nodes. The sampling strategy is similar for the
+CLGS (Fig. 4) and the CLDR model (Fig. 5). For
+the CLDR model, the positive graph is simpliﬁed to
+a disjoint graph, and then hard negative sampling
+is performed.
+Methods: we report two cases of pseudoporphyria 
+caused by naproxen and oxaprozin.  
+naproxen
+oxaprozin
+pseudoporphyria
+Positive subgraph
+Negative subgraphs
+cases
+report
+pseudoporphyria
+methods
+caused
+oxaprozin
+naproxen
+Figure 4: Example of sampling negative graphs - CLGS
+model
+Methods: we report two cases of pseudoporphyria 
+caused by naproxen and oxaprozin.  
+naproxen
+oxaprozin
+pseudoporphyria
+Positive subgraph
+Negative subgraphs
+cases
+pseudoporphyria
+methods
+caused
+oxaprozin
+naproxen
+Disjoint positive subgraph
+pseudoporphyria
+pseudoporphyria
+oxaprozin
+naproxen
+pseudoporphyria
+report
+Figure 5:
+Example of sampling negative graphs -
+CLDR model
+In the CLNER, random sampling4 is executed at
+the batch level. Analysis of the number of differ-
+ent entity tags (drug, AE or outside token) in the
+batch is performed a priori to choose an appropriate
+number of positive and negative samples (balanced
+sampling).
+4Hard negative sampling based on the Euclidean distance
+and cosine similarity is also tested, but the performance is not
+increased. Hence, the complexity-performance trade-off leads
+us to ﬁnally select random sampling.
+342
+3.3
+Design Choices
+In this subsection, the justiﬁcation for the model
+design choices is discussed. For the CLGS and
+CLDR models, the GCN layer is the key element
+because it can produce useful node representations
+considering the graph links. The propagation rule
+of the GCN layer is described by the following
+equation:
+Xl+1 = σ(Anorm ∗Xl ∗Wl),
+(3)
+where σ(·) is the activation function (e.g., ReLU,
+Tanh), Anorm is the normalized adjacency matrix
+(Eq.
+2), Xl the node embeddings and Wl the
+weights of the l layer.
+In the ﬁrst setting (CLGS model), the graph is
+propagated through the GCN layer, and a ﬁnal
+pooled graph representation is extracted. We hy-
+pothesize that using the CL paradigm, the model
+can learn which part of the information is essen-
+tial for the relation representations by keeping the
+structure-related information in the graph represen-
+tation. In the second setting (CLDR model), the
+level of abstraction is reduced because instead of
+applying CL in the graph sentence, we use the CL
+paradigm at the relation level. The strategy of cre-
+ating disjoint graphs results in learning similar rep-
+resentations for the drug and AE nodes. To address
+this, the relations are represented asymmetrically as
+a concatenation of the nodes. We hypothesize that
+relation-related information can be imposed in the
+pair-of-tokens embeddings of the LM by applying
+CL to them and these pair-of-nodes embeddings of
+the graph relations (Fig. 2).
+3.4
+Training Details
+The models are trained using a CL loss function
+that is similar to the SimCLR loss function (Chen
+et al., 2020). In the ﬁrst setting (CLGS model),
+the main concept is to leverage the two graph and
+sentence representations so the true representation
+pair is close and similar in the learned embedding
+space. At each training time, a set of Z graphs (the
+positive and some negative graphs) and the corre-
+sponding sentence are passed on the model, and
+the corresponding representations are calculated.
+Therefore, the contrastive loss receives the graph
+and sentence representations and for the i-th pair is
+as follows:
+l(S→G)
+i
+= −log(
+exp(<Si,Gi>/τ)
+PZ
+z=1 exp(<Si,Gz>/τ)),
+(4)
+where < Si, Gi > represents the cosine similar-
+ity and τ is a temperature parameter.
+In the second setting (CLDR model), the pair
+of node embeddings that are extracted from the
+disjoint graphs encode their relation, because this is
+the main functionality of the GCN layer. Hence, the
+main idea is to increase the similarity between the
+representations of the correct relation in the graph
+and the relation representations that are extracted
+from the text encoder.
+The contrastive loss for each sentence is as fol-
+lows:
+l(RS→RG) = PR
+r=1 −log(
+exp(<RSr,RGr>/τ)
+PZ
+z=1 exp(<RSr,RGz>/τ)), (5)
+where R is the total number of relations in the
+sentence, RS is the relation representation of the
+text encoder and RG is the relation representation
+of the graph.
+For the CLNER model, the contrastive loss is as
+follows:
+lNE = PN
+n=1 −log(
+PP
+p=1 exp(<RNn,RNp>/τ)
+PK
+k=1 exp(<RNn,RNk>/τ)), (6)
+where N is the total number of tokens in the
+batch, P is the number of the positive samples
+(same NE tag), K is the total number of samples
+and RN is the extracted token representation.
+We use a batch-size of 8 for training the CLGS
+and CLDR models, and 16 for the CLNER model.
+ADAM optimizer (Kingma and Ba, 2014) is se-
+lected with a learning rate of 1e-5 5.
+4
+Evaluation - Baseline
+For the CLGS model, the ﬁrst evaluation step is a
+simple similarity check. We use the trained CLGS
+model to extract the sentence representation and
+the positive and negative graph representations for
+all the sentences in the test set. Then, a similarity
+check is applied using the extracted sentence and
+graph representations. The most similar graph is
+predicted as the positive sentence graph. Given the
+positive and all the negative hard graphs extracted
+from each sentence, the model should be able to
+detect the correct graph. The different model varia-
+tions perform well, but the mean pooling selection
+in the graph and sentence side results in better per-
+formance, as the accuracy is over 91%. The addi-
+tion of the projection layers is not advantageous.
+5More information about hyperparameter tuning-selection
+is given in the Appendix section.
+343
+Graph Pooling
+Text Pooling
+Projection layer
+Accuracy
+Mean
+[CLS]
+-
+88.39
+Mean
+Mean
+-
+91.23
+Max
+Max
+-
+89.1
+Mean
+[CLS]
+Yes
+88.63
+Mean
+Mean
+Yes
+87.68
+Table 2: Results - CLGS model: Finding the correct
+graph with similarity check
+The second evaluation step is applied to both
+models (CLGS and CLDR). Following previous re-
+search on representation learning (Henaff, 2020;
+Chen et al., 2020; He et al., 2020; Zhang et al.,
+2020), we evaluate the tuned CharacterBERT text
+encoder, taken from the trained CLGS and CLDR
+models, in a linear classiﬁcation setting, where all
+the candidate relations (concatenation of the token
+embeddings) are created, and a linear classiﬁca-
+tion layer is trained for the RE task. As a baseline
+model, we use the pretrained medical Character-
+BERT to create the representation for the relations6.
+This linear setting directly provides insight into
+how successfully the relation-related structure is
+imposed at the token level of the text encoder, by
+evaluating the quality of the learned representations
+for RE.
+Model
+Precision
+Recall
+F1
+Baseline
+69.96
+64.39
+66.79
+CharacterBERTCLGS
+56.82
+59.42
+58.09
+CharacterBERTCLDR
+79.51
+84.39
+81.73
+Table 3: RE - linear classiﬁcation setting
+Using the tuned CharacterBERT representation
+from the CLGS model (mean graph and text pool-
+ing) results in poor performance. The pooling layer
+smooths the information. Hence, structure-related
+information cannot be passed at the token level of
+the text encoder. A smarter pooling strategy that
+preserves most of the relation-aware information
+would be ideal, but designing such pooling is dif-
+ﬁcult. The main obstacle is the varied number of
+relations. In contrast, when we use the tuned Char-
+acterBERT of the CLDR model, the basic classiﬁer
+vastly outperforms the baseline model. This is a
+strong indication that the relation-related structure
+is successfully imposed on the pairs of token em-
+beddings of the text encoder.
+6We also try ﬁne-tuning both the text encoder and the
+linear head, but the performance is not improved.
+5
+tSNE Analysis
+A tSNE analysis is performed to further explore
+the quality of the learned embedding spaces. Us-
+ing the tuned CharacterBERT of the CLDR model,
+the relation representation space is created. We
+project the positive (orange dots) and hard negative
+relations (blue dots), where one of the two rela-
+tion tokens is correct. In the tSNE plot (Fig. 6),
+meaningful relation clusters can be easily identiﬁed,
+which demonstrates the efﬁciency of our frame-
+work (CLDR model). The relation representations
+are asymmetric, as the drug and AE tokens have
+similar representations (Fig. 7). This means that
+we cannot solve RE and NER tasks using the same
+representation space. Hence, we learn a different
+space for the named entities (CLNER model).
+Figure 6: tSNE plot - Relation representation space ob-
+tained with CharacterBERT of CLDR model (1: rela-
+tion, 0: no relation)
+Figure 7: tSNE plot - Relation representation space ob-
+tained with CharacterBERT of CLDR model - Named
+Entities
+In the tSNE plot in the entity representation
+space (Fig. 8), we can detect insightful entity clus-
+ters. In particular, the clusters related to the drug
+tags (B-DRUG, I-DRUG) are very dense and well
+344
+shaped. This is a strong ﬁnding that illustrates that
+the CLNER model can extract very good represen-
+tations for the NER task.
+Figure 8: tSNE plot - Entity representation space ob-
+tained with CLNER model
+6
+Entity-Relation task
+The insights of the tSNE analysis, with the well-
+deﬁned clusters in the embedding spaces, lead us to
+approach the entity-relation task using intuitively
+simple and transparent KNN classiﬁers. For the
+RE task, we utilize the tuned CharacterBERT of
+the CLDR model to create the candidate relation
+representations. At the inference step, for each
+candidate relation, we decide whether it is positive
+based on the labels of the k-nearest neighbors in the
+learned embedding space. The value of k is chosen
+based on the performance in the randomly selected
+validation set (10% of training set) for each fold.
+We adopt the same strategy for the NER task using
+the CLNER model and project each token to the
+named entity representation space.
+To solve both NER and RE tasks, we combine
+the two semantic spaces.
+First, we determine
+whether a candidate relation (concatenation of the
+tokens) is predicted as positive in the relation rep-
+resentation space, which is obtained by the tuned
+CharacterBERT of the CLDR model. Then, we
+determine whether the boundaries and the types of
+the two entities in the candidate relation are pre-
+dicted correctly in the entity representation space
+obtained by the CLNER model. All possible candi-
+date relations and the named entities of the test set
+are classiﬁed.
+We strictly evaluate the performance of the IE
+task. As Bekoulis et al. (2018b) state, an entity is
+considered correct if its boundaries are detected cor-
+rectly and the predicted type (drug or AE) matches
+the ground truth. In the same setup, a relation is
+considered correct if its type and the two entities
+(boundaries and type) involved in the relation are
+correctly predicted. We measure precision, recall
+and F1 score. Following previous work on IE, we
+report the macro-averaged F1 score, and as 10-fold
+cross-validation is adopted, we average the scores
+over the folds.
+Model
+NER
+RE
+RE-
+Li et al., 2016
+79.5
+63.4
+-
+Li et al., 2017
+84.6
+71.4
+-
+Bekoulis et al., 2018b
+86.4
+74.58
+-
+Bekoulis et al., 2018a
+86.73
+75.52
+-
+Tran and Kavuluru, 2019
+87.11
+77.29
+-
+Eberts and Ulges, 2020
+89.25
+79.24
+-
+Wang and Lu, 2020
+89.7
+80.1
+-
+Zhao et al., 2020
+89.4
+81.14
+-
+Ours
+88.3
+79.97
+86.5
+Table 4: Test set results: macro-averaged F1 score
+Table 4 presents the best performing models,
+evaluated on the ADE (Gurulingappa et al., 2012)
+dataset. These studies address the IE problem as
+a joint task, solving NER and RE tasks jointly. Li
+et al. (2016) employ global features and a CNN
+(LeCun et al., 1995) module to solve the problem.
+The proposed model of Li et al. (2017) includes
+bidirectional RNNs (Graves et al., 2013), inspired
+by the work of Miwa and Bansal (2016). Bekoulis
+et al. (2018a,b) formulate the IE problem as a multi-
+head selection problem. Tran and Kavuluru (2019)
+approach the IE task as a table-ﬁlling problem and
+introduce a relation-metric network, combining the
+idea of metric learning and the usage of CNNs
+for table ﬁlling. Eberts and Ulges (2020) present
+a span-based model that its core module is pre-
+trained BERT (Devlin et al., 2018). Wang and Lu
+(2020) propose table-sequence encoders that learn
+table and sequence representations to solve the IE
+problem. Zhao et al. (2020) introduce a deep cross-
+modal attention network, constructed by stacking
+multiple attention units, for joint entity and relation
+extraction.
+In the RE task, we achieve very competitive re-
+sults using a simple and transparent KNN classiﬁer.
+In contrast, the state-of-the-art models (Wang and
+Lu, 2020; Zhao et al., 2020) are very complex and
+computationally expensive. This fact highlights
+the high quality of the learned relation representa-
+tion space (CLDR model). In principle, the NER
+task is a sequence-tagging problem. However, we
+obtain good performance with a KNN classiﬁer
+345
+that performs the inference in the learned entity
+representation space (CLNER model).
+Notably, the last column of Table 4 (RE-)
+presents the performance of the RE KNN classi-
+ﬁer in predicting whether there is a relation be-
+tween two tokens, without considering the NER
+task (type and boundaries of the entities). In this
+case, the F1 score is 86.5, and this value is the up-
+per bound performance of our approach. Hence,
+incorporating a state-of-the-art model for the NER
+task (e.g., Wang and Lu, 2020, Eberts and Ulges,
+2020) could further improve the scores of the RE
+task under strict evaluation. However, we use the
+SpERT model (Eberts and Ulges, 2020) for NER
+(F1 score: 89.25), but the results in the RE task are
+not improved. This illustrates that our NER results
+are already very competitive.
+The above results reveal the quality of the rep-
+resentations for both NER and RE tasks. Hence,
+the proposed CL framework can be used as a pre-
+processing and representation learning step in the
+pipeline for IE models. The CL framework can be
+trained to leverage the embedding space and create
+meaningful, disentangled representations for the IE
+task. We successfully evaluated the representations
+with a simple KNN classiﬁer, but the learned repre-
+sentations can be used as input in complex models
+for entity and relation classiﬁcation to achieve bet-
+ter results and faster convergence. We will explore
+this research direction in the future.
+7
+Conclusion
+We present a novel CL framework, which, in princi-
+ple, is text encoder-agnostic, for effectively impos-
+ing relation-related structure to LMs and leveraging
+the embedding space. We evaluate the quality of
+the learned representations using relative baselines
+and competitively solve an entity-relation task. The
+overall results indicate that the learned represen-
+tations are very powerful. The performed tSNE
+analysis illustrates that meaningful clusters can be
+easily identiﬁed in the learned embedding spaces.
+We note that the proposed framework can be used
+as a representation learning step for complex IE
+systems. In future work, we intend to explore
+the capabilities of our approach in continual learn-
+ing settings and exploit external graph structured
+knowledge in representation learning of language
+data.
+Acknowledgments
+This work is supported by the Research Founda-
+tion – Flanders (FWO) and Swiss National Science
+Foundation (SNSF). Christos Theodoropoulos and
+Marie-Francine Moens are afﬁliated to Leuven.AI -
+KU Leuven institute for AI, B-3000, Leuven, Bel-
+gium.
+References
+Omri Abend, Tom Kwiatkowski, Nathaniel J Smith,
+Sharon Goldwater, and Mark Steedman. 2017. Boot-
+strapping language acquisition. Cognition, 164:116–
+143.
+Giannis Bekoulis, Johannes Deleu, Thomas Demeester,
+and Chris Develder. 2018a.
+Adversarial training
+for multi-context joint entity and relation extraction.
+In Proceedings of the 2018 Conference on Empiri-
+cal Methods in Natural Language Processing, pages
+2830–2836.
+Giannis Bekoulis, Johannes Deleu, Thomas Demeester,
+and Chris Develder. 2018b.
+Joint entity recogni-
+tion and relation extraction as a multi-head selection
+problem. Expert Systems with Applications, 114:34–
+45.
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie
+Subbiah,
+Jared
+D
+Kaplan,
+Prafulla
+Dhariwal,
+Arvind Neelakantan, Pranav Shyam, Girish Sastry,
+Amanda Askell, Sandhini Agarwal, Ariel Herbert-
+Voss, Gretchen Krueger, Tom Henighan, Rewon
+Child, Aditya Ramesh, Daniel Ziegler, Jeffrey Wu,
+Clemens Winter, Chris Hesse, Mark Chen, Eric
+Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess,
+Jack Clark, Christopher Berner, Sam McCandlish,
+Alec Radford, Ilya Sutskever, and Dario Amodei.
+2020. Language models are few-shot learners. In
+Advances in Neural Information Processing Systems,
+volume 33, pages 1877–1901. Curran Associates,
+Inc.
+Ting Chen, Simon Kornblith, Mohammad Norouzi,
+and Geoffrey Hinton. 2020. A simple framework for
+contrastive learning of visual representations. In In-
+ternational Conference on Machine Learning, pages
+1597–1607. PMLR.
+James R Curran and Stephen Clark. 2003. Language
+independent ner using a maximum entropy tagger.
+In Proceedings of the Seventh Conference on Natu-
+ral language Learning at HLT-NAACL 2003, pages
+164–167.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2018.
+BERT: Pre-training of
+deep bidirectional transformers for language under-
+standing. arXiv preprint arXiv:1810.04805.
+Markus Eberts and Adrian Ulges. 2020. Span-based
+joint entity and relation extraction with transformer
+pre-training. pages 2006–2013.
+346
+Hicham
+El
+Boukkouri,
+Olivier
+Ferret,
+Thomas
+Lavergne, Hiroshi Noji, Pierre Zweigenbaum, and
+Jun’ichi Tsujii. 2020.
+Characterbert: Reconciling
+elmo and bert for word-level open-vocabulary rep-
+resentations from characters.
+In Proceedings of
+the 28th International Conference on Computational
+Linguistics, pages 6903–6915.
+Radu Florian, Hongyan Jing, Nanda Kambhatla, and
+Imed Zitouni. 2006. Factorizing complex models: a
+case study in mention detection. In Proceedings of
+the 21st International Conference on Computational
+Linguistics and the 44th Annual Meeting of the As-
+sociation for Computational Linguistics, pages 473–
+480.
+Radu Florian, John F Pitrelli, Salim Roukos, and Imed
+Zitouni. 2010. Improving mention detection robust-
+ness to noisy input. In Proceedings of the 2010 Con-
+ference on Empirical Methods in Natural Language
+Processing, pages 335–345.
+Alex Graves, Abdel-rahman Mohamed, and Geoffrey
+Hinton. 2013. Speech recognition with deep recur-
+rent neural networks. In 2013 IEEE international
+conference on acoustics, speech and signal process-
+ing, pages 6645–6649. Ieee.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus
+Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. 2012. Development of a benchmark
+corpus to support the automatic extraction of drug-
+related adverse effects from medical case reports.
+Journal of Biomedical Informatics, 45(5):885–892.
+Kaiming He, Haoqi Fan, Yuxin Wu, Saining Xie, and
+Ross Girshick. 2020. Momentum contrast for unsu-
+pervised visual representation learning. In Proceed-
+ings of the IEEE/CVF Conference on Computer Vi-
+sion and Pattern Recognition, pages 9729–9738.
+Olivier Henaff. 2020. Data-efﬁcient image recognition
+with contrastive predictive coding. In International
+Conference on Machine Learning, pages 4182–4192.
+PMLR.
+Jing Jiang and ChengXiang Zhai. 2007. A systematic
+exploration of the feature space for relation extrac-
+tion. In Human Language Technologies 2007: The
+Conference of the North American Chapter of the
+Association for Computational Linguistics; Proceed-
+ings of the Main Conference, pages 113–120.
+Prannay Khosla, Piotr Teterwak, Chen Wang, Aaron
+Sarna,
+Yonglong
+Tian,
+Phillip
+Isola,
+Aaron
+Maschinot, Ce Liu, and Dilip Krishnan. 2020. Su-
+pervised contrastive learning. In Advances in Neural
+Information Processing Systems, volume 33, pages
+18661–18673. Curran Associates, Inc.
+Diederik P Kingma and Jimmy Ba. 2014. Adam: A
+method for stochastic optimization. arXiv preprint
+arXiv:1412.6980.
+Thomas N Kipf and Max Welling. 2016.
+Semi-
+supervised classiﬁcation with graph convolutional
+networks. arXiv preprint arXiv:1609.02907.
+Yann LeCun, Yoshua Bengio, et al. 1995.
+Convolu-
+tional networks for images, speech, and time series.
+The handbook of brain theory and neural networks,
+3361(10):1995.
+Fei Li, Meishan Zhang, Guohong Fu, and Donghong Ji.
+2017. A neural joint model for entity and relation ex-
+traction from biomedical text. BMC bioinformatics,
+18(1):1–11.
+Fei Li, Yue Zhang, Meishan Zhang, and Donghong
+Ji. 2016. Joint models for extracting adverse drug
+events from biomedical text.
+In Proceedings of
+the Twenty-Fifth International Joint Conference on
+Artiﬁcial Intelligence, IJCAI’16, page 2838–2844.
+AAAI Press.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Man-
+dar Joshi, Danqi Chen, Omer Levy, Mike Lewis,
+Luke Zettlemoyer, and Veselin Stoyanov. 2019.
+Roberta: A robustly optimized BERT pretraining ap-
+proach. arXiv preprint arXiv:1907.11692.
+Makoto Miwa and Mohit Bansal. 2016. End-to-end re-
+lation extraction using LSTMs on sequences and tree
+structures. In Proceedings of the 54th Annual Meet-
+ing of the Association for Computational Linguistics
+(Volume 1: Long Papers), pages 1105–1116, Berlin,
+Germany. Association for Computational Linguis-
+tics.
+David Nadeau and Satoshi Sekine. 2007. A survey of
+named entity recognition and classiﬁcation. Lingvis-
+ticae Investigationes, 30(1):3–26.
+Matthew E Peters, Mark Neumann, Mohit Iyyer, Matt
+Gardner, Christopher Clark, Kenton Lee, and Luke
+Zettlemoyer. 2018. Deep contextualized word repre-
+sentations. arXiv preprint arXiv:1802.05365.
+Steven Pinker. 1996. Language Learnability and Lan-
+guage Development: With New Commentary by the
+Author, volume 7. Harvard University Press.
+Barbara Plank and Alessandro Moschitti. 2013. Em-
+bedding semantic similarity in tree kernels for do-
+main adaptation of relation extraction. In Proceed-
+ings of the 51st Annual Meeting of the Association
+for Computational Linguistics (Volume 1: Long Pa-
+pers), pages 1498–1507.
+Lev Ratinov and Dan Roth. 2009.
+Design chal-
+lenges and misconceptions in named entity recog-
+nition.
+In Proceedings of the Thirteenth Confer-
+ence on Computational Natural Language Learning
+(CoNLL-2009), pages 147–155.
+Erik F Tjong Kim Sang and Jorn Veenstra. 1999. Rep-
+resenting text chunks. In Proceedings of the Ninth
+Conference of the European Chapter of the Associa-
+tion for Computational Linguistics, pages 173–179.
+Michael Schlichtkrull, Thomas N Kipf, Peter Bloem,
+Rianne Van Den Berg, Ivan Titov, and Max Welling.
+2018. Modeling relational data with graph convolu-
+tional networks. In European Semantic Web Confer-
+ence, pages 593–607. Springer.
+347
+Ang Sun, Ralph Grishman, and Satoshi Sekine. 2011.
+Semi-supervised relation extraction with large-scale
+word clustering.
+In Proceedings of the 49th An-
+nual Meeting of the Association for Computational
+Linguistics: Human Language Technologies, pages
+521–529.
+Bruno Taillé, Vincent Guigue, Geoffrey Scoutheeten,
+and Patrick Gallinari. 2020. Let’s stop error prop-
+agation in the end-to-end relation extraction litera-
+ture!
+In Proceedings of the 2020 Conference on
+Empirical Methods in Natural Language Processing
+(EMNLP 2020), pages 3689–3701.
+Tung Tran and Ramakanth Kavuluru. 2019.
+Neural
+metric learning for fast end-to-end relation extrac-
+tion. arXiv preprint arXiv:1905.07458.
+Laurens Van der Maaten and Geoffrey Hinton. 2008.
+Visualizing data using t-sne.
+Journal of Machine
+Learning Research, 9(11).
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+Uszkoreit, Llion Jones, Aidan N Gomez, Ł ukasz
+Kaiser, and Illia Polosukhin. 2017. Attention is all
+you need. In Advances in Neural Information Pro-
+cessing Systems, volume 30. Curran Associates, Inc.
+Jue Wang and Wei Lu. 2020.
+Two are better than
+one: Joint entity and relation extraction with table-
+sequence encoders. In Proceedings of the 2020 Con-
+ference on Empirical Methods in Natural Language
+Processing (EMNLP 2020), pages 1706–1721. Asso-
+ciation for Computational Linguistics.
+Yuhao Zhang, Hang Jiang, Yasuhide Miura, Christo-
+pher D Manning, and Curtis P Langlotz. 2020.
+Contrastive learning of medical visual representa-
+tions from paired images and text. arXiv preprint
+arXiv:2010.00747.
+Shan Zhao, Minghao Hu, Zhiping Cai, and Fang Liu.
+2020. Modeling dense cross-modal interactions for
+joint entity-relation extraction. pages 4032–4038.
+Shubin Zhao and Ralph Grishman. 2005. Extracting
+relations with integrated information using kernel
+methods. In Proceedings of the 43rd Annual Meet-
+ing of the Association for Computational Linguistics
+(ACL’05), pages 419–426.
+Training Details - Hyperparameters
+Initially, the data are split to train and test set using
+10-fold cross-validation (same splits to Eberts and
+Ulges (2020)). In each training session, for each
+split, the seed number is set to 42 in order to ran-
+domly create a validation set for tuning (10% of
+the train set). The seed number is chosen in order
+to have the same split of train and validation set in
+all training sessions of the CL framework and the
+baseline and KNN classiﬁers. ADAM optimizer
+(Kingma and Ba, 2014) is selected with learning
+rate 1e-5 for training of the CL framework. The
+best weights, based on the performance in the vali-
+dation set, are stored.
+We train the CL framework (CLGS, CLDR,
+CLNER models) for 20 epochs and apply the tech-
+nique of early stopping after 3 epochs without im-
+provement in the validation set. We experiment
+with different hyperparameter values and select the
+best values based on the performance in the val-
+idation set (averaged across the 10 splits) in the
+basic classiﬁer that is presented in section 4. For
+the CLGS and CLDR models, the different negative
+graphs of each sentence are created ofﬂine. The
+length of sentences varies signiﬁcantly, so the num-
+ber of negative graphs also varies. Based on that,
+randomly selecting 8 negative graphs for each train-
+ing set is intuitively a good choice. In parentheses,
+there are the tested values. The hyperparameters of
+the CLGS model are:
+• Batch Size: 8 (8, 16)
+• Temperature τ: 0.1 (0.05, 0.1, 0.2)
+• Number of negative graphs: 8 (4, 8, 12)
+Those of the CLDR model are:
+• Batch Size: 8 (8, 16)
+• λ parameter (adjacency matrix): 0.8 (0.7, 0.8,
+0.9)
+• Temperature τ: 0.1 (0.05, 0.1, 0.2)
+• Number of negative graphs: 8 (4, 8, 12)
+The essential parameter of the CLNER model is
+the number of samples. The number of available to-
+kens depends on the batch size. In order to sample
+in a balanced way (Table 5), when the batch size
+is 16, a good number of samples is 80. For exam-
+ple, if we have a ’B-DRUG’ token, then we sample
+all the tokens with the same tag (positive tokens -
+around 20, Table 5) and the remaining negative to-
+kens are sampled in a balanced way. This sampling
+strategy should be deﬁned because the NE token
+distribution is highly imbalanced (Table 6). The
+’O’ tag is highly represented, while the ’I-DRUG’
+tag is under-represented. The temperature value τ
+is set to 0.1.
+The KNN classiﬁer has only one hyperparameter,
+the number of k neighbors that are taken into ac-
+count in the inference step. We choose the k value
+based on the performance in the validation set for
+each split. The k value is 5 for the RE KNN clas-
+siﬁer, and 7 for the NER KNN classiﬁer (section
+6).
+348
+NE type
+Count
+B-DRUG
+19
+I-DRUG
+4
+B-AE
+21
+I-AE
+26
+O
+268
+Table 5: Average number of tokens per NE tag - Batch
+size: 16
+NE type
+Count
+B-DRUG
+5,039
+I-DRUG
+1,062
+B-AE
+5,701
+I-AE
+7,054
+O
+71,858
+Table 6: Total number of tokens per NE tag

@@ -1,0 +1,365 @@
+Skip to main content
+Advertisement
+[image]
+[image]
+Log in
+Menu
+Find a journal Publish with us Track your research
+Search
+ Cart
+1. Home 
+2. Journal of Healthcare Informatics Research 
+3. Article
+Informative Causality Extraction
+from Medical Literature via
+Dependency-Tree–Based
+Patterns
+•  Research Article
+•  Published: 25 May 2022
+•  Volume 6, pages 295–316, (2022)
+•  Cite this article
+[image] Journal of Healthcare Informatics Research Aims and scope 
+Submit manuscript 
+Show authors
+•  M. Ahsanul Kabir1,
+•  AlJohara Almulhim1,
+•  Xiao Luo2 &
+•  …
+•  Mohammad Al Hasan
+  ORCID:
+orcid.org/0000-0002-8279-10231 
+•  
+2747 Accesses
+•  
+5 Citations
+•  Explore all metrics 
+Abstract
+Extracting cause-effect entities from medical literature is an important
+task in medical information retrieval. A solution for solving this task can
+be used for compilation of various causality relations, such as causality
+between disease and symptoms, between medications and side effects,
+and between genes and diseases. Existing solutions for extracting
+cause-effect entities work well for sentences where the cause and the
+effect phrases are name entities, single-word nouns, or noun phrases
+consisting of two to three words. Unfortunately, in medical literature,
+cause and effect phrases in a sentence are not simply nouns or noun
+phrases, rather they are complex phrases consisting of several words,
+and existing methods fail to correctly extract the cause and effect entities
+in such sentences. Partial extraction of cause and effect entities conveys
+poor quality, non-informative, and often, contradictory facts, comparing to
+the one intended in the given sentence. In this work, we solve this
+problem by designing an unsupervised method for cause and effect
+phrase extraction, PatternCausality, which is specifically suitable for the
+medical literature. Our proposed approach first uses a collection of
+cause-effect dependency patterns as template to extract head words of
+cause and effect phrases and then it uses a novel phrase extraction
+method to obtain complete and meaningful cause and effect phrases
+from a sentence. Experiments on a cause-effect dataset built from
+sentences from PubMed articles show that for extracting cause and
+effect entities, PatternCausality is substantially better than the existing
+methods—with an order of magnitude improvement in the F-score metric
+over the best of the existing methods. We also build different variants of
+PatternCausality, which use different phrase extraction methods; all
+variants are better than the existing methods. PatternCausality and its
+variants also show modest performance improvement over the existing
+methods for extracting cause and effect entities in a domain-neutral
+benchmark dataset, in which cause and effect entities are nouns or noun
+phrases consisting of one to two words.
+ This is a preview of subscription content, log in via an institution 
+to check access.
+Access this article
+Log in via an institution 
+Subscribe and save
+ Springer+
+from $39.99 /Month
+•  Starting from 10 chapters or articles per month
+•  Access and download chapters and articles from more than 300k
+books and 2,500 journals
+•  Cancel anytime
+View plans 
+Buy Now
+Buy article PDF USD 39.95
+Price excludes VAT (USA)
+Tax calculation will be finalised during checkout.
+Instant access to the full article PDF.
+Institutional subscriptions 
+Fig. 1
+[image]
+Fig. 2
+[image]
+Fig. 3
+[image]
+Fig. 4
+[image]
+Similar content being viewed by others
+[image]
+Causal Discovery and Knowledge Linkage in Scientific
+Literature: A Case Study in Biomedicine
+Chapter © 2022
+[image]
+Models of Medical Reasoning
+Chapter © 2023
+[image]
+CHIP2022 Shared Task Overview: Medical Causal Entity
+Relationship Extraction
+Chapter © 2023
+ Discover the latest articles, books and news in related subjects,
+suggested using machine learning.
+Explore related subjects
+•  Computational Linguistics
+•  Corpus Linguistics
+•  Discourse Research
+•  Literature mining
+•  Machine Translation
+•  Natural Language Processing (NLP)
+References
+1. Wald D, Law M, Morris J (2002) Homocysteine and cardiovascular
+disease: Evidence on causality from a meta-analysis. BMJ (Clinical
+research ed.) 325:1202. https://doi.org/10.1136/
+bmj.325.7374.1202
+Article  Google Scholar 
+2. Azagi T, Sprong H, Hoornstra D, Hovius J (2020) Evaluation of
+disease causality of rare ixodes ricinus-borne infections in europe.
+Pathogens 9:150. https://doi.org/10.3390/pathogens9020150
+Article  Google Scholar 
+3. Martín Giménez V, Inserra F, Ferder L, García J, Manucha W
+(2020) Vitamin D deficiency in african americans is associated with
+a high risk of severe disease and mortality by Sars-CoV-2. (Letter)
+https://doi.org/10.1038/s41371-020-00398-z
+4. Evans W, McLeod H (2003) Pharmacogenomics-drug disposition,
+drug targets, and side effects. The New England J Med 348:538–
+49. https://doi.org/10.1056/NEJMra020526
+Article  Google Scholar 
+5. Berry D, Knapp P, Raynor D (2002) Provision of information about
+drug side-effects to patients. Lancet 359:853–4. https://
+doi.org/10.1016/S0140-6736(02)07923-0
+Article  Google Scholar 
+6. Dicpinigaitis P (2006) Angiotensin-converting enzyme inhibitor-
+induced cough: ACCP evidence-based clinical practice guidelines.
+Chest. 129:169S-173S. https://doi.org/10.1378/
+chest.129.1_suppl.169S
+Article  Google Scholar 
+7. Atkinson J, Rivas A (2008) Discovering novel causal patterns from
+biomedical natural-language texts using bayesian nets. IEEE
+Trans Inf Technol Biomed 12(6):714
+Article  Google Scholar 
+8. Lee DG, Shin H (2017) Disease causality extraction based on
+lexical semantics and document-clause frequency from biomedical
+literature. BMC Medical Inform Decis Mak 17(1):53
+Article  MathSciNet  Google Scholar 
+9. Zhao S, Jiang M, Liu M, Qin B, Liu T (2018) Causaltriad: toward
+pseudo causal relation discovery and hypotheses generation from
+medical text data. In: Proceedings of the 2018 ACM international
+conference on bioinformatics, computational biology, and health
+informatics, pp 184–193
+10. An N, Xiao Y, Yuan J, Yang J, Alterovitz G (2019) Extracting
+causal relations from the literature with word vector mapping.
+Comput Biol Med 115:103524
+Article  Google Scholar 
+11. Sorgente A, Vettigli G, Mele F (2013) Automatic extraction of
+cause-effect relations in natural language text. DART@ AI* IA
+2013,37
+12. An N, Xiao Y, Yuan J, Jiaoyun Y, Alterovitz G (2019) Extracting
+causal relations from the literature with word vector mapping.
+Comput Biology Med 115:103524. https://doi.org/10.1016/
+j.compbiomed.2019.103524
+Article  Google Scholar 
+13. Khoo C, Kornfilt J, Oddy R, Myaeng SH (1998) Automatic
+extraction of cause-effect information from newspaper text without
+knowledge-based inferencing. Literary and Linguistic Computing
+13:177–186. https://doi.org/10.1093/llc/13.4.177
+Article  Google Scholar 
+14. Khoo C, Myaeng SH, Oddy R (2001) Using cause-effect relations
+in text to improve information retrieval precision. Inf Process
+Manage 37:119–145. https://doi.org/10.1016/
+S0306-4573(00)00022-4
+Article  MATH  Google Scholar 
+15. Dasgupta T, Saha R, Dey L, Naskar A, Automatic extraction of
+causal relations from text using linguistically informed deep neural
+networks. In: Proceedings of the 19th annual sigdial meeting on
+discourse and dialogue (Association for Computational Linguistics,
+Melbourne, Australia, 2018), pp. 306–316. https://
+doi.org/10.18653/v1/W18-5035
+16. Li Z, Li Q, Zou X, Ren J (2019) Causality extraction based on self-
+attentive BiLSTM-CRF with transferred embeddings
+17. Chang DS, Choi KS (2006) Incremental cue phrase learning and
+bootstrapping method for causality extraction using cue phrase
+and word pair probabilities. Neurocomputing 42:662–678. https://
+doi.org/10.1016/j.ipm.2005.04.004
+Article  Google Scholar 
+18. Sorgente A, Vettigli G, Mele F (2013) Automatic extraction of
+cause-effect relations in natural language text. 1109:37–48
+Google Scholar 
+19. Do Q, Chan YS, Roth D (2011) Minimally supervised event
+causality identification. In: Proceedings of the 2011 conference on
+empirical methods in natural language processing, pp 294–303
+20. Nguyen TH, Grishman R (2015) Relation extraction: Perspective
+from convolutional neural networks. In: Proceedings of the 1st
+workshop on vector space modeling for natural language
+processing, pp 39–48
+21. Peng N, Poon H, Quirk C, Toutanova K, Yih WT (2017) Cross-
+sentence n-ary relation extraction with graph lstms. Trans Assoc
+Comput Linguist 5:101
+Article  Google Scholar 
+22. Honnibal M, Montani I (2020) spaCy 2.2.3: Industrial-strength
+natural language processing. In: https://spacy.io/
+23. Marneffe MC, Manning C (2008). The Stanford typed
+dependencies representation. https://
+doi.org/10.3115/1608858.1608859
+Article  Google Scholar 
+24. Choi JD, Palmer M (2012) Fast and robust part-of-speech tagging
+using dynamic model selection. In: Proceedings of the 50th annual
+meeting of the association for computational linguistics (volume 2:
+short papers) (Association for Computational Linguistics, Jeju
+Island, Korea), pp 363–367. https://aclanthology.org/P12-2071
+25. Johansson R, Nugues P (2007) Extended constituent-to-
+dependency conversion for english. In: Proceedings of the 16th
+nordic conference of computational linguistics (NODALIDA 2007)
+(University of Tartu, Estonia, Tartu, Estonia, 2007), pp 105–112.
+https://aclanthology.org/W07-2416
+26. Kabir MA, Phillips T, Luo X, Hasan MA (2021) Asper: Attention-
+based approach to extract syntactic patterns denoting semantic
+relations in sentential context
+27. Gurulingappa H, Mateen A, Roberts A, Fluck J, Hofmann-Apitius
+M, Toldo L (2012) Development of a benchmark corpus to support
+the automatic extraction of drug related adverse effects from
+medical case reports. J Biomed Inf. https://doi.org/10.1016/
+j.jbi.2012.04.008
+Article  Google Scholar 
+28. Girju R, Nakov P, Nastase V, Szpakowicz S, Turney P, Yuret D
+(2007) SemEval-2007 task 04: classification of semantic relations
+between nominals. 13–18
+29. Hendrickx I, Kim S, Kozareva Z, Nakov P, Padó S, Pennacchiotti
+M, Romano L, Szpakowicz S (2010) SemEval-2010 task 8: Multi-
+way classification of semantic relations between pairs of nominals.
+33–38
+30. Zaki MJ (2000) Scalable algorithms for association mining. IEEE
+Trans Know Data Eng 12(3):372. https://
+doi.org/10.1109/69.846291
+Article  Google Scholar 
+31. Caruana R, Lawrence S, Giles CL (2001) Overfitting in neural nets:
+backpropagation, conjugate gradient, and early stopping. In: Leen
+TK, Dietterich TG, Tresp V (eds) (Advances in neural information
+processing systems 13, MIT Press, 2001), pp 402–408. http://
+papers.nips.cc/paper/1895-overfitting-in-neural-nets-
+backpropagation-conjugate-gradient-and-early-stopping.pdf
+32. Mikolov T, Corrado G, Chen K, Dean J (2013) Efficient estimation
+of word representations in vector space. 1–12
+33. Handler A, Denny M, Wallach H, O’Connor B (2016) Bag of what?
+simple noun phrase extraction for text analysis. 114–124. https://
+doi.org/10.18653/v1/W16-5615
+34. Subhashini R, Kumar VJS (2010) Shallow NLP techniques for
+noun phrase extraction. In: Trendz in information sciences
+computing(TISC2010), pp 73–77. https://doi.org/10.1109/
+TISC.2010.5714612
+35. Boudin F (2016) pke: an open source python-based keyphrase
+extraction toolkit. In: Proceedings of COLING 2016, the 26th
+international conference on computational linguistics: system
+demonstrations (Osaka, Japan, 2016), pp 69–73. http://aclweb.org/
+anthology/C16-2015
+Download references
+Acknowledgements
+This material is based upon work supported by the National Science
+Foundation (NSF), USA under Grant No. IIS-1909916.
+Author information
+Authors and Affiliations
+1. Department of Computer Science, Indiana University Purdue
+University Indianapolis, Indianapolis, IN, USA
+M. Ahsanul Kabir, AlJohara Almulhim & Mohammad Al Hasan
+2. Department of Computer Information and Graphics Technology,
+Indiana University Purdue University, Indianapolis, IN, USA
+Xiao Luo
+Authors
+1. M. Ahsanul Kabir
+View author publications
+Search author on:PubMed Google Scholar
+2. AlJohara Almulhim
+View author publications
+Search author on:PubMed Google Scholar
+3. Xiao Luo
+View author publications
+Search author on:PubMed Google Scholar
+4. Mohammad Al Hasan
+View author publications
+Search author on:PubMed Google Scholar
+Corresponding author
+Correspondence to Mohammad Al Hasan.
+Ethics declarations
+Conflict of Interest
+The authors declare no competing interests.
+Rights and permissions
+Reprints and permissions
+About this article
+[image]
+Cite this article
+Kabir, M.A., Almulhim, A., Luo, X. et al. Informative Causality Extraction
+from Medical Literature via Dependency-Tree–Based Patterns. J Healthc
+Inform Res 6, 295–316 (2022). https://doi.org/10.1007/
+s41666-022-00116-z
+Download citation
+•  Received: 26 April 2021
+•  Revised: 06 March 2022
+•  Accepted: 07 March 2022
+•  Published: 25 May 2022
+•  Issue Date: September 2022
+•  DOI: https://doi.org/10.1007/s41666-022-00116-z
+Keywords
+•  Causality
+•  Cause-effect phrase extraction
+•  Cause-effect pattern
+Access this article
+Log in via an institution 
+Subscribe and save
+ Springer+
+from $39.99 /Month
+•  Starting from 10 chapters or articles per month
+•  Access and download chapters and articles from more than 300k
+books and 2,500 journals
+•  Cancel anytime
+View plans 
+Buy Now
+Buy article PDF USD 39.95
+Price excludes VAT (USA)
+Tax calculation will be finalised during checkout.
+Instant access to the full article PDF.
+Institutional subscriptions 
+Advertisement
+Search
+Search by keyword or author
+ Search
+Navigation
+•  Find a journal
+•  Publish with us
+•  Track your research
+Discover content
+•  Journals A-Z
+•  Books A-Z
+Publish with us
+•  Journal finder
+•  Publish your research
+•  Language editing
+•  Open access publishing
+Products and services
+•  Our products
+•  Librarians
+•  Societies
+•  Partners and advertisers
+Our brands
+•  Springer
+•  Nature Portfolio
+•  BMC
+•  Palgrave Macmillan
+•  Apress
+•  Discover
+•  Your privacy choices/Manage cookies
+•  Your US state privacy rights
+•  Accessibility statement
+•  Terms and conditions
+•  Privacy policy
+•  Help and support
+•  Legal notice
+•  Cancel contracts here
+34.106.106.208
+Not affiliated
+[image]
+© 2025 Springer Nature

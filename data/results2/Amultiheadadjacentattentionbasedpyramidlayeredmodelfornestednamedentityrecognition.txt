@@ -1,0 +1,1544 @@
+ORIGINAL ARTICLE
+A multi-head adjacent attention-based pyramid layered model
+for nested named entity recognition
+Shengmin Cui1 • Inwhee Joe1
+Received: 6 April 2022 / Accepted: 18 August 2022 / Published online: 1 September 2022
+ The Author(s) 2022
+Abstract
+Named entity recognition (NER) is one of the widely studied natural language processing tasks in recent years. Con-
+ventional solutions treat the NER as a sequence labeling problem, but these approaches cannot handle nested NER. This is
+due to the fact that nested NER refers to the case where one entity contains another entity and it is not feasible to tag each
+token with a single tag. The pyramid model stacks L ﬂat NER layers for prediction, which subtly enumerates all spans with
+length less than or equal to L. However, the original model introduces a block consisting of a convolutional layer and a
+bidirectional long short-term memory (Bi-LSTM) layer as the decoder, which does not consider the dependency between
+adjacent inputs and the Bi-LSTM cannot perform parallel computation on sequential inputs. For the purpose of improving
+performance and reducing the forward computation, we propose a Multi-Head Adjacent Attention-based Pyramid Layered
+model. In addition, when constructing a pyramid structure for span representation, the information of the intermediate
+words has more proportion than words on the two sides. To address this imbalance in the span representation, we fuse the
+output of the attention layer with the features of head and tail words when doing classiﬁcation. We conducted experiments
+on nested NER datasets such as GENIA, SciERC, and ADE to validate the effectiveness of our proposed model.
+Keywords Nested named entity recognition  Named entity recognition  Attention  Pyramid  Natural language processing
+1 Introduction
+Named entity recognition (NER) aims to detect spans in
+unstructured text and classify them according to their
+semantic meanings is a fundamental and essential natural
+language processing (NLP) task. A typical example of a
+NER task is the identiﬁcation of entities such as date,
+location, and organization in a sentence. The extracted
+entities can be used for information extraction [1, 2],
+building knowledge graphs [3, 4], chatbots [5, 6], and
+question answering systems [7, 8].
+Numerous NER models have been proposed so far, and
+among them most traditional approaches treat NER as a
+sequence labeling problem, that is, each token in a sentence
+will be assigned one tag. Cases of such tasks are usually
+solved with models based on recurrent neural networks
+(RNN) or conditional random ﬁelds (CRF) [9–11]. These
+methods are based on the assumption that the entity spans
+in the text are not nested with each other. However, nested
+entities are very common in practice [12]. In the GENIA
+corpus [13], approximately 18% of entities contain other
+entities or are nested within other entities. An example of
+nested situation is shown in Fig. 1. As can be seen from the
+ﬁgure, the entity ‘‘IFN-gamma’’ itself is an entity of type
+Protein, and yet it is a part of an RNA entity ‘‘IFN-gamma
+cytoplasmic mRNA.’’ This nested structure cannot be
+solved directly by predominant sequence labeling methods
+since the token in the nested entities needs to be repre-
+sented by multiple tags. Taking these nested entities into
+account can beneﬁt many downstream NLP tasks.
+Many approaches have been proposed over the past few
+years to address this nested NER problem. Among these,
+one of the representative categories is hypergraph-based
+approach [14, 15]. However, this approach requires the
+deﬁning of graph nodes, edges, and transformation actions
+& Inwhee Joe
+iwjoe@hanyang.ac.kr
+Shengmin Cui
+shengmincui@hanyang.ac.kr
+1
+Department of Computer Science, Hanyang University, 222,
+Wangsimni-ro, Seoul 04763, Korea
+123
+Neural Computing and Applications (2023) 35:2561–2574
+https://doi.org/10.1007/s00521-022-07747-8
+(0123456789().,-volV)(0123456789().
+,- volV)
+resulting in elaborate tagging schemas and suffers from
+unsatisfactory performance results. Another common way
+of presenting nested named entities is the layered model
+[16, 17]. They annotate each layer in accordance with the
+level of nesting. In this way, multiple ﬂat NER layers can
+be stacked to address the nested NER problem. Unfortu-
+nately, this approach suffers from layer disorientation [18]
+and error propagation problems [17]. The former refers to
+the fact that the right span and classiﬁcation may be output
+from the wrong layer, resulting in over-estimated loss, and
+the latter is the propagation of errors from the ﬁrst few
+layers to the next few layers. In order to solve the above
+issues, Wang et al. proposed the pyramid model [18].
+Between the output features of each two consecutive layers
+in their decoder, the two adjacent hidden states of the lower
+layer are embedded into the higher layer using a block
+consisting of a convolutional layer [19] with a kernel of
+two and a bidirectional long short-term memory (Bi-
+LSTM) layer [20]. Consequently, entities of length l are
+predicted at the l-th layer which solves the layer disorien-
+tation problem, and the prediction of each layer does not
+determine the prediction of the other layers that mitigates
+the error propagation problem to a certain extent. In their
+designed decoder, two adjacent hidden states are aggre-
+gated with the convolution layer and contextual informa-
+tion is captured with the Bi-LSTM layer. Nevertheless, the
+way of using convolutional layers for aggregation does not
+consider the dependencies between the adjacent inputs.
+Furthermore, they stack multiple layers of Bi-LSTMs, and
+Bi-LSTMs cannot compute sequential data in parallel,
+which can lead to comparatively slower training and
+forecasting. Also, for span representation, information
+from intermediate words has a higher proportion than on
+both sides. For example, as shown in Fig. 1, when the
+pyramid model identiﬁes the span ‘‘IFN-gamma cytoplas-
+mic mRNA’’ of length 3, it aggregates the hidden states of
+‘‘IFN-gamma cytoplasmic’’ and ‘‘cytoplasmic mRNA.’’ In
+the representation of the span, ‘‘cytoplasmic’’ contributes
+more than words on either side. And this situation becomes
+more and more severe as the number of layers increases.
+To address the above problems, we propose a novel
+Multi-Head Adjacent Attention-based Pyramid Layered
+model. When we represent a span of length l (l is greater
+than 1), we aggregate the hidden states of two adjacent
+spans of length l  1. Inspired by the self-attention mech-
+anism [21], we project these hidden states of spans into
+queries, keys, and values. The difference is that we com-
+pute the attention score for every two adjacent hidden
+states. Then, the weighted sum is the output of this layer.
+Our proposed attention mechanism does not compute
+queries with all keys in a sequence as self-attention does
+since we aim to aggregate two inputs and output one out-
+put, and doing so reduces the computational cost compared
+to self-attention. In this way, not only internal dependency
+is taken into account when representing a span, but also the
+sequence can be output in parallel at each layer with matrix
+operations. In addition, the output of each layer of the
+decoder is fused with hidden states of head and tail words
+of the corresponding span from the encoder before pre-
+diction and feeding to the next layer, which can alleviate
+the problem of over-weighting of intermediate words.
+Our main contributions are as follows:
+•
+We propose a novel Adjacent Attention mechanism for
+fusing information from two adjacent inputs. This
+fusion takes into account the dependencies between the
+inputs.
+•
+We design a Multi-Head Adjacent Attention-based
+module for extracting nested entities based on Adjacent
+Attention mechanism. Compared with the pyramid
+model, our module not only takes into account the
+dependency between inputs, but also allows parallel
+computation of sequential outputs by matrix operations.
+Moreover, we add information of head and tail repre-
+sentation to span representation to mitigate the imbal-
+anced contribution problem.
+•
+Experiment results on three nested datasets illustrate
+that our model outperforms recently proposed nested
+NER models.
+The remainder of this paper is organized as follows. Firstly,
+Sect. 2 presents some related works for NER. Then, our
+proposed Multi-Head Adjacent Attention-based Pyramid
+Layered model for NER is presented in Sect. 3. Next, in
+Sect. 4 we display and discuss experiment results. Finally,
+conclusions are drawn in Sect. 5.
+2 Related work
+NER has been extensively studied for its frequently used
+for downstream tasks in the ﬁeld of NLP, and the majority
+of the research converts NER into a sequence labeling
+problem. Before deep learning became popular in various
+ﬁelds, probabilistic graphical models, such as hidden
+Markov models (HMM) [22, 23] and CRF [24, 25], were
+commonly applied to tackle ﬂat NER task. Recently, plenty
+of deep learning models have achieved excellent results in
+Fig. 1 An example of nested entities from GENIA corpus
+2562
+Neural Computing and Applications (2023) 35:2561–2574
+123
+both computer vision (CV) and NLP, and therefore, many
+researchers have started to introduce deep learning into
+NER tasks. To the best of our knowledge, Hammerton [26]
+was the ﬁrst to use Long Short-Term Memory (LSTM)
+which is a typical deep learning model to handle sequential
+data to extract named entities. Collobert et al. [27] pro-
+posed a model based on convolutional neural network
+(CNN), which ﬁrst encodes tokens with a convolutional
+layer and then classiﬁes them using a CRF layer. Subse-
+quently, the combination of Bi-LSTM and CRF was widely
+utilized for these sequential labeling tasks. These methods
+use hand-crafted spelling features [9], CNN-based charac-
+ter embedding [11, 28], and Bi-LSTM-based character
+embedding
+[10]
+for
+character-level
+representation
+of
+words. However, these models that focus on sequential
+labeling cannot handle nested NER task as they only
+allocate one label to each token.
+Over the past few years, an increasing number of studies
+have focused on nested NER. Early solutions for nested
+NER were based on a hybrid method combining supervised
+learning with manual rules [29–31]. These authors ﬁrst
+used HMM to extract the innermost entities and then a rule-
+based post-processing approach to obtain the outer entities.
+The problem with this kind of approach is that a great deal
+of effort is required to observe the data in order to design
+reasonable rules. Then, a more popular approach is to
+design proprietary structures to capture nested entities.
+Finkel and Manning [12] used a constituency tree to rep-
+resent a sentence and detected nested entities with a CRF-
+based parser. However, its time complexity is the cube of
+the sentence length, making it incapable of handling long
+sentences. Another proprietary structure is the hypergraph.
+Lu and Roth [14] were the ﬁrst to introduce hypergraph-
+based methods to the task of nested NER. This approach
+allows edges to be connected to multiple nodes to represent
+nested entities. Wang and Lu [15] proposed a segmentation
+hypergraph to represent all possible combinations of
+tokens. Katiyar and Cardie [32] proposed a different
+hypergraph-based approach that learns structures in a
+greedy manner with LSTM. This approach requires a
+complex decoding process for detecting entities. Another
+solution to the nested NER is the span-based method. This
+method ﬁrst extracts candidate spans from the sentences
+and then classiﬁes the spans. Sohrab and Miwa [33] pro-
+posed the exhaustive model that exhausts every possible
+spans from the sequence of texts within a limited length
+and classiﬁes them. Luan et al. [34] represent spans using
+dynamic span graphs which leverages coreference and
+relation type conﬁdences. A drawback of the span-based
+approach is that it usually performs poorly in determining
+entity boundaries [35]. To alleviate this problem, Tan et al.
+[35] and Xu et al. [36] added a boundary detection com-
+ponent to facilitate the detection of entities. Layered
+models [16, 17] have better supervision on the boundaries
+due to their tagging approach but suffer from layer dis-
+orientation and error propagation problems. Wang et al.
+[18] proposed a pyramid structure-based model to alleviate
+these problems to some extent. This is the ﬁrst example of
+using pyramid structure for NER task to the best of our
+knowledge. Pyramid structures are commonly used for
+object detection tasks in computer vision [37, 38]. These
+models allow detection on multiple scales. Our approach is
+based on a pyramid-layered structure; therefore, it is pos-
+sible to enumerate almost all spans, and we design an
+Adjacent Attention mechanism-based decoder that takes
+into account internal dependency when representing spans.
+Furthermore, we also enhance the representation of head
+and
+tail
+words
+of
+a
+span,
+thus
+leading
+to
+better
+performance.
+Pre-trained models proposed in recent years have been
+broadly used in NLP tasks due to their generalization
+capability. Among them, word embedding methods such as
+word2vec [39] and GloVe [40] can be regarded as dis-
+tributed representations of a word. Others, called language
+model embedding, such as ELMo [41], Flair [42], and
+BERT [43] can capture the semantics of a word in different
+contexts. These have been shown in past work to have an
+enhancing effect on the performance of the model, hence
+we adopt word embedding and language model embedding
+in our model.
+3 Methodology
+In this section, we introduce the proposed Multi-Head
+Adjacent Attention-based Pyramid Layered model for
+nested NER, which consists of two principal components
+as encoder and decoder. We ﬁrst use an encoder to obtain
+the representation of words with contextual information
+and then add a Bi-LSTM layer to represent text spans of
+length 1. This representation is taken as input to the
+decoder and a pyramid model is applied to represent and
+classify all possible spans of each length. Figure 2 illus-
+trates overall architecture of the model. In particular, the
+tagging approach and part of the encoder follow the work
+of [18] and we propose a new Multi-Head Adjacent
+Attention module for decoding. We will describe more
+details of our model in the following subsections.
+3.1 Tagging scheme
+First, the input of our model is a T-word sentence. After
+encoding, the spans of length 1 are ﬁrst classiﬁed, where
+we adopt the IOB2 tagging format [44], i.e., B-C denotes
+the beginning of an entity mention of category C, I-C
+denotes the inside of an entity mention, and O denotes that
+Neural Computing and Applications (2023) 35:2561–2574
+2563
+123
+this token is outside the entity mention. Then, text spans of
+each length can be enumerated with the stacked Multi-
+Head Adjacent Attention module. Speciﬁcally, the repre-
+sentations of spans of length l are output by the ðl  1Þ-th
+layer of attention blocks. Suppose we intend to exhaust all
+possible spans of length less than or equal to L, we need to
+stack L  1 attention blocks. It is worth noting that B-C tag
+is used for the complete span representation, and in this
+way, each entity of length not greater than L has a single
+label and will not be tagged in other layers, thus only the
+labels of B-C and O are provided except for the topmost
+layer of the decoder. For the representations of spans with
+length greater than L, I-C is supplemented in the topmost
+layer to facilitate annotation. For more details about this
+tagging scheme, please refer to literature [18].
+3.2 Encoder
+We ﬁrst employ word embedding and character-level word
+embedding to represent words in a sentence to make them
+semantically meaningful. In this work, word vectors that
+have been pre-trained with a large corpus are utilized for
+word embedding. The character-level word embedding is
+generated using Bi-LSTM with the same settings as [10]
+which allows the model to alleviate the out-of-vocab
+(OOV) problem. Next, the two embedding results are
+concatenated and fed into the Bi-LSTM-based sequence
+encoding layer to further exploit the contextual informa-
+tion. Thus, for a sentence x ¼ ½x1; x2; . . .; xT, the output of
+sequence encoding xse 2 RTdse is as:
+xse ¼ BiLSTMseð½EmbwordðxÞ; EmbcharðxÞÞ
+ð1Þ
+where EmbwordðxÞ 2 RTdword denotes the word embedding,
+EmbcharðxÞ 2 RTdchar
+denotes the character-level word
+embedding, and [; ] denotes concatenation. The pre-trained
+word embedding has a distinct vector representation for
+each word, which can merely be considered a distributed
+representation of a word. However, the pre-trained lan-
+guage model reﬂects contextual information when it rep-
+resents words. Consequently, language model embeddings
+are added and a linear layer is used for reducing the
+dimension:
+xrd ¼ Linearrdð½xse; LMðxÞÞ
+ð2Þ
+where
+LMðxÞ 2 RTdLM
+denotes
+pre-trained
+language
+model.
+Then, another Bi-LSTM layer is added after the word
+representation is obtained, and the output of this layer will
+contribute to various parts of the decoder. For examples,
+the output of this layer will be directly sent to the logits
+layer to predict entities of length 1; the enhanced contex-
+tual representation allows the decoder to focus on the span
+representation; and the appended head and tail information
+in the decoder also utilizes the output of this layer. Thus,
+the ﬁnal encoder output is:
+~x1 ¼ BiLSTMeeðxrdÞ
+ð3Þ
+where the superscript 1 of ~x1 is used to indicate that the
+output feature of this layer can be regarded as representa-
+tion of 1-length text spans.
+3.3 Multi-head attention decoder
+The decoder receives outputs of the encoder and enumer-
+ates spans of each length from the bottom up. Each
+attention-based layer in the decoder is like a sliding win-
+dow with size 2, fusing the information of every two
+adjacent inputs. As explained in Sect. 3.1, we need to set a
+maximum individual tag length L to control how many
+layers we need to stack (the number of layers of the
+decoder is L  1). Figure 2b shows an example of our
+Fig. 2 The architecture of our proposed Multi-Head Adjacent
+Attention-based Pyramid Layered model. a Encoder is used to obtain
+the words representation and add a Bi-LSTM layer to represent the
+span representation of length 1. b Decoder exhausts and predicts
+spans of length less than or equal to L by stacking Multi-Head
+Adjacent Attention modules
+2564
+Neural Computing and Applications (2023) 35:2561–2574
+123
+decoder with L ¼ 3. More precisely, ﬁrst, the output ~x1 of
+the encoder of length T will be sent to two different layers.
+One of them is a logits layer that classiﬁes spans of length
+1, and the other is our proposed Multi-Head Adjacent
+Attention module. In this way, the output of the ﬁrst
+attention layer can be considered as an exhaustive enu-
+meration of spans of length 2, and the output is represented
+as ~x2, followed by the same operation repeatedly. Then, for
+the output of each layer, we use a linear logits layer and a
+softmax function for classiﬁcation, the formula is as
+follows:
+^yl ¼ SoftmaxðLinearlogitsð~xlÞÞ
+ð4Þ
+where ^yl 2 RðTlþ1ÞE is the predicted probability distri-
+bution of l-length spans and E is the number of tag types.
+When training the model we use the cross-entropy loss
+function suitable for multi-class classiﬁcation and the ﬁnal
+loss function is deﬁned as:
+Loss ¼ 
+X
+N
+i¼1
+X
+L
+l¼1
+X
+Tlþ1
+t¼1
+X
+E
+e¼1
+yl
+tðeÞ logð^yl
+tðeÞÞ
+ð5Þ
+where ^yl
+tðeÞ 2 ½0; 1 is the predicted probability of t-th span
+of length l along the e-th class, and yl
+tðeÞ 2 f0; 1g is the
+corresponding ground truth.
+Our proposed Multi-Head Adjacent Attention module is
+presented in Fig. 3. This module includes two main com-
+ponents, namely Multi-Head Adjacent Attention and head
+and tail representation. First, the module receives sequen-
+tial inputs. The decoder needs to stack L  1 such module
+resulting in the input between layers will be biased, so we
+use layer normalization [45] to mitigate this problem.
+Then, we use the Multi-Head Adjacent Attention layer to
+compute the outputs. The outputs of Multi-Head are con-
+catenated and fed into a linear layer. This stacking will
+naturally form a pyramid structure, but this approach will
+result in the information of intermediate words dominating
+the representation of a span. We believe that the head and
+tail words are essential for representing spans, and many
+span-based models fuse the hidden states of head and tail
+words as a representation of span. Therefore, we append
+the head and tail representation to the proposed attention
+module to mitigate this problem. The output of the atten-
+tion layer is concatenated with the head and tail repre-
+sentation and then passed through an feed-forward neural
+network (FFNN) which consists of a linear transformation
+and a ReLU function to obtain the ﬁnal output of this
+module. Additionally, weights are shared between all
+stacked Multi-Head Adjacent Attention modules.
+3.3.1 Multi-Head Adjacent Attention
+Our proposed module aims to combine two adjacent hidden
+states and represent them using features of the same size.
+Previous work has used convolutional layers to achieve this
+goal. However, this method does not consider the depen-
+dency of two adjacent inputs. We propose a novel attention
+mechanism-based approach to consider their correlation
+when combining two adjacent inputs. Then, the weighted
+sum is computed as a representation of the fusion based on
+the attention scores and the respective values of the adja-
+cent inputs.
+Adjacent Attention We assume the input of this layer as
+a ¼ ½a1; a2; . . .aT. Figure 4 exhibits an example of the
+Adjacent Attention layer for T ¼ 4. Inspired by the self-
+attention mechanism, we ﬁrst map each input ai 2 RM into
+query, key, and value vectors. The transformation is
+deﬁned as:
+qi ¼ ReLUðWqaiÞ
+ð6Þ
+ki ¼ ReLUðWkaiÞ
+ð7Þ
+vi ¼ ReLUðWvaiÞ
+ð8Þ
+where qi; ki; vi 2 RK denote query, key, and value of ai,
+respectively. Wq; Wk; Wv 2 RKM are trainable parame-
+ters. In general, linear projections are used for query, key,
+and value transformation. ReLU function used here is a
+piecewise function that prunes negative values to zero and
+retains positive values, thus it has a desirable property that
+Fig. 3 Proposed Multi-Head Adjacent Attention module
+Neural Computing and Applications (2023) 35:2561–2574
+2565
+123
+the activation after passing it is sparse [46]. The purpose of
+using the natural sparsity of ReLU is to prevent over-ﬁtting
+and reduce the training time [47]. The query generated
+from the input is used to compute the attention score with
+the keys of adjacent inputs. For a input ai (2  i  T  1)
+the way to calculate its attention score with the left and
+right neighboring inputs are as:
+bi;i1 ¼ tanhðqi  ki1Þ
+ð9Þ
+bi;iþ1 ¼ tanhðqi  kiþ1Þ
+ð10Þ
+where  denotes the dot product of two vectors. In partic-
+ular, only the attention score with its right neighbor is
+computed when i ¼ 1, and only the attention score with its
+left neighbor is computed when i ¼ T. Instead of the
+commonly used softmax function, we choose to use the
+tanh function here. Our intention is to represent the
+strength of the dependence of two adjacent inputs, while
+the output of the softmax function sums to 1, which would
+result in the sum of the attention scores between two inputs
+that are not dependent on each other also being 1. Next, we
+obtain the output using the computed attention score and
+the values generated from the input data for each time step.
+Since we aim to fuse two adjacent inputs, the i-th output
+fuses the i-th and ði þ 1Þ-th information of the inputs.
+Therefore, the output bi 2 RK is as:
+bi ¼ bi;iþ1viþ1 þ biþ1;ivi;
+1  i  T  1
+ð11Þ
+The output has a length of 1 less than the input, which
+naturally allows the stack to form a pyramid structure.
+Multi-Head Attention Inspired by [21] which claim that
+multi-head attention allows the model to jointly attend to
+information from different perspectives, we adopt the
+multi-head attention mechanism here as well. It can be
+formulated as follows:
+MultiHeadðaÞ ¼ ½b1; b2; . . .; bHWo
+ð12Þ
+where bh 2 RðT1ÞK is the output of h-th head and Wo 2
+RHKdmodule is parameters to learn. In this work, we set
+dmodule ¼ HK; hence, the dimension of each head is
+reduced and the total cost of computation is similar to a
+full-dimension with one-head attention.
+3.3.2 Head and tail representation
+From Sect. 3.3.1, we can see that the outputs of Adjacent
+Attention are the fusion of every two adjacent inputs.
+However, for a representation of a text span longer than 2,
+the information proportion of intermediate words may be
+higher than that of the two side words. And the imbalance
+will become increasingly serious as the number of layers
+increases. Take Fig. 4 as an example, the output of this
+layer b1 contains the information of a1 and a2, and simi-
+larly b2 contains the information of a2 and a3, then if
+another layer is added on top of this, the output is deﬁned
+as c ¼ ½c1; c2; . . .; cT2, then c1 contains the information of
+b1 and b2. However, both b1 and b2 contain the informa-
+tion of a2 to some extent, which makes the information of
+a2 contribute more in the representation of c1. To alleviate
+this problem, we fuse the output of Multi-Head with the
+information of the head and tail words of this span and send
+it to the next layer. Therefore, when we want to represent
+entity
+mentions
+of
+length
+l,
+i.e.,
+when
+~xl ¼
+½~xl
+1; ~xl
+2; . . .; ~xl
+Tlþ1 is to be output, the computation of the
+representation of the head and tail words is as:
+Rl
+i ¼ MaxPoolð½~x1
+i ; ~x1
+iþl1Þ
+ð13Þ
+where MaxPool denotes max pooling operation with stride
+and sliding window size of 2.
+4 Experiments
+4.1 Datasets
+To illustrate the effectiveness of our proposed model, we
+conduct experiments on three benchmark nested NER
+datasets: GENIA, SciERC [48], and ADE [49]. Details of
+the data statistics for these datasets are summarized in
+Table 1.
+•
+GENIA is a biology domain dataset built on the GENIA
+v3.0.2 corpus. We follow previous works of [12, 14] to
+preprocess the data: ﬁrst, the subtypes of ‘‘DNA,’’
+‘‘RNA,’’ and ‘‘Protein’’ are assigned to ‘‘DNA,’’
+‘‘RNA,’’ and ‘‘Protein,’’ and then the ‘‘Cell-Line’’ and
+‘‘Cell-Type’’ are maintained and the other entity types
+Fig. 4 Proposed adjacent
+attention layer
+2566
+Neural Computing and Applications (2023) 35:2561–2574
+123
+are removed, resulting in 5 entity types.; the dataset is
+divided into training, development, and test sets in the
+ratio of 8.1:0.9:1.
+•
+SciERC is collected from the abstracts of 500 papers
+from conferences in the ﬁeld of artiﬁcial intelligence
+(AI). This dataset includes 6 entity types such as
+‘‘Task,’’ ‘‘Method,’’ ‘‘Metric,’’ ‘‘Material,’’ ‘‘Other-
+Scientiﬁc-Term,’’ and ‘‘Generic.’’ We follow the work
+of [48] to pre-process the dataset and split it into a
+training set, a development set, and a test set with a
+ratio of 6.8:1:2.
+•
+ADE is extracted from medical reports containing
+descriptions of adverse effects caused by drug use.
+There are two entity types, ‘‘Adverse-Effect’’ and
+‘‘Drug.’’ Since this dataset does not have an ofﬁcial
+training, development, and test split, we follow previ-
+ous works [50, 51] to conduct tenfold cross-validation.
+4.2 Evaluation metrics
+The NER task involves two basic steps, which are detecting
+entity boundaries and determining entity classes. The
+widely used quantitative comparison methods are exact
+match and relaxed match. Exact match evaluation consid-
+ers a named entity to be correctly identiﬁed only when both
+the detected boundary and category are consistent with the
+manual annotation. Whereas relaxed evaluation is scored
+from two perspectives, that is, for entities, if their predicted
+entity category is the same as the true category, a correct
+category will be recorded regardless of their detected
+boundaries as long as they overlap with the annotation; and
+a correct boundary will be recorded regardless of their
+category assignment. In this work, we choose exact match
+evaluation metrics. Previous work has not been evaluated
+in the same way for these datasets. To conveniently com-
+pare with previous work, we follow the evaluation
+approach used by previous work on each dataset, respec-
+tively. For the GENIA and SciERC datasets, we run the
+model ﬁve times with different initial random seeds and
+report the average Micro Precision, Recall, and F1. For the
+ADE dataset, we use tenfold cross-validation and report the
+average Macro Precision, Recall, and F1. All reported
+results take into account nested entities.
+4.3 Implementation details
+We implement our proposed model based on the Pytorch
+library and conduct our experiments on an NVIDIA RTX
+3090 GPU. Since all three datasets were extracted from
+domain-speciﬁc corpus, we choose in-domain pre-trained
+model for the word embedding and language model
+embedding for each dataset, which proved to be more
+effective than BERT [52]. Both the GENIA and ADE
+datasets belong to the biomedical domain. Therefore, we
+adopt word vectors pre-trained with MEDLINE abstracts
+and with dimensions of 200 to initialize word embedding
+[53]. To the best of our knowledge, there are no pre-trained
+word vectors for AI domain, we therefore choose the
+commonly used GloVe embedding with 200 dimensions
+for the SciERC dataset. Initialized word embeddings are
+frozen during training and test. In addition, for all datasets,
+the character-based embedding is generated by Bi-LSTM,
+and we follow the work of [18] to set the dimension as 60.
+For the GENIA and ADE datasets, we choose Flair [42]
+and BioBERT [54] as the language model embedding. Flair
+is a new type of contextual character-level language model
+embedding that can better handle rare words. Here, we use
+PubMed-forward and PubMed-backward with dimension
+4096, which are trained with 5% of PubMed abstracts.
+BioBERT has the same architecture with BERT and is pre-
+trained with a sizable biomedical corpus. We utilize Bio-
+BERT-Base v1.1 which is based on BERT-base-cased with
+dimension 768. For the SciERC dataset, we choose Sci-
+BERT [55] and CsRoBERTa.1 SciBERT is also based on
+the BERT and pretrained with corpus of scientiﬁc publi-
+cations and CsRoBERTa pre-trained with papers of com-
+puter science domain. Here, SciBERT-scivocab-uncased
+and CsRoBERTa-base with dimension 768 are adopted.
+We extract the last four layers’ hidden states of these pre-
+trained language models, compute the average value as the
+embedding, and do not ﬁne-tune language models when
+training the model. It is worth noting that we adopt two
+different language models for embedding, and the differ-
+ences in their tokenize vocab will lead to inconsistencies in
+the length of the embedding results. Here, we take the
+average of the sub-words when representing the words. We
+set the hidden state size of sequence encoding layer varying
+Table 1 Statistics of the
+datasets used in the experiments
+GENIA
+SciERC
+ADE
+Tain
+Dev
+Test
+Train
+Dev
+Test
+# Sentences
+10,522
+1669
+1855
+1861
+275
+551
+4272
+# Entities
+47,027
+4469
+5600
+5598
+811
+1685
+10,839
+Max entity length
+20
+20
+15
+13
+12
+13
+14
+1 https://huggingface.co/allenai/cs_roberta_base.
+Neural Computing and Applications (2023) 35:2561–2574
+2567
+123
+among f128; 256g. As the output of both the entity
+encoding layer and the attention decoder is sent to the
+logits layer with shared weights, the dimensions of these
+two layers should be consistent and among f128; 256g as
+well. The number of heads of the Adjacent Attention layer
+is set varying among f4; 8; 16; 32g. For the GENIA dataset,
+we follow the previous work by setting the batch size to 64,
+and the other datasets to 32. In addition, we set the dropout
+among f0:3; 0:4; 0:5g and the maximum individual tag
+length L among f4; 8; 12; 16g. We follow the training
+recipe of [18] using an SGD optimizer with a learning rate
+of 0.01 and a gradient clipping of 5 to train our model. To
+determine the best hyper-parameters combination, we uti-
+lize grid search method. For the GENIA and SciERC
+datasets, we use the combination of hyper-parameters that
+perform best in the development set, while for the ADE
+dataset we compare the results of tenfold cross-validation.
+The optimal combination of hyper-parameters for each
+dataset is exhibited in Table 2.
+4.4 Comparison with the pyramid model
+Our model and the pyramid model are both built with a
+pyramid structure. In contrast to the pyramid model, which
+uses a combination of convolutional and Bi-LSTM layers,
+we newly design a decoder based on an attention mecha-
+nism to capture the dependencies between inputs to
+improve performance. Therefore, to validate the effec-
+tiveness of our decoder, we compare our model with the
+pyramid model on three datasets. For the GENIA dataset,
+we compared the average results of ﬁve runs of our model
+with the average results reported in their paper. For fair
+comparison, we adopted the same embedding settings as
+the pyramid model: Bi-LSTM with dimension 60 as char-
+acter-level word embedding; pre-trained word vectors with
+dimension 200 as word embedding; and Flair and Bio-
+BERT as language model embedding. For the SciERC and
+ADE datasets, we ran experiments using their publicly
+available code with the same embedding settings as our
+model. For the SciERC dataset, we compare the average
+micro results of running the model ﬁve times, while for the
+ADE dataset we compare the Macro results of tenfold
+cross-validation. For the pyramid model, the hidden state
+we set the search space to f100; 128; 200; 256g. The reason
+for this setting is that f128; 256g is our search space and
+f100; 200g is the space of hidden state size in their work.
+Other hyper-parameters are the same as in our model. The
+optimal hidden state sizes of the pyramid model on the
+SciERC and ADE datasets are 128 and 256, respectively.
+The performance of our proposed model compared with the
+pyramid model on the three datasets is tabulated in Table 3.
+From the table, we can see that our model improves the F1
+score by 0:55%, 0:78%, and 0:43% on the GENIA,
+SciERC, and ADE datasets, respectively. In addition, both
+precision and recall are higher than the pyramid model in
+all three datasets. These results demonstrate the effective-
+ness of our decoder. We believe that the performance
+improvement is due to our proposed Multi-Head Adjacent
+Attention module that considers internal dependencies in
+the representation of spans and appends head and tail word
+representations.
+4.5 Comparison with baselines
+We compare our proposed model with several state-of-the-
+art models proposed in recent years on GENIA, SciERC,
+and ADE datasets, respectively:
+•
+BiFlaG [56] is a bipartite ﬂat-graph network with two
+interactive subgraph modules corresponding to the
+outermost entity and the inner entity.
+•
+HIT [57] expresses the nested entities by using two
+parts: a head and tail detector and a token interaction
+tagger.
+•
+Second-best [58] design an objective function that takes
+the extracted entities as the parent span and extracts
+nested entities leveraging the second-best path within
+this.
+•
+LogSumExpDecoder [59] expands second-best path
+identiﬁcation by excluding the effect of best path. This
+is achieved by selecting and removing chunks at each
+level to construct different potential functions.
+•
+BartNER [60] utilizes the pre-trained Seq2Seq model
+BART, and generates indexes at the decoder with
+pointer mechanism.
+•
+DYGIE [34] constructs a dynamic span graph and
+reﬁnes
+it
+with
+relation
+type
+conﬁdences
+and
+coreference.
+•
+SPE [61] proposes span encoder and span pair encoder
+which can import inter-span and intra-span information
+into the pre-trained model.
+Table 2 Hyper-parameters settings
+Hyper-parameters
+GENIA
+SciERC
+ADE
+Sequence encoding dim
+128
+128
+128
+Entity encoding dim
+256
+256
+256
+Attention decoder dim
+256
+256
+256
+# Heads of attention layer
+32
+4
+8
+Dropout rate
+0.4
+0.5
+0.4
+Max length
+16
+12
+12
+2568
+Neural Computing and Applications (2023) 35:2561–2574
+123
+•
+UniRE [62] constructs a table containing all possible
+entity pairs and applies a uniﬁed classiﬁer to predict
+each cell.
+•
+PURE [63] ﬁrst obtains the contextual representation of
+each token with pre-trained model and concatenates the
+hidden states of head and tail tokens and the width
+embedding as the representation of a span.
+•
+SpERT [50] fuses the embedding results of tokens with
+max pooling as the representation of a span. Moreover,
+the width embedding is added to the span representation
+to enhance the span representation.
+•
+SPAN-MultiHead [51] introduces an attention-based
+semantic representation for extraction framework. In
+particular, attention is used to compute semantic
+representations, both span-speciﬁc and contextual.
+•
+SpERT.PL [64] is based on SpERT with the addition of
+part-of-speech (POS) embeddings to enrich the span
+representation.
+The overall performance of our proposed model and pre-
+vious work on GENIA, SciERC, and ADE are shown in
+Tables 4, 5, and 6, respectively. Our model outperforms the
+best baseline model on three nested datasets. Speciﬁcally,
+the F1 scores of our proposed model improved the previous
+best model by 0:56%, 0:95%, and 0:42% on GENIA,
+SciERC, and ADE, respectively. On the GENIA dataset,
+BartNER obtained a slightly higher recall than our model,
+but it was much less precision than our model. Similarly,
+on the SciERC dataset, UniRE also obtained a high recall,
+but its precision was low, resulting in a much lower ﬁnal F1
+score than our model. Although BartNER and UniRE
+employ different methods to extract entities, they have one
+thing in common, that is, they only use the hidden states of
+the head and tail words when representing spans, and
+ignore the information of intermediate words. Therefore,
+we believe that our recall is not as high as theirs since they
+have a high probability of determining a span as an entity
+based on the learned pattern of head and tail word pairs
+even if intermediate words are replaced with others that
+have changed the semantics of the sentence. This will
+result in many non-entities being recognized as entities,
+which leads to a decrease in precision. In contrast, our span
+representation treats the contribution of each word in the
+span as fairly as possible, which improves the precision a
+lot compared to these methods. On the ADE dataset, both
+the precision and recall of our model are higher than other
+models, indicating that our model can not only extract
+more entities but also ﬁlter out non-entities. These results
+demonstrate that our model is very effective for nested
+Table 3 Performance of our
+proposed model and pyramid
+model on three datasets
+Model
+GENIA
+SciERC
+ADE
+P (%)
+R (%)
+F1 (%)
+P (%)
+R (%)
+F1 (%)
+P (%)
+R (%)
+F1 (%)
+Pyramid
+79.98
+78.51
+79.24
+70.10
+68.09
+69.07
+90.10
+92.25
+91.16
+Our model
+80.10
+79.47
+79.79
+71.03
+68.72
+69.85
+90.83
+92.37
+91.59
+Table 4 Performances of our model and baseline models on GENIA
+dataset
+Model
+GENIA
+P (%)
+R (%)
+F1 (%)
+BiFlaG (2020)
+77.40
+74.60
+76.00
+HIT (2020)
+78.10
+74.40
+76.20
+Second-best (2020)
+77.81
+76.94
+77.36
+LogSumExpDecoder (2021)
+79.20
+78.67
+78.93
+BartNER (2021)
+78.87
+79.60
+79.23
+Our Model
+80.10
+79.47
+79.79
+Bold indicates the best result
+Table 5 Performances of our model and baseline models on SciERC
+dataset
+Model
+SciERC
+P (%)
+R (%)
+F1 (%)
+DYGIE (2019)
+–
+–
+65.20
+SPE (2020)
+–
+–
+67.70
+UniRE (2021)
+65.80
+71.10
+68.40
+PURE (2021)
+–
+–
+68.90
+Our model
+71.03
+68.72
+69.85
+Bold indicates the best result
+Table 6 Performances of our model and baseline models on ADE
+dataset
+Model
+ADE
+P (%)
+R (%)
+F1 (%)
+SpERT (2020)
+88.99
+89.59
+89.28
+SPAN-MultiHead (2020)
+89.88
+91.32
+90.59
+SpERT.PL (2021)
+90.33
+92.03
+91.17
+Our model
+90.83
+92.37
+91.59
+Bold indicates the best result
+Neural Computing and Applications (2023) 35:2561–2574
+2569
+123
+named entities extraction. The main enhancement of the
+proposed model comes from the fact that we utilize a
+pyramid structure to enumerate the mentions of each length
+of the entity and consider the internal dependency when
+representing the span. This results in a better span repre-
+sentation and ultimately better performance.
+4.6 Performance of our model with different L
+One important hyper-parameter of our model is the maxi-
+mum individual tag length L, which determines how many
+attention modules we need to stack. This also determines
+that all possible spans of length less than or equal to L will
+be classiﬁed using a single representation. Therefore, the
+setting of L is quite important for the performance of our
+model. To observe the effect of L on our model, we con-
+duct experiments on the GENIA, SciERC, and ADE
+datasets, respectively. With the other hyper-parameters
+following the optimal settings of the model, we let L take
+values from f4; 8; 12; 16g. Table 7 presents the perfor-
+mance of our model on the three datasets with different L.
+For the datasets GENIA, SciERC, and ADE, the optimal L
+is 16, 12, and 12, respectively. The optimal L for each
+dataset is essentially close to the maximum entity length in
+the dataset. In addition, the table shows that the F1 score is
+the lowest on all three datasets when L ¼ 4. For the
+GENIA dataset, the F1 score tends to increase as L
+increases. For the SciERC and ADE datasets, the perfor-
+mance of our model is similar when L ¼ 8 and L ¼ 16,
+both of which are within the acceptable range, although
+there is a decrease. Therefore, although the performance of
+our model depends on the setting of L, for the setting of L,
+the named entities can be extracted efﬁciently within a
+certain range around their maximum entity length.
+4.7 Ablation study
+To verify the effectiveness of the components in our
+model, we select GENIA dataset and remove one compo-
+nent at a time from our model to analyze its impact on
+performance. The performance of the variants of our model
+is presented in Table 8, where w/o means without.
+Character Embedding First we remove the character
+embedding. As we can see from the table, the F1 score of
+our model dropped by 0:29% after removing this compo-
+nent. This means that as a complement to the pre-trained
+language model it solves the OOV problem to some extent.
+BioBERT Embedding Then, we observe the effect of Bio-
+BERT on our model. From the results, we can see that
+BioBERT contributes more to the model compared to
+character embedding. We believe that such large pre-
+trained models can effectively represent tokens and prevent
+Table 7 Performance of our
+model with different L on
+GENIA, SciERC, and ADE
+datasets
+L
+GENIA
+SciERC
+ADE
+P (%)
+R (%)
+F1 (%)
+P (%)
+R (%)
+F1 (%)
+P (%)
+R (%)
+F1 (%)
+4
+78.96
+79.00
+78.98
+68.27
+68.04
+68.15
+90.13
+91.94
+91.02
+8
+79.52
+79.65
+79.59
+69.15
+69.01
+69.08
+90.47
+92.11
+91.28
+12
+79.59
+79.64
+79.61
+71.03
+68.72
+69.85
+90.83
+92.37
+91.59
+16
+80.10
+79.47
+79.79
+68.14
+69.92
+69.01
+90.26
+92.17
+91.21
+Bold indicates the best result
+Table 8 Ablation study on GENIA dataset
+P (%)
+R (%)
+F1 (%)
+Our model
+80.10
+79.47
+79.79
+w/o Character embedding
+80.12
+78.90
+79.50
+w/o BioBERT embedding
+79.25
+78.30
+78.77
+w/o Flair embedding
+79.73
+78.94
+79.33
+w/o Language model embedding
+78.21
+77.41
+77.81
+w/o Head and tail representation
+79.05
+80.05
+79.55
+w/o ReLU (in Eq. 6, Eq. 7, and Eq. 8)
+79.43
+78.40
+78.90
+Fig. 5 Training loss
+2570
+Neural Computing and Applications (2023) 35:2561–2574
+123
+overﬁtting when applied to downstream tasks with rela-
+tively small datasets.
+Flair Embedding From the tabulated results, we can see
+that removing this language model embedding from the F1
+score also decreases more than the character embedding,
+which proves that the contribution of the language model
+embedding to the model is greater than that of the character
+embedding.
+Language Model Embedding The F1 score of our model
+decreases by 1:98% after we remove both pre-trained
+language models. From this experiment, we can see that the
+pre-trained language model has a great impact on our
+model, further verifying that the pre-trained language
+model helps our model learn contextual information, which
+is difﬁcult to capture on small datasets.
+Head and Tail Representation When we remove the head
+and tail representation the F1 score drops by 0:24%. This
+means that adding the head and tail word information to the
+representation of entity mentions gives a better represen-
+tation and improves performance.
+ReLU Operation in Eqs. 6, 7, and 8 To verify the
+effectiveness of using ReLU when mapping input to query,
+key, and value, we removed ReLU in this experiment.
+Using SGD with a learning rate of 0.01 after removing
+ReLU leads to the model failing to converge. Therefore, we
+gradually reduce the learning rate and try to use the Adam
+optimizer, and ﬁnally the model starts to converge when
+using Adam with a learning rate of 0.001 and exponential
+learning rate scheduler. The decline curves of loss values
+are shown in Fig. 5. As can be seen from the ﬁgure, the
+Fig. 6 Inference speed of our model and pyramid model on GENIA, SciERC, and ADE datasets
+Neural Computing and Applications (2023) 35:2561–2574
+2571
+123
+model with ReLU removed converge slower than our
+model. In addition, it can be seen from the ﬁgure that
+ﬁnally our model with ReLU removed can converge to the
+same level with our model, but the F1 score of the test set
+decreases by 0:89% as shown in Table 8. This demon-
+strates that the addition of ReLU has some effect of pre-
+venting overﬁtting.
+4.8 Inference speed
+Our model and the pyramid model are both based on the
+pyramid structure; therefore, we have the same time
+complexity as the pyramid model which is O(TL), where T
+is the length of the sentence and L is the maximum indi-
+vidual tag length. However, we propose a decoder based on
+the attention mechanism, and this decoder can compute the
+sequential output in parallel. In contrast, the Bi-LSTM used
+by the pyramid model cannot output in this way. This will
+lead to the fact that our model should have faster inference
+speed than the pyramid model although we have the same
+time complexity. To verify this, we compare the inference
+speed of our model with the pyramid model on three
+datasets. Both models are implemented by Pytorch library
+and ran on a single RTX 3090 GPU. The hyper-parameters
+of the model are selected as the best-performing ones on
+each dataset. The results of the comparison are shown in
+Fig. 6. As can be seen from the ﬁgure, the average infer-
+ence speed of our model is about 15% faster than that of the
+pyramid model for various batch sizes on all three datasets.
+5 Conclusion
+In this paper, we propose a Multi-Head Adjacent Attention-
+based Pyramid Layered model for nested named entity
+extraction. We consider the dependencies between two
+adjacent hidden states when fusing them to better represent
+text spans with a pyramid structure and ultimately improve
+the extraction performance. The speed of extracting entities
+is improved to some extent as our proposed attention-based
+mechanism can perform parallel computation on sequential
+inputs. In addition, to mitigate the issue of the intermediate
+words dominating the span representation, we added the
+head and tail words representation to the attention-based
+mechanism module and experimentally demonstrated the
+effectiveness of this solution. The experimental results
+demonstrate that our model outperforms other baseline
+models on three nested NER datasets.
+In future work, we will continue to investigate how to
+represent spans more simply and efﬁciently to improve the
+performance of extracting nested entities. In addition, we
+will try to resolve the problem of discontinuous NER,
+which has received increasing attention from researchers in
+the past few years.
+Acknowledgements This work was supported by the Institute of
+Information & Communications Technology Planning & Evaluation
+(IITP) grant funded by the Korea government (MSIT) (No. 2020-0-
+00107, Development of the technology to automate the recommen-
+dations for big data analytic models that deﬁne data characteristics
+and problems).
+Funding Institute of Information & Communications Technology
+Planning & Evaluation (IITP) grant funded by the Korea government
+(MSIT), 2020-0-00107.
+Code availability The code is available from the corresponding author
+upon reasonable request.
+Declarations
+Conflict of interest The authors declare that they have no conflict of
+interest regarding the publication of this article.
+Open Access This article is licensed under a Creative Commons
+Attribution 4.0 International License, which permits use, sharing,
+adaptation, distribution and reproduction in any medium or format, as
+long as you give appropriate credit to the original author(s) and the
+source, provide a link to the Creative Commons licence, and indicate
+if changes were made. The images or other third party material in this
+article are included in the article’s Creative Commons licence, unless
+indicated otherwise in a credit line to the material. If material is not
+included in the article’s Creative Commons licence and your intended
+use is not permitted by statutory regulation or exceeds the permitted
+use, you will need to obtain permission directly from the copyright
+holder. To view a copy of this licence, visit http://creativecommons.
+org/licenses/by/4.0/.
+References
+1. Chang CH, Kayed M, Girgis MR, Shaalan KF (2006) A survey of
+web information extraction systems. IEEE Trans Knowl Data
+Eng 18(10):1411–1428
+2. Weston L, Tshitoyan V, Dagdelen J, Kononova O, Trewartha A,
+Persson KA, Ceder G, Jain A (2019) Named entity recognition
+and normalization applied to large-scale information extraction
+from the materials science literature. J Chem Inf Model
+59(9):3692–3702
+3. Luan Y, He L, Ostendorf M, Hajishirzi H (2018) Multi-task
+identiﬁcation of entities, relations, and coreference for scientiﬁc
+knowledge graph construction. In: Proceedings of the 2018
+conference on empirical methods in natural language processing.
+ACL, pp 3219–3232
+4. Yu H, Mao XL, Chi Z, Wei W, Huang H (2020) A robust and
+domain-adaptive approach for low-resource named entity recog-
+nition. In: 2020 IEEE international conference on knowledge
+graph (ICKG). IEEE, pp 297–304
+5. Maroengsit W, Piyakulpinyo T, Phonyiam K, Pongnumkul S,
+Chaovalit P, Theeramunkong T (2019) A survey on evaluation
+methods for chatbots. In: Proceedings of the 2019 7th interna-
+tional conference on information and education technology.
+ACM, pp 111–119
+6. Saffar MM, Trabelsi A, Zaiane OR (2019) Self-attentional
+models application in task-oriented dialogue generation systems.
+In: Proceedings of the international conference on recent
+2572
+Neural Computing and Applications (2023) 35:2561–2574
+123
+advances
+in
+natural
+language
+processing
+(RANLP
+2019).
+INCOMA Ltd, pp 1031–1040
+7. Zheng Z (2002) AnswerBus question answering system. In:
+Proceedings of the second international conference on human
+language technology research. Morgan Kaufmann Publishers Inc,
+pp 399–404
+8. Kolomiyets O, Moens MF (2011) A survey on question
+answering technology from an information retrieval perspective.
+Inf Sci 181(24):5412–5434
+9. Huang Z, Xu W, Yu K (2015) Bidirectional LSTM-CRF models
+for sequence tagging. Preprint https://doi.org/10.48550/arXiv.
+1508.01991
+10. Lample G, Ballesteros M, Subramanian S, Kawakami K, Dyer C
+(2016) Neural architectures for named entity recognition. In:
+Proceedings of the 2016 conference of the north american
+chapter of the association for computational linguistics: human
+language technologies. ACL, pp 260–270
+11. Chiu JPC, Nichols E (2016) Named Entity Recognition with
+Bidirectional
+LSTM-CNNs.
+Trans
+Assoc
+Comput
+Linguist
+4:357–370
+12. Finkel JR, Manning CD (2009) Nested named entity recognition.
+In: Proceedings of the 2009 conference on empirical methods in
+natural language processing. ACL, pp 141–150
+13. Kim JD, Ohta T, Tateisi Y, Tsujii J (2003) GENIA corpus-a
+semantically annotated corpus for bio-textmining. Bioinformatics
+19(suppl-1):i180–i182
+14. Lu W, Roth D (2015) Joint mention extraction and classiﬁcation
+with mention hypergraphs. In: Proceedings of the 2015 confer-
+ence on empirical methods in natural language processing. ACL,
+pp 857–867
+15. Wang B, Lu W (2018) Neural segmental hypergraphs for over-
+lapping mention recognition. In: Proceedings of the 2018 con-
+ference on empirical methods in natural language processing.
+ACL, pp 204–214
+16. Alex B, Haddow B, Grover C (2007) Recognising nested named
+entities in biomedical text. In: Biological, translational, and
+clinical language processing. ACL, pp 65–72
+17. Ju M, Miwa M, Ananiadou S (2018) A neural layered model for
+nested named entity recognition. In: Proceedings of the 2018
+conference of the north american chapter of the association for
+computational linguistics: human language technologies. ACL,
+vol 1 (Long Papers), pp 1446–1459
+18. Wang J, Shou L, Chen K, Chen, G (2020) Pyramid: a layered
+model for nested named entity recognition. In: Proceedings of the
+58th annual meeting of the association for computational lin-
+guistics. ACL, pp 5918–5928
+19. Krizhevsky A, Sutskever I, Hinton GE (2012) Imagenet classi-
+ﬁcation with deep convolutional neural networks. In: Advances in
+neural information processing systems, vol 25. https://proceed
+ings.neurips.cc/paper/2012/ﬁle/
+c399862d3b9d6b76c8436e924a68c45b-Paper.pdf
+20. Graves A, Schmidhuber J (2005) Framewise phoneme classiﬁ-
+cation with bidirectional LSTM and other neural network archi-
+tectures. Neural Netw 18(5):602–610
+21. Vaswani A, Shazeer N, Parmar N, Uszkoreit J, Jones L, Gomez
+AN, Kaiser L, Polosukhin I (2017) Attention is all you need. In:
+Advances in neural information processing systems, vol 30.
+https://proceedings.neurips.cc/paper/2017/ﬁle/
+3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf
+22. Zhou G, Su J (2002) Named entity recognition using an HMM-
+based chunk tagger. In: Proceedings of the 40th annual meeting
+of
+the
+association
+for
+computational
+linguistics.
+ACL,
+pp 473–480
+23. Zhao S (2004) Named entity recognition in biomedical texts
+using an HMM model. In: Proceedings of the international joint
+workshop on natural language processing in biomedicine and its
+applications (NLPBA/BioNLP). COLING, pp 87–90
+24. McDonald R, Pereira F (2005) Identifying gene and protein
+mentions in text using conditional random ﬁelds. BMC Bioin-
+form 6(1):1–7
+25. Ratinov L, Roth D (2009) Design challenges and misconceptions
+in named entity recognition. In: Proceedings of the thirteenth
+conference on computational natural language learning (CoNLL-
+2009). ACL, pp 147–155
+26. Hammerton J (2003) Named entity recognition with long short-
+term memory. In: Proceedings of the seventh conference on
+natural language learning at HLT-NAACL, pp 172–175
+27. Collobert R, Weston J, Bottou L, Karlen M, Kavukcuoglu K,
+Kuksa P (2011) Natural language processing (almost) from
+scratch. J Mach Learn Res 12:2493–2537
+28. Ma X, Hovy E (2016) End-to-end sequence labeling via bi-di-
+rectional lstm-cnns-crf. Preprint https://doi.org/10.48550/arXiv.
+1603.01354
+29. Shen D, Zhang J, Zhou G, Su J, Tan CL (2003) Effective adap-
+tation of hidden markov model-based named entity recognizer for
+biomedical domain. In: Proceedings of the ACL 2003 workshop
+on natural language processing in biomedicine. ACL, pp 49–56
+30. Zhou G, Zhang J, Su J, Shen D, Tan CL (2004) Recognizing
+names in biomedical texts: a machine learning approach. Bioin-
+formatics 20(7):1178–1190
+31. Zhang J, Shen D, Zhouw G, Su J, Tan CL (2004) Enhancing
+hmm-based biomedical named entity recognition by studying
+special phenomena. J Biomed Inform 37(6):411–422
+32. Katiyar A, Cardie C (2018) Nested named entity recognition
+revisited. In: Proceedings of the 2018 conference of the North
+American chapter of the association for computational linguis-
+tics: human language technologies. ACL, vol 1 (Long Papers),
+pp 861–871
+33. Sohrab MG, Miwa M (2018) Deep exhaustive model for nested
+named entity recognition. In: Proceedings of the 2018 conference
+on empirical methods in natural language processing. ACL,
+pp 2843–2849
+34. Luan Y, Wadden D, He L, Shah, A, Ostendorf M, Hajishirzi H
+(2019) A general framework for information extraction using
+dynamic span graphs. In: Proceedings of the 2019 conference of
+the North American chapter of the association for computational
+linguistics: human language technologies. ACL, vol 1 (Long and
+Short Papers), pp 3036–3046
+35. Tan C, Qiu W, Chen M, Wang R, Huang F (2020) Boundary
+enhanced neural span classiﬁcation for nested named entity
+recognition. In: Proceedings of the AAAI conference on artiﬁcial
+intelligence, vol 34, no 5, pp 9016–9023
+36. Xu Y, Huang H, Feng C, Hu Y (2021) A supervised multi-head
+self-attention network for nested named entity recognition. In:
+Proceedings of the AAAI conference on artiﬁcial intelligence, vol
+35, no 16, pp 14185–14193
+37. Liu W, Anguelov D, Erhan D, Szegedy C, Reed S, Fu CY, Berg
+AC (2016) SSD: single shot multibox detector. In: Computer
+vision: ECCV 2016. Springer, pp 21–37
+38. Lin TY, Dollar P, Girshick R, He K, Hariharan B, Belongie S
+(2017) Feature pyramid networks for object detection. In: Pro-
+ceedings of the IEEE conference on computer vision and pattern
+recognition (CVPR)
+39. Mikolov T, Chen K, Corrado G, Dean J (2013) Efﬁcient esti-
+mation of word representations in vector space. Preprint https://
+doi.org/10.48550/arXiv.1301.3781
+40. Pennington J, Socher R, Manning C (2014) GloVe: global vectors
+for word representation. In: Proceedings of the 2014 conference
+on empirical methods in natural language processing (EMNLP).
+ACL, pp 1532–1543
+Neural Computing and Applications (2023) 35:2561–2574
+2573
+123
+41. Peters ME, Neumann M, Iyyer M, Gardner M, Clark C, Lee K,
+Zettlemoyer L (2018) Deep contextualized word representations.
+In: Proceedings of the 2018 conference of the North American
+chapter of the association for computational linguistics: human
+language technologies. ACL, vol 1 (Long Papers), pp 2227–2237
+42. Akbik A, Blythe D, Vollgraf R (2018) Contextual string
+embeddings for sequence labeling. In: Proceedings of the 27th
+international conference on computational linguistics. ACL,
+pp 1638–1649
+43. Devlin J, Chang MW, Lee K, Toutanova K (2019) BERT: pre-
+training of Deep Bidirectional Transformers for Language
+Understanding. In: Proceedings of the 2019 conference of the
+North American chapter of the association for computational
+linguistics: human language technologies. ACL, vol 1 (Long and
+Short Papers), pp 4171–4186
+44. Sang EFTK, Veenstra J (1999) Representing text chunks. In:
+EACL ’99, pp 173–179
+45. Ba JL, Kiros JR, Hinton GE (2016) Layer normalization. Preprint
+https://doi.org/10.48550/arXiv.1607.06450
+46. Xu B, Wang N, Chen T, Li M (2015) Empirical evaluation of
+rectiﬁed activations in convolutional network. Preprint https://
+doi.org/10.48550/arXiv.1505.00853
+47. Hoeﬂer T, Alistarh D, Ben-Nun T, Dryden N, Peste A (2021)
+Sparsity in deep learning: pruning and growth for efﬁcient
+inference and training in neural networks. J Mach Learn Res
+22(241):1–124
+48. Luan Y, He L, Ostendorf M, Hajishirzi H (2018) Multi-task
+identiﬁcation of entities, relations, and coreference for scientiﬁc
+knowledge graph construction. In: Proceedings of the 2018
+conference on empirical methods in natural language processing.
+https://doi.org/10.18653/v1/D18-1360
+49. Gurulingappa H, Rajput AM, Roberts A, Fluck J, Hofmann-
+Apitius M, Toldo L (2012) Development of a benchmark corpus
+to support the automatic extraction of drug-related adverse effects
+from medical case reports. J Biomed Inform 45(5):1532
+50. Eberts M, Ulges A (2020) Span-based joint entity and relation
+extraction with transformer pre-training. In: ECAI 2020. IOS
+Press, pp 2006–2013
+51. Ji B, Yu J, Li S, Ma J, Wu Q, Tan Y, Liu H (2020) Span-based
+joint entity and relation extraction with attention-based span-
+speciﬁc and contextual semantic representations. In: Proceedings
+of the 28th international conference on computational linguistics,
+pp 88–99
+52. Wadden D, Wennberg U, Luan Y, Hajishirzi H (2019) Entity,
+relation, and event extraction with contextualized span repre-
+sentations. In: Proceedings of the 2019 conference on empirical
+methods in natural language processing and the 9th international
+joint conference on natural language processing (EMNLP-
+IJCNLP). ACL, pp 5784–5789
+53. Chiu B, Crichton G, Korhonen A, Pyysalo S (2016) How to train
+good word embeddings for biomedical NLP. In: Proceedings of
+the 15th workshop on biomedical natural language processing.
+ACL, pp 166–174
+54. Lee J, Yoon W, Kim S, Kim D, Kim S, So CH, Kang J (2019)
+BioBERT: a pre-trained biomedical language representation
+model
+for
+biomedical
+text
+mining.
+Bioinformatics
+36(4):1234–1240
+55. Beltagy I, Lo K, Cohan A (2019) SciBERT: a pretrained lan-
+guage model for scientiﬁc text. In: Proceedings of the 2019
+conference on empirical methods in natural language processing
+and the 9th international joint conference on natural language
+processing (EMNLP-IJCNLP). ACL, pp 3615–3620
+56. Luo Y, Zhao H (2020) Bipartite ﬂat-graph network for nested
+named entity recognition. In: Proceedings of the 58th annual
+meeting of the association for computational linguistics. ACL,
+pp 6408–6418
+57. Wang Y, Li Y, Tong H, Zhu Z (2020) HIT: nested named entity
+recognition via head-tail pair and token interaction. In: Pro-
+ceedings of the 2020 conference on empirical methods in natural
+language processing (EMNLP). ACL, pp 6027–6036
+58. Shibuya T, Hovy E (2020) Nested named entity recognition via
+second-best sequence learning and decoding. Trans Assoc
+Comput Linguist 8:605–620
+59. Wang Y, Shindo H, Matsumoto Y, Watanabe T (2021) Nested
+named entity recognition via explicitly excluding the inﬂuence of
+the best path. In: Proceedings of the 59th annual meeting of the
+association for computational linguistics and the 11th interna-
+tional joint conference on natural language processing (vol 1:
+Long Papers). ACL, pp 3547–3557
+60. Yan H, Gui T, Dai J, Guo Q, Zhang Z, Qiu X (2021) A uniﬁed
+generative framework for various NER subtasks. In: Proceedings
+of the 59th annual meeting of the association for computational
+linguistics and the 11th international joint conference on natural
+language processing (vol 1: Long Papers). ACL, pp 5808–5822
+61. Wang Y, Sun C, Wu Y, Yan J, Gao P, Xie G (2020) Pre-training
+entity relation encoder with intra-span and inter-span informa-
+tion. In: Proceedings of the 2020 conference on empirical
+methods
+in
+natural
+language
+processing
+(EMNLP).
+ACL,
+pp 1692–1705
+62. Wang Y, Sun C, Wu Y, Zhou H, Li L, Yan J (2021) UniRE: a
+uniﬁed label space for entity relation extraction. In: Proceedings
+of the 59th annual meeting of the association for computational
+linguistics and the 11th international joint conference on natural
+language processing (vol 1: Long Papers). ACL, pp 220–231
+63. Zhong Z, Chen D (2021) A frustratingly easy approach for entity
+and relation extraction. In: Proceedings of the 2021 conference of
+the north american chapter of the association for computational
+linguistics: human language technologies. ACL, pp 50–61
+64. Santosh T, Chakraborty P, Dutta S, Sanyal DK, Das PP (2021)
+Joint entity and relation extraction from scientiﬁc documents:
+role of linguistic information and entity types. In: 2nd workshop
+on extraction and evaluation of knowledge entities from scientiﬁc
+documents (EEKE2021) at the ACM/IEEE joint conference on
+digital libraries 2021 (JCDL2021), pp 15–19
+Publisher’s Note Springer Nature remains neutral with regard to
+jurisdictional claims in published maps and institutional afﬁliations.
+2574
+Neural Computing and Applications (2023) 35:2561–2574
+123

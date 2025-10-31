@@ -1,0 +1,1293 @@
+Skip to main content
+Thank you for visiting nature.com. You are using a browser version
+with limited support for CSS. To obtain the best experience, we
+recommend you use a more up to date browser (or turn off
+compatibility mode in Internet Explorer). In the meantime, to
+ensure continued support, we are displaying the site without styles
+and JavaScript.
+Advertisement
+[image]
+[image]
+•  View all journals
+•  
+Search
+•  Log in
+•  Explore content
+•  About the journal
+•  Publish with us
+•  Sign up for alerts
+•  RSS feed
+1. nature 
+2. npj digital medicine 
+3. articles 
+4. article
+Towards evaluating and building versatile large language models
+for medicine
+Download PDF 
+Download PDF 
+Show authors
+•  Article
+•  Open access
+•  Published: 27 January 2025
+Towards evaluating and
+building versatile large
+language models for medicine
+•  Chaoyi Wu1,2 na1,
+•  Pengcheng Qiu1,2 na1,
+•  Jinxin Liu3,
+•  Hongfei Gu4,
+•  Na Li3,
+•  Ya Zhang1,2,
+•  Yanfeng Wang
+1,2 &
+•  …
+•  Weidi Xie
+1,2 
+npj Digital Medicine volume 8, Article number: 58 (2025) Cite this
+article
+•  10k Accesses
+•  13 Citations
+•  12 Altmetric
+•  Metrics details
+Subjects
+•  Diagnosis
+•  Health care
+•  Health services
+•  Public health
+Abstract
+In this study, we present MedS-Bench, a comprehensive benchmark
+to evaluate large language models (LLMs) in clinical contexts,
+MedS-Bench, spanning 11 high-level clinical tasks. We evaluate
+nine leading LLMs, e.g., MEDITRON, Llama 3, Mistral, GPT-4,
+Claude-3.5, etc. and found that most models struggle with these
+complex tasks. To address these limitations, we developed MedS-
+Ins, a large-scale instruction-tuning dataset for medicine. MedS-Ins
+comprises 58 medically oriented language corpora, totaling 5M
+instances with 19K instructions, across 122 tasks. To demonstrate
+the dataset’s utility, we conducted a proof-of-concept experiment by
+performing instruction tuning on a lightweight, open-source
+medical language model. The resulting model, MMedIns-Llama 3,
+significantly outperformed existing models on various clinical tasks.
+To promote further advancements, we have made MedS-Ins fully
+accessible and invite the research community to contribute to its
+expansion. Additionally, we have launched a dynamic leaderboard
+for MedS-Bench, to track the development progress of medical
+LLMs.
+Similar content being viewed by others
+[image]
+Towards building multilingual language model for
+medicine
+Article Open access 27 September 2024
+[image]
+Medical foundation large language models for
+comprehensive text analysis and beyond
+Article Open access 05 March 2025
+[image]
+Application of large language models in medicine
+Article 07 April 2025
+Introduction
+Large Language Models (LLMs) have recently achieved significant
+advancements across various natural language processing tasks,
+demonstrating remarkable capabilities in language translation, text
+generation, dialogue, and beyond. These developments have also
+extended into the medical domain, where LLMs have achieved high
+scores on multiple-choice question-answering (MCQA) benchmarks
+in healthcare, and successfully passed the UMLS examination, as
+noted by Singhal et al.1,2. Moreover, LLMs have shown expert-level
+performance in clinical text summarization when appropriate
+prompting strategies are employed3.
+Alongside these advancements, however, there has been growing
+criticisms and concerns regarding the application of LLMs in clinical
+settings, primarily due to their deficiencies in fundamental medical
+knowledge. For instance, LLMs have demonstrated poor
+comprehension of ICD codes4, produced inaccurate predictions
+related to clinical procedures5, and misinterpreted Electronic Health
+Record (EHR) data6. We posit that these polarized views on the
+efficacy of LLMs arise from the stringent standards required for AI
+deployment in clinical environments. Current benchmarks, which
+largely focus on multiple-choice problems2,7,8, fail to adequately
+reflect the practical utility of LLMs in real-world clinical scenarios.
+To address this gap, we introduce MedS-Bench (S for Super), a
+comprehensive benchmark that extends beyond multiple-choice
+question answering (MCQA), to include 11 advanced clinical
+tasks, such as clinical report summarization, treatment
+recommendations, diagnosis, and named entity recognition, among
+others. This benchmark provides clinicians and researchers with a
+detailed understanding of where LLMs excel and where they fall
+short in medical tasks. Specifically, we evaluate nine mainstream
+models for medicine: MEDITRON8, Mistral9, InternLM 210, Llama
+311, Qwen 212, Baichuan 213, Med42-v214, GPT-415 and
+Claude-3.516. Our findings indicate that even the most advanced
+LLMs struggle with complex clinical tasks, even when utilizing few-
+shot prompting, underscoring the gap between high performance on
+MCQA benchmarks and the actual demands of clinical practice.
+To advance the development of open-source medical LLMs capable
+of tackling a broad spectrum of clinical tasks, we take inspiration
+from the idea of Super-NaturalInstructions17, and construct the
+first, comprehensive instruction tuning dataset for medicine, MedS-
+Ins. It aggregates 58 open-source biomedical natural language
+processing datasets from five text sources, including exams, clinical
+texts, academic papers, medical knowledge bases, and daily
+conversations, resulting in 5M instances with 19K instructions
+across 122 clinical tasks, each accompanied with hand-written
+task definitions. We performed extensive instruction tuning on
+open-source medical language models, and explored both zero-shot
+and few-shot prompting strategies. The outcome is a new medical
+LLM—MMedIns-Llama 3, for the first time, showing the
+effectiveness of training on diverse medical tasks through
+instruction tuning, enabling open-source medical LLMs to surpass
+leading closed-source models, including GPT-4 and Claude-3.5,
+across a wide range of clinical tasks.
+While our final model serves primarily as an academic proof of
+concept, we believe that MedS-Ins represents an initial step toward
+advancing medical LLMs for real-world clinical applications,
+moving beyond the confines of online chat or multiple-choice
+question answering.
+Results
+In this section, we first introduce MedS-Bench, the benchmark
+employed in our study, designed to provide a comprehensive
+evaluation across a range of tasks critical to clinical applications.
+We then present detailed statistics on our instruction tuning dataset,
+MedS-Ins, which was carefully curated to cover a broad spectrum
+of medical language processing tasks. Finally, we provide an in-
+depth analysis of the evaluation results, comparing the performance
+of leading mainstream models with our own model, MMedIns-
+Llama 3, adapted from an open-source language model and fine-
+tuned on comprehensive medical instructions.
+To ensure clarity in our subsequent discussion and analysis, we
+define key terminologies used throughout this study. For additional
+examples, please refer to the “Detail Tasks in MedS-Ins” section of
+the Supplementary.
+•  Text domains: Refers to the nature or type of the data, such
+as clinical texts, examination materials, academic papers, and
+so forth.
+•  Data sources: In contrast to the “text domains” which
+describe the attribute of the data, “data sources” refer to the
+specific origins of the data, such as MIMIC-IV or PubMed
+papers. Different data sources may belong to the same text
+domain.
+•  Task categories: These denote the broad types of language
+processing tasks, such as multiple-choice question answering
+or named entity recognition, etc. Tasks within the same
+category share a common objective.
+•  Tasks: These denote the fundamental units (leaf nodes) in our
+data collection pipeline, including specific tasks like outcome
+extraction, drug dose extraction, pathology summarization,
+etc. Each task may be defined by unique combinations of data
+sources, task categories, or text domains.
+First of all, to evaluate the capabilities of various LLMs in clinical
+applications, we developed MedS-Bench, a comprehensive medical
+benchmark that extends beyond traditional multiple-choice
+questions. MedS-Bench encompasses 11 high-level clinical task
+categories, derived from 28 existing datasets, as illustrated in Fig.
+1. Each dataset was reformatted into an instruction-prompted
+question-answering structure, complete with hand-crafted task
+definitions (instructions), as shown in Fig. 2a. The task categories
+we considered include: Multi-choice Question Answering, Text
+Summarization, Information Extraction, Explanation, Rationale, Named
+Entity Recognition, Diagnosis, Treatment Planning, Clinical Outcome
+Prediction, Text Classification, Fact Verification, and Natural Language
+Inference. A more detailed description of each category is provided
+in the “Task Category Details” section of the Supplementary.
+Fig. 1: Benchmark Statistics.
+[image]
+The hierarchical ring chart meticulously displays the data
+distribution within the evaluation benchmarks. The first tier
+categorizes the types of tasks, with the benchmarks encompassing
+11 primary task categories. The second tier outlines the datasets
+involved, including 28 datasets in total. The third tier details the
+specific tasks, with the benchmarks collectively addressing 52
+distinct tasks. Overall, this benchmark allows for a thorough and
+comprehensive evaluation of model performance across multiple
+dimensions.
+Full size image
+Fig. 2: Overview of MedS-Ins.
+[image]
+a The task collection pipeline. For each task, we add a task category
+along with a hand-written definition to it, resulting in a total of 19
+task categories. b We collect the existing 58 public datasets. c We
+convert the formats of different datasets into one unified medical
+instruction dataset, MedS-Ins. d The final data distribution of our
+collected MedS-Ins. The Sankey diagram shows how the different
+text domains (left), task categories (middle), and data sources
+(right) contribute to the final datasets. On the left of the bottom,
+two pie charts show the data distributions on text domains and task
+categories respectively.
+Full size image
+In addition to defining these task categories, we also provide
+detailed statistics on the number of tokens and distinguish the
+required competencies for LLMs to address each task, as presented
+in the “Detail Tasks in MedS-Ins” section of the Supplementary.
+Following previous work18, we manually classified the tasks into
+two categories based on the skills required: (i) recalling facts from
+the model, and (ii) retrieving facts from the provided context.
+Broadly speaking, the former involves tasks that require to access
+knowledge encoded in the model’s weights from large-scale pre-
+training, while the latter involves tasks that necessitate extracting
+information from the provided context, such as in summarization or
+information extraction. As shown in the “Detail Tasks in MedS-Ins”
+section of the Supplementary, eight of the task categories require
+the model to recall knowledge from the model, while the remaining
+three require fact retrieval from the given context.
+Then, we introduce our proposed instruction dataset, MedS-Ins,
+with the data collected from 5 distinct text sources and 19 task
+categories, 122 distinct clinical tasks. The statistics of MedS-Ins are
+summarized in Fig. 2. Our proposed instruction tuning dataset is
+composed of samples drawn from five distinct text domains:
+exams, clinical texts, academic papers, medical knowledge bases,
+and daily conversations, introduced as follows:
+•  Exams: This category consists of data from medical
+examination questions across various countries. It
+encompasses a broad spectrum of medical knowledge,
+ranging from fundamental medical facts to complex clinical
+procedures. While the exam domain is a vital resource for
+understanding and assessing medical education, it is
+important to note that the highly standardized nature of
+exams often results in over-simplified cases compared to real-
+world clinical tasks. 7% of the tokens in our dataset are from
+the exams.
+•  Clinical texts: Generated during routine clinical practice,
+these texts support diagnostic, treatment, and preventive
+processes within hospitals and clinical centers. This category
+includes Electronic Health Records (EHRs), radiology reports,
+lab results, follow-up instructions, and medication
+recommendations, among others. These texts are
+indispensable for disease diagnosis and patient management,
+making accurate analysis and understanding crucial for the
+effective clinical application of LLMs. 35% of the tokens in
+our dataset are from clinical texts. Notably, the significant
+proportion of clinical texts ensures that the instruction tuning
+data aligns closely with clinical demands.
+•  Academic papers: This data is sourced from medical
+research papers, covering the latest findings and
+advancements in the medical research field. Given their
+accessibility and structured organization, extracting data from
+academic papers is relatively straightforward. These cases
+help models grasp cutting-edge medical research information,
+guiding them to better understand contemporary
+developments in medicine. 13% of the tokens in our dataset
+are from academic papers.
+•  Medical knowledge bases: This domain comprises well-
+organized and comprehensive medical knowledge, including
+medical encyclopedias, knowledge graphs, and glossaries of
+medical terms. Such data forms the backbone of medical
+knowledge bases, supporting both medical education and the
+application of LLMs in clinical practice. 43% of the tokens in
+our dataset are from medical knowledge.
+•  Daily conversations: This source refers to the daily
+consultation generated between doctors and patients,
+primarily sourced from online platforms and other interactive
+scenarios. These interactions reflect the real-life interactions
+between medical professionals and patients, playing a critical
+role in understanding patients’ needs and enhancing the
+overall experience of medical service. 2% of the tokens in our
+dataset are from daily conversations.
+Beyond categorizing the text domains from which the original data
+is sourced, the samples in MedS-Ins are further organized into
+distinct task categories. We have identified 19 task categories,
+each representing a critical capability that we believe a medical
+LLM should possess. By constructing this instruction-tuning dataset
+and fine-tuning models accordingly, we aim to equip the LLMs with
+the versatility needed to address a broad spectrum of medical
+applications.
+These 19 task categories include but are not limited to, the 11
+categories in the MedS-Bench benchmark. The additional categories
+encompass a range of linguistic and analytical tasks essential for
+comprehensive medical language processing, including Intent
+Identification, Translation, Word Relation Classification, Text Retrieval,
+Sentence Composition Analysis, Wrong Candidate Generation, Dialogue,
+and Text Completion and the MCQA category is extended to general
+Question Answering, which also includes free-text answering cases.
+The diversity of task categories ranging from common question
+answering and dialogue to various downstream clinical tasks—
+guarantees a comprehensive understanding of the potential medical
+applications. A detailed description of each category is provided in
+the “Task Category Details” section of the Supplementary.
+After introducing all our proposed datasets, we will analyze
+different LLMs on various tasks accordingly. For each task type, we
+start by discussing the performance of various existing LLMs,
+followed by a comparison with our final model, MMedIns-Llama 3.
+All results presented here were obtained using a 3-shot prompting
+strategy (more details in the “Evaluation Settings” section in
+Supplementary), except for MCQA tasks, where we used a zero-shot
+prompting setting to align with previous studies7,8,19. As our
+comparisons include proprietary models like GPT-4 and Claude 3.5,
+which incur usage costs, we randomly sampled around 1500 test
+cases per benchmark to manage the cost constraints. The task
+description and specific sampling numbers are detailed in the
+section “Task Category Details” in Supplementary. For simplicity,
+the percentage mark (%) is omitted in all the following tables and
+results analysis.
+Multilingual Multiple-choice Question-answering
+Here, we present evaluation results on the widely used multiple-
+choice Question-answering (MCQA) benchmarks, as shown in Table
+1. Some numbers are directly incorporated from our previous
+studies8,13,14,19,20. On these multi-choice question-answering
+datasets, existing proprietary LLMs have demonstrated very high
+accuracies, for example, on MedQA, GPT-4 can achieve 85.8, which
+is almost comparable to human experts, and Llama 3 can also pass
+the exam with 60.9 scores. Similarly, in languages other than
+English, LLMs also demonstrate superior results in multiple-choice
+accuracy on MMedBench19. The results indicate that as multi-choice
+questions have been extensively considered in existing research,
+different LLMs may have been specifically optimized for such tasks,
+resulting in high performance. It is therefore essential to build up a
+more comprehensive benchmark, to further push the development
+of LLMs towards clinical applications. Our proposed model,
+MMedIns-Llama 3, although not primarily trained on multi-choice
+questions, still shows notable improvement, achieving an average
+accuracy of 63.9 across different benchmarks, significantly
+surpassing GPT-3.5.
+Table 1 Results on medical multiple-choice question
+answering, as reported with Accuracy score
+Full size table
+Text Summarization
+As shown by Table 2, the performance of text summarization is
+reported as ‘BLEU/ROUGE’ scores, on multiple report types across
+various modalities, including X-ray, CT, MRI, ultrasound, and other
+medical questions. Among the models, closed-source LLMs, such as
+GPT-4 and Claude-3.5, perform better than all the open-source
+ones, achieving an average of 24.46/25.66 and 26.29/27.36,
+respectively. Among open-source models, Mistral achieves the best
+results, with BLEU/ROUGE scores of 24.48/24.90. Llama 3 follows
+closely, with scores of 22.20/23.08. Our model (MMedIns-Llama 3),
+trained on the medical-specific instruction dataset (MedS-Ins),
+significantly outperforms the others, achieving average scores of
+46.82/48.38.
+Table 2 Results on text summarization, as reported with BLEU
+and ROUGE scores, formatted as ‘BLEU/ROUGE’
+Full size table
+Information Extraction
+The performance of information extraction is summarized in Table
+3. InternLM 2 shows exceptionally good performance in this task
+with an average score of 79.11. For example, In the PICO tasks,
+InternLM 2 leads in both Intervention and Outcome Extraction, with
+scores of 74.42 and 69.77, respectively. Closed-source models such
+as GPT-4 and Claude-3.5 outperform all other open-source
+counterparts, with average scores of 76.92 and 79.41, respectively.
+Analysis of individual benchmark components reveals that most
+LLMs perform better at extracting less medically complex
+information, such as basic patient details, compared to more
+specialized medical data like outcomes and interventions. For
+instance, in extracting basic information from PMC Patients, most
+LLMs score above 90, with Claude-3.5 achieving the highest score
+of 99.07. In contrast, performance on Clinical Outcome Extraction
+tasks within PICO is relatively poor. Our proposed model, MMedIns-
+Llama 3, demonstrates the best overall performance, achieving an
+average score of 83.77, surpassing InternLM 2 by 4.66 points.
+Notably, in the PICO tasks, MMedIns-Llama 3 excels in Participant
+Extraction, scoring 83.72, which exceeds the second-best model by
+11.63 points.
+Table 3 Results on information extraction, as reported with
+Accuracy score
+Full size table
+Concept Explanation
+We conduct evaluations on medical concept explanation and
+reported the BLEU-1 and ROUGE-1 scores across all relevant
+datasets and models. In Table 4, we evaluate the model on medical
+concept explanation, GPT-4 performs well on this task, achieving
+average scores of 19.37/21.58. In contrast, MEDITRON and Qwen 2
+achieve relatively lower scores, with averages of 8.51/18.90 and
+9.20/12.67. We hypothesize that MEDITRON’s lower performance
+may be due to its training corpus, which is primarily focused on
+academic papers and guidelines, making it less effective at
+explaining basic medical concepts. Similarly, Qwen 2’s performance
+appears limited by its lack of familiarity with medical terminology.
+While Qwen 2 performs better on the Health Fact Explanation task,
+which is less domain-specific, its performance drops significantly on
+more specialized tasks, such as DO entity explanation and BioLord
+concept explanation, where models are required to explain medical
+terms. Our final model, MMedIns-Llama 3, significantly outperforms
+the other ones across all concept explanation tasks, particularly in
+Health Fact Explanation (30.50/28.53) and BioLORD Concept
+Explanation (38.12/43.90), and achieving the highest average
+scores of 34.43/37.47. Following MMedIns-Llama 3, GPT-4 also
+showed strong performance, with GPT-4 scoring 19.37/21.58.
+Table 4 Results on medical concept explanation, as reported
+with ‘BLEU/ROUGE’ scores
+Full size table
+Answer Explanations (Rationale)
+In Table 5, we evaluate the complex rationale, i.e., explaining the
+answer and comparing the reasoning abilities of various models
+using the MMedBench19 dataset across six languages. Among the
+models tested, the closed-source model Claude-3.5 exhibited the
+strongest performance, with average scores of 46.26/36.97,
+demonstrating consistently high scores across all languages,
+particularly in French and Spanish. This superior performance may
+be attributed to the similarity of this task to chain-of-thought
+reasoning, a capability that has been specifically enhanced in many
+general-purpose LLMs. Among open-source models, Mistral and
+InternLM 2 demonstrated comparable performance, with average
+scores of 38.14/32.28 and 35.65/32.04, respectively. It is important
+to note that GPT-4 was excluded from this evaluation, because the
+rationale component of the MMedBench dataset was primarily
+constructed using GPT-4 outputs, which could introduce bias and
+bring unfair comparisons. Consistent with our observations in
+concept explanation, our final model, MMedIns-Llama 3,
+demonstrated the best overall performance with average BLEU-1/
+ROUGE-1 scores of 46.90/34.54 across all languages, notably,
+achieving 51.74/35.19 in Japanese reasoning tasks, 49.08/38.19 in
+English, and 46.93/38.73 in French, respectively. This superior
+performance is likely due to the fact that our base language model
+(MMed-Llama 3) was initially developed to be multilingual19.
+Consequently, even though our instruction tuning did not explicitly
+target multilingual data, the final model outperforms others across
+multiple languages.
+Table 5 Results on rationale, as reported with ‘BLEU/ROUGE’
+scores
+Full size table
+Named Entity Recognition (NER)
+As shown in Table 6, among these models GPT-4 is the only one
+that consistently demonstrates robust performance across Named
+Entity Recognition (NER) tasks, achieving an average F1-Score of
+59.52. It excels particularly in the BC5Chem Chemical Recognition
+task with a score of 67.62. InternLM 2 shows the best performance
+among all the open-source models, with an average F1-Score of
+45.69. Qwen 2 and Med42-v2 also show solid performance, with
+averages of 35.55 and 24.73, respectively. Llama 3 and Mistral,
+with average F1-Score of 23.62 and 16.53, respectively, exhibit
+moderate performance. MEDITRON, not optimized for NER tasks,
+shows limited effectiveness in this area. Our model, MMedIns-
+Llama 3, significantly outperforms all other models, achieving an
+average F1-Score of 79.29. It excels in the BC4Chem and BC5Chem
+Chemical Recognition tasks, with F1 scores of 90.78 and 91.25,
+respectively. Furthermore, MMedIns-Llama 3 leads in the
+BC5Disease Disease Recognition task with an F1-Score of 54.26 and
+in the Species800 Organism Recognition task with 80.87,
+demonstrating superior capability in handling complex NER tasks
+across various biomedical domains.
+Table 6 Results on NER tasks, as reported with F1-Score scores
+Full size table
+Diagnosis, Treatment Planning, and Clinical Outcome
+Prediction
+We evaluate the performance on tasks involving diagnosis,
+treatment planning, and clinical outcome prediction, using the
+DDXPlus benchmark for Diagnosis, the SEER benchmark for
+Treatment Planning, and the MIMIC4ED benchmark for Clinical
+Outcome Prediction. The results, presented in Table 7, are
+measured in terms of accuracy. Here, the use of accuracy as a
+metric is appropriate in this generative prediction problem, as each
+of these datasets simplifies the original problem into a closed-set
+choice. Specifically, DDXPlus utilizes a predefined list of diseases,
+from which models must select one based on the provided patient
+context. In SEER, treatment recommendations are categorized into
+eight high-level categories, while in MIMIC4ED, the final clinical
+outcome decisions are binary, with options of either True or False.
+Overall, the open-source LLMs underperform the closed-source
+LLMs in these tasks. In the SEER treatment planning task, InternLM
+2 and MEDITRON achieved relatively high accuracy scores of 62.33
+and 68.27, respectively, among open-source models, but this is still
+far away from GPT-4’s 84.73 and Claude-3.5’s 92.93. For the
+DDXPlus diagnosis task, the open-source exhibited similar,
+relatively low scores around 35.00, with even medical-specific
+models like MEDITRON and med42-v2 performing poorly. This may
+be due to the task’s complexity, which differs significantly from
+multiple-choice QA, and the models’ lack of specialized training.
+Notably, in clinical outcome prediction, both Baichuan 2 and Llama
+3 struggled to predict critical triage and the 72-hour ED revisit
+binary indicator, failing to provide meaningful predictions. This
+may be because the task lies outside their training distribution, and
+the models often fail to follow the provided three-shot format,
+resulting in extremely low scores. Closed-source models such as
+GPT-4 and Claude-3.5 demonstrate significantly better performance.
+Claude-3.5, for instance, achieves a 92.93 accuracy score in
+treatment planning and GPT-4 attains 84.73. They also demonstrate
+better performance in diagnosis, highlighting the considerable gap
+between open-source and closed-source LLMs. Despite these results,
+the scores remain insufficient for reliable clinical use. In contrast,
+MMedIns-Llama 3 demonstrate superior accuracy in clinical
+decision support tasks, with a 98.47 accuracy score in treatment
+planning, 97.53 in diagnosis, and an average accuracy of 63.35
+(mean on the scores of Hospitalization, 72h ED Revisit, and Critical
+Triage) in clinical outcome prediction.
+Table 7 Results on treatment planning, diagnosis clinical
+outcome prediction, and text classification results
+Full size table
+Text Classification
+In Table 7, we present the evaluation on the Hallmarks of Cancer
+(HoC) multi-label classification task, and report macro-Precision,
+macro-Recall, and macro-F1 scores. For this task, all candidate
+labels are input into the language model as a list, and the model is
+asked to select its preferred answers, allowing for multiple
+selections. The metrics are then calculated based on these model
+selections. GPT-4 and Claude-3.5 perform well on this task, with
+GPT-4 achieving a macro-F1 score of 68.06 and Claude-3.5 slightly
+worse at 66.74. Both models show strong recall capabilities,
+particularly GPT-4, which achieves a macro-Recall of 80.23,
+underscoring its proficiency in identifying relevant labels. Among
+open-source models, Med42-v2, the latest medical LLM that
+underwent comprehensive supervised fine-tuning and preference
+optimization, performs well among the open-source models,
+achieving a macro-F1 score of 47.87. Llama 3 and Qwen 2 show
+moderate performance, with macro-F1 scores of 38.37 and 40.29,
+respectively. These models, especially InternLM 2, exhibit high
+recall but struggle with precision, resulting in lower F1 scores.
+Baichuan and MEDITRON rank the lowest in this task, with macro-
+F1 scores of 23.76 and 23.70, respectively. Our MMedIns-Llama 3
+clearly outperforms all other models, achieving the highest scores
+across all metrics, with a macro-Precision of 89.59, a macro-Recall
+of 85.58, and a macro-F1 score of 86.66. These results highlight
+MMedIns-Llama 3’s superior ability to accurately classify and recall
+multiple labels, making it the most effective model for this complex
+task.
+Fact Verification
+In Table 8, we evaluate the models on fact verification tasks. For
+PubMedQA Answer Verification and HealthFact Verification, the
+LLMs are required to select a single answer from a list of provided
+candidates, with accuracy serving as the evaluation metric. In
+contrast, for EBMS Justification Verification, where the task
+involves generating free-form text, performance is assessed using
+BLEU and ROUGE scores. InternLM 2 achieves the highest accuracy
+on PubMedQA Answer Verification with scores of 99.23. On
+PUBLICHEALTH, Med42-v2 achieves 79.54, which is the best
+among all the open-source models, just behind GPT-4 with 78.60. In
+the EBMS benchmark, Llama 3 and GPT-4 show comparable
+performance, with average BLEU/ROUGE score of 16.52/16.49 and
+16.28/16.27. MMedIns-Llama 3 continues surpassing existing
+models, achieving the highest accuracy score as InternLM 2,
+excelling in PubMedQA Answer Verification and HealthFact
+Verification while in EMBS, MMedIns-Llama 3 slightly falls behind
+the GPT-4 and Llama 3 with 12.71/14.65 in BLEU and ROUGE,
+which we treat as future work for further improvement.
+Table 8 Results on fact verification and NLI results, as reported
+with both accuracy and BLUE/ROUGE scores
+Full size table
+Natural Language Inference (NLI)
+Table 8 shows the evaluation on medical Natural Language
+Inference (NLI) using the MedNLI textual entailment dataset. The
+results are measured with accuracy for the discriminative tasks
+(selecting the right answer from a list of candidates) and BLEU/
+ROUGE metrics for the generative tasks (generating free-form text
+answers). InternLM 2 achieves the highest scores among the open-
+source LLMs, scoring 84.67. For the closed-source LLMs, GPT-4 and
+Claude-3.5 all show relatively high scores, with 86.63 and 82.14
+accuracy scores respectively. Qwen 2 and Med42-v2 also show
+second-best performance of 82.00 and 77.57 among the open-
+source LLMs In the generative task, Llama 3 demonstrates the
+highest consistency with the reference ground truth, achieving
+scores of 21.31 for BLEU and 22.75 for ROUGE among the open-
+source models. Similarly, GPT-4 also performs well in the
+generative task format, resulting in 27.09/23.71 scores while
+Claude-3.5 is not ideal in this task. MMedIns-Llama 3 achieves the
+highest accuracy in the discriminative task, scoring 86.71,
+comparable with GPT-4. MMedIns-Llama 3 also excels in the
+generative task, with BLEU/ROUGE scores of 23.52/25.17,
+outperforming other models except the GPT-4.
+Run Time Analysis
+Beyond the task-wise performance, we also compare the inference
+cost of different models. The results are shown in the “Run Time
+Analysis” section in Supplementary. Generally, the run-time
+differences between various LLM series (like Mistral vs. Llama 3)
+are not significant. Thus, in real clinical applications, the
+performance we believe is the main fact that clinicians need to
+consider.
+Discussion
+Overall, this paper makes several key contributions:
+Firstly, we construct a comprehensive evaluation benchmark -
+MedS-Bench. The development of medical LLMs has largely relied
+on benchmarks focused on multiple-choice question answering
+(MCQA). However, this narrow evaluation framework risks
+overlooking the broader capabilities required for LLMs in various
+clinical scenarios. In this work, we introduce MedS-Bench, a
+comprehensive benchmark designed to assess the performance of
+both closed-source and open-source LLMs across diverse clinical
+tasks, including those that require fact recall from the model or
+reasoning from given context. Our results reveal that while existing
+LLMs perform exceptionally well on MCQA benchmarks, they
+struggle to align with the actual clinical practice, particularly in
+tasks such as treatment planning and explanation. This finding
+underscores the need for further efforts to develop medical LLMs
+that are better suited to a wider range of clinical and medical
+scenarios beyond MCQA.
+Secondly, we introduce a new comprehensive instruction tuning
+dataset - MedS-Ins. We have developed MedS-Ins, a novel medical
+instruction tuning dataset, by extensively sourcing data from
+existing BioNLP datasets and converting these samples into a
+unified format, with semi-automated prompting strategies. Previous
+efforts have focused primarily on constructing question-answer
+pairs from daily conversations, exams, or academic papers, often
+neglecting the texts generated from real clinical practice. In
+contrast, MedS-Ins integrates a broader range of medical text
+sources, encompassing five primary text domains and 19 task
+categories, as illustrated in Fig. 2d. This systematic analysis on data
+composition is crucial for aligning LLMs with the diverse queries
+encountered in clinical practice.
+Thirdly, we present a strong large language model for medicine -
+MMedIns-Llama 3. On the model front, we demonstrate that by
+conducting instruction tuning on MedS-Ins, we can significantly
+enhance the alignment of open-source medical LLMs with clinical
+demands. Our final model, MMedIns-Llama 3, serves as a proof-of-
+concept, featuring a medium-scale architecture with 8 billion
+parameters, has exhibited a deep understanding of various clinical
+tasks and adapts flexibly to multiple medical scenarios through
+zero-shot or few-shot instruction prompts, without the need for
+further task-specific training. As evidenced by the results, our model
+outperforms existing LLMs, including GPT-4, Claude-3.5, across a
+range of medical benchmarks, covering different text sources.
+Lastly, we need highlight the limitations of our paper and the
+potential improvements in future work.
+First, MedS-Bench currently covers only 11 clinical tasks, which
+does not fully encompass the complexity of all clinical scenarios.
+Additionally, while we evaluated nine mainstream LLMs, some
+models remain absent from our analysis. To address these
+limitations, we plan to release an open leaderboard for medical
+LLMs alongside this paper. This initiative aims to encourage
+contributions from the community to continually expand and refine
+comprehensive benchmarks for medical LLMs. Specifically, this will
+involve updating the test set to better reflect real clinical demands
+and include a broader range of medical LLMs. By incorporating
+more task categories from diverse text sources into the evaluation
+process, we hope to gain a deeper understanding of the ongoing
+advancements in LLMs within the medical field.
+Second, although MedS-Ins now encompasses the widest range of
+medical tasks available, it remains incomplete, and certain practical
+medical scenarios may be missing. To address this, we have made
+all our collected data and resources available as open-source on
+GitHub. We encourage contributions from the broader AI4medicine
+community to help maintain and dynamically expand this
+instruction tuning dataset, similar to efforts for Super-
+NaturalInstructions in the general domain21. Detailed guidelines are
+provided on our GitHub page, and we will acknowledge every
+contributor involved in updating the dataset. The current limited
+number of tasks may explain why we have not yet observed the
+models exhibiting emergent abilities to generalize to unseen clinical
+tasks, a capability seen in LLMs trained on thousands of diverse
+tasks in the general domain17,22.
+Third, we plan to incorporate more languages into MedS-Bench and
+MedS-Ins to support the development of more robust multilingual
+LLMs for medicine. Multilingual language models have seen
+substantial development in general domains, evidenced by
+advancements in models23,24,25, training datasets26,27, and
+evaluation benchmarks28,29,30. Despite this, the multilingual
+capabilities of biomedical language models, particularly those
+dealing with diverse healthcare data from various regions, remain
+underexplored. Recent efforts, such as BioMistral31, Apollo32, and
+MMedLM19, have begun to address this gap by developing
+multilingual medical large language models (LLMs). However, their
+evaluation or instruction tuning progress still mainly focuses on
+multiple-choice question-answering formats. This may be attributed
+to the lack of well-established, comprehensive benchmarks or a
+task-wise taxonomy in the medical field, even in English, which
+complicates the creation of multilingual evaluation benchmarks via
+translate-and-filter strategies31. Thus, our MedS-Bench and MedS-
+Ins, although currently primarily in English, can offer an exemplary
+taxonomy-wise framework for expansion into multilingual contexts.
+Expanding to include a broader range of languages would be a
+promising future direction, ensuring that the latest advancements in
+healthcare AI can benefit a wider and more diverse range of regions
+equitably. We leave this as a crucial potential future direction. For
+now, we just combine a few existing multilingual benchmarks, for
+example, multiple-choice question-answering, and translation.
+Forth, our model has not yet undergone extensive clinical
+validation. We aim to collaborate with the community to develop
+higher-quality instruction-tuning datasets that can better reflect real
+clinical needs. Furthermore, we are considering to further align the
+model safety with human preference. With these refinements, we
+plan to conduct clinical validation in real-world deployments to
+assess its practical effectiveness in future work. Beyond the model
+performance, more importantly, we have to emphasize that while
+our benchmark is more comprehensive and clinically relevant than
+previous MCQA benchmarks, it cannot replace the final stage of
+evaluating LLMs in actual clinical settings to ensure their safety.
+Instead, our benchmark is expected to serve as an experimental
+arena for assessing the performance of different LLMs, offering a
+more accurate reflection of their clinical capabilities, and serving as
+a crucial preliminary step before costly real-world evaluations, thus
+significantly reducing the expenses associated with assessing a
+model’s true clinical effectiveness.
+Finally, all our code, data, and evaluation pipelines are open-
+sourced. We hope this work will inspire the medical LLM
+community to focus more on aligning these models with real-world
+clinical applications.
+Methods
+In this section, we will first describe the data constructing
+procedure for MedS-Ins, as shown in Fig. 3a. In order to organize
+the different tasks, we assign a domain tag and category tag to each
+task, the former denotes the domain covered by the instructions,
+while the category tag denotes the applicable task. We start by
+filtering the medical-related sentence in natural instruction datasets,
+followed by prompting specific BioNLP into free-text response
+formats.
+Fig. 3: The pipeline of our method.
+[image]
+a The data collection pipeline. We mainly collect data by filtering
+natural instructions and prompting well-organized BioNLP datasets.
+b The training and evaluation pipeline for our model leveraging the
+collected MedS-Ins. We leverage the instruction tuning training
+method to combine different datasets and evaluate the final model
+on multiple benchmarks comprehensively. The icons in the figure
+are from Microsoft free icon basis.
+Full size image
+Filtering Natural Instructions
+We start by filtering medical-related tasks from the 1616 tasks
+collected in Super-NaturalInstructions21. As this work focuses more
+on different natural language processing tasks in general-purpose
+domains, the granularity of classification is relatively coarse for the
+medical domain. We first extract all the instructions in “Healthcare”
+and “Medicine” categories, subsequently, we manually added more
+detailed granularity to the domain labels for them, while the task
+category remains unchanged.
+In addition, we found that many of the organized instruction fine-
+tuning datasets in the generic domain also cover some healthcare-
+related data, such as LIMA33 and ShareGPT34. To filter out the
+medical part of these data, we used InsTag35 to classify the domain
+of each instruction at a coarse granularity. Specifically, InsTag is an
+LLM, specialized for tagging different instruction samples. Given an
+instruction query, it will analyze which domain and task it belongs
+to. Finally, by filtering instruction datasets in the general domain,
+we collect 37 tasks, for a total of 75373 samples.
+Prompting Existing BioNLP Datasets
+In the literature, there exist many excellent datasets on text analysis
+in clinical scenarios. However, as most datasets are collected for
+different purposes, like classification or text completion, they can
+not be directly used for training large language models. Here, we
+convert these existing former medical NLP tasks into a format that
+can be used for training generative models, naturally adding them
+into instruction tuning.
+Specifically, we use MIMIC-IV-Note as an example, which provides
+high-quality structured reports with both findings and impressions,
+they are used as a proxy task for text summarization, where
+impressions act as an abstract summary of the findings. We first
+manually write prompts to define the task, for example, “Given the
+detailed finding of Ultrasound imaging diagnostics, summarize the note’s
+conclusion in a few words.”. Considering the diversity for instruction
+tuning, we ask 5 individuals to independently describe a certain
+task with 3 different prompts. This results in 15 free-text prompts
+for each task, with similar semantic meanings but as varied as
+possible in wording and format. Then, inspired by the Self-
+Instruct36, we use these manually written instructions as seed
+prompts and asked GPT-415 to rewrite more task instructions based
+on the following prompt:
+Rewrite the following instruction definition
+directly. You can change the wording, but keep the
+meaning the same. Output the rewritten definition
+directly without any additional information.
+Finally, for each task, we will describe it with 7 key elements as
+shown at the bottom of Fig. 3a, i.e., {“Categories”, “Domains”
+“Definitions”, “Input Language”, “Output Language”, “Instruction
+Language” and “Instances”}, where “Definition” consists of the
+manually written or GPT-4 enhanced instruction to describe the
+tasks, “Input Language”, “Output Language”, and “Instruction
+Language” respectively describe the languages, such as English or
+Chinese, used in the corresponding components of a specific
+instance of this task. “Categories” and “Domains” describe what text
+domains and categories the task belongs to. Finally, in “Instances”,
+different training or evaluation instances with Input and Output
+contents are stored.
+Through the above procedure, we prompt an extra 85 tasks into a
+unified free-form question-answering format, combined with the
+filtered data, resulting in a totaling 5M instances with 19K
+instructions, covering 122 tasks, termed as MedS-Ins (the detailed
+122 task information can be found in the “Detailed Tasks in MedS-
+Ins” section of the Supplementary, which has shown to significantly
+improve the LLMs on clinical tasks.
+After preparing the related data, we will further detail the training
+procedure, as shown in Fig. 3b. We take the same approach as our
+previous work7,19, which have shown that further auto-regressive
+training on medical-elated corpus can inject medical knowledge
+into the models, thus allowing them to perform better in different
+downstream tasks. We start from a multilingual LLMs base model
+(MMed-Llama 319), and further train it with comprehensive
+instructions from MedS-Ins.
+Instruction Tuning
+Given the base model, trained on a large-scale medical corpus with
+auto-regressive prediction, we further fine-tune it to better follow
+human instructions or prompts. Considering an input sequence with
+an instruction I and a context C, and an output sequence O, the
+model is trained to maximize the probability:
+$$P(O| C,I)=\mathop{\prod }\limits_{t=1}^{| O| }P({o}_{t}| {o}
+_{1},{o}_{2},\ldots ,{o}_{t-1},C,I;\theta )$$
+(1)
+Similarly, the loss function used in instruction tuning is cross-
+entropy loss and can be calculated as follows:
+$${\rm{Loss}}=-\mathop{\sum }\limits_{t=1}^{| O| }\log P({o}
+_{t}| {o}_{1},{o}_{2},\ldots ,{o}_{t-1},C,I;\theta )$$
+(2)
+The key insight here is to construct diverse instructions, that
+enables the model to robustly output the preferred answers. Here,
+we mainly consider two types of instructions, namely, zero-shot and
+few-shot prompting:
+•  Zero-shot Prompting. Here, the I contains some semantic
+task descriptions as hints, and the model is therefore asked to
+directly answer the questions based on its internal model
+knowledge. In our collected MedS-Ins, the “Definition”
+contents for each task can be naturally used as the zero-shot
+instruction input. Due to the coverage of a wide range of
+different medical task definitions, the model is expected to
+learn the semantic understanding of various task descriptions.
+The input template is as follows:
+○  {INSTRUCTION}
+○  Input: {INPUT}
+•  Few-shot Prompting. Here, the I contains the few-shot
+examples, that allow the model to learn the input-output
+mapping on the fly. We simply obtain such instructions by
+randomly sampling other cases from the training set of the
+same task, and organizing them using a straightforward
+template as follows:
+○  Case1: Input: {CASE1_INPUT}, Output:
+{CASE1_OUTPUT}
+○  …
+○  CaseN: Input: {CASEN_INPUT}, Output:
+{CASEN_OUTPUT}
+○  {INSTRUCTION}
+○  Please learn from the few-shot cases to see what
+content you have to output.
+○  Input: {INPUT}
+Notably, considering some extremely long context clinical
+tasks the few-shot examples may exceed the max length of the
+context window. In this case, we adopt basic left-truncation
+to prioritize the last part of the case-related content or output
+format part in the few-shot examples.
+Implementation Details
+We conduct all our experiments using PyTorch framework and
+Transformers python package. Specifically, we set the maximum
+length to 2048, and pad the sequence to the longest case with
+padding tokens in a batch. We employ the Fully Sharded Data
+Parallel (FSDP) implemented with Transformers.trainer function to
+save the memory cost per GPU. We also adopt BF16 as default
+training precision and gradient checkpointing37 techniques to
+optimize memory usage. We use a global batch size of 128 and a
+learning rate of 1e-5. We choose the medical-knowledge-enhanced
+model MMed-Llama 3 in our previous work as the foundation
+model. We further train the model by supervised fine-tuning on
+Meds-Ins for 5 Epoch with 32 Ascend910B for 383.5 hours.
+At last, we will talk about our evaluation details. First, we provide
+details for the baseline large language models (LLMs). Note that, we
+evaluate all models in few-shot settings, as we observe that open-
+source models struggle to complete zero-shot evaluation.
+Specifically, three example cases are given to the model, the
+detailed prompting strategy and model versions can be found in the
+“Evaluation Settings” section in Supplementary.
+The first category includes the powerful closed-source LLMs, known
+for their robust performance in the general domain. We evaluate
+these models on various medical-specific tasks:
+•  GPT-415, developed by OpenAI, stands for one of the most
+sophisticated LLMs to date. It is renowned for its strong
+capabilities in language processing in general domains,
+including medical applications.
+•  Claude-3.516, developed by Anthropic, is a frontier AI
+language model designed to be secure, trustworthy, and
+reliable. It exhibits advanced reasoning capabilities that
+enable it to perform complex cognitive tasks effectively. We
+adopt the Claude-3.5-Sonnet for comparison, which is
+claimed as the best model among the Claude family.
+The second category comprises the mainstream open-source LLMs:
+•  Llama 311, developed by Meta AI, is one of the most notable
+open-source LLMs globally. As part of the LLaMA series, it is
+designed for high performance in natural language processing
+tasks, with enhancements over its predecessors in accuracy
+and contextual understanding. In this study, considering our
+model is an 8B scale LLM, for fair comparison, we adopt its
+8B version as well.
+•  Mistral9, developed by Mistral AI, is an innovative open-
+source LLM that claims superiority over Llama 2 13B across
+all evaluated benchmarks. For a fair comparison against other
+LLMs, we consider its 7B version.
+•  Internlm 210, developed by Shanghai AI Laboratory, stands
+out as a leading open-source multilingual LLM, showcasing
+exceptional performance, particularly in English and Chinese.
+In this paper We adopt the 7B version of Internlm 2.
+•  Qwen 212, developed by Alibaba, is a series of advanced
+large language and multi-modal models, ranging from 0.5 to
+72 billion parameters, designed for high performance in a
+variety of tasks. In this paper we adopt the 7B version.
+•  Baichuan 213 is a series of large-scale multilingual language
+models with 7 billion and 13 billion parameters, trained from
+scratch on 2.6 trillion tokens. Baichuan 2 excels particularly
+in specialized domains such as medicine and law. Here, we
+adopt the 7B version.
+The third category of models we choose is the open-sourced medical
+LLMs, which have been further trained on medical data.
+•  MEDITRON8 is a large-scale medical LLM, further pre-trained
+on Llama 2. It leverages 21.1M medical papers, guidelines for
+further pre-training, and supervised finetuning on different
+MCQA datasets with context and chain-of-thought prompt
+styles. Similarly, we consider its 7B version.
+•  Med42-v214 is a suite of clinical LLMs built on the Llama 3
+architecture and fine-tuned with specialized clinical data.
+These models are designed to address the limitations of
+generic LLMs in healthcare settings by effectively responding
+to clinical queries, which typical models avoid due to safety
+concerns. Similarly, we consider its 8B version.
+Then, we delineate the metrics employed across various tasks and
+categories within our evaluation benchmark.
+Accuracy
+For tasks requiring the model to select a single correct answer from
+multiple choices, we employ ‘accuracy’ as a direct metric. This
+metric is applied to tasks MedQA, MedMCQA, and MMedBench in
+Multilingual Multiple-choice Question-answering; participant,
+intervention, and outcome extraction in PICO, drug dose extraction in
+ADE, and patient information extraction in PMC-patient for
+Information Extraction. It is also used in SEER for Treatment
+Planning, DDXPlus for Diagnosis, MIMIC4ED for Clinical Outcome
+Prediction, PubMedQA and PUBLICHEALTH Verification for Fact
+Verification, as well as MedNLI textual entailment discriminative tasks
+for NLI.
+Precision, Recall, F1 Score
+For tasks where the model is required to select multiple correct
+answers, we utilize Precision, Recall, and the F1 Score. These
+metrics are relevant forBC4Chem and BC5Chem for chemical
+recognition, BC5Disease for disease recognition, Species800 for
+organism recognition in Named Entity Recognition (NER), and HoC in
+Classification.
+BLEU, ROUGE
+For tasks necessitating the generation of free-form text, which are
+inherently more challenging to evaluate, we utilize BLEU and
+ROUGE metrics to assess the similarity between the generated text
+and the ground truth. Specifically, we use BLEU-1 and ROUGE-1 by
+default if no other statements in this paper. These tasks include
+MedQSum, RCT-Text, MIMIC-CXR, MIMIC-IV for Text
+Summarization; EBMS for Fact Verification; PUBLICHEALTH
+Explanation, Do, BioLORD and MMedBench for Concept Explanation
+/ Rationale; along with generative tasks in textual entailment in
+MedNLI for NLI.
+Data availability
+MedS-Ins is available at https://huggingface.co/datasets/
+Henrychur/MedS-Ins, MedS-Bench is available at https://
+huggingface.co/datasets/Henrychur/MedS-Bench. For datasets
+without redistribution licenses, we provide corresponding download
+links and datapreprocessing scripts at https://github.com/MAGIC-
+AI4Med/MedS-Ins/tree/main/data_preparing.
+Code availability
+Source codes of this paper is released in https://github.com/
+MAGIC-AI4Med/MedS-Inswith CC BY-SA license. Model weights of
+MMedIns-Llama 3 can be found in https://huggingface.co/
+Henrychur/MMedS-Llama-3-8Bwith the Llama 3 community license.
+References
+1. Singhal, K. et al. Large language models encode clinical
+knowledge. Nature 620, 172–180 (2023).
+Article  PubMed  PubMed Central  CAS  Google Scholar 
+2. Singhal, K. et al. Towards expert-level medical question
+answering with large language models. arXiv preprint
+arXiv:2305.09617 (2023).
+3. Van Veen, D. et al. Adapted large language models can
+outperform medical experts in clinical text summarization.
+Nat. Med. 30, 1134–1142 (2024).
+Article  PubMed  PubMed Central  Google Scholar 
+4. Soroush, A. et al. Large language models are poor medical
+coders—benchmarking of medical code querying. NEJM AI 1,
+AIdbp2300040 (2024).
+Article  Google Scholar 
+5. Hager, P. et al. Evaluation and mitigation of the limitations of
+large language models in clinical decision-making. Nature
+Medicine 1–10 (2024).
+6. Fleming, S. L. et al. Medalign: A clinician-generated dataset
+for instruction following with electronic medical records. In
+Proceedings of the AAAI Conference on Artificial Intelligence, 38,
+22021–22030 (2024).
+7. Wu, C. et al. Pmc-llama: toward building open-source
+language models for medicine. Journal of the American
+Medical Informatics Association ocae045 (2024).
+8. Chen, Z. et al. Meditron-70b: Scaling medical pretraining for
+large language models. arXiv preprint arXiv:2311.16079
+(2023).
+9. Jiang, A. Q. et al. Mistral 7b. arXiv preprint arXiv:2310.06825
+(2023).
+10. Cai, Z. et al. Internlm2 technical report. arXiv preprint
+arXiv:2403.17297 (2024).
+11. Touvron, H. et al. Llama: Open and efficient foundation
+language models. arXiv preprint arXiv:2302.13971 (2023).
+12. Yang, A. et al. Qwen2 technical report. arXiv preprint
+arXiv:2407.10671 (2024).
+13. Yang, A. et al. Baichuan 2: Open large-scale language models.
+arXiv preprint arXiv:2309.10305 (2023).
+14. Christophe, C., Kanithi, P. K., Raha, T., Khan, S. & Pimentel,
+M. A. Med42-v2: A suite of clinical llms. arXiv preprint
+arXiv:2408.06142 (2024).
+15. Kasai, J., Kasai, Y., Sakaguchi, K., Yamada, Y. & Radev, D.
+Evaluating GPT-4 and ChatGPT on Japanese medical licensing
+examinations (2023).
+16. Anthropic Team. Introducing the next generation of
+claudehttps://www.anthropic.com/news/claude-3-family
+(2024). Accessed on March 4, 2024.
+17. Wang, Y. et al. Super-naturalinstructions: Generalization via
+declarative instructions on 1600+ nlp tasks. In Proceedings of
+the 2022 Conference on Empirical Methods in Natural Language
+Processing (pp. 5085-5109).
+18. Jin, T. et al. The cost of down-scaling language models: Fact
+recall deteriorates before in-context learning. arXiv preprint
+arXiv:2310.04680 (2023).
+19. Qiu, P. et al. Towards building multilingual language model
+for medicine. Nature Communications 15.1 (2024): 8384.
+20. Pal, A., Minervini, P., Motzfeldt, A. G. & Alex, B.
+openlifescienceai/open_medical_llm_leaderboardhttps://
+huggingface.co/spaces/openlifescienceai/
+open_medical_llm_leaderboard (2024). Accessed on November
+15, 2024.
+21. Wang, Y. et al. Super-naturalinstructions: Generalization via
+declarative instructions on 1600+ nlp tasks. In 2022
+Conference on Empirical Methods in Natural Language
+Processing, EMNLP 2022 (2022).
+22. Longpre, S. et al. The flan collection: Designing data and
+methods for effective instruction tuning. In International
+Conference on Machine Learning (pp. 22631-22648). PMLR.
+23. Le Scao, T. et al. Bloom: A 176b-parameter open-access
+multilingual language model (2023).
+24. Lai, V. D. et al. Okapi: Instruction-tuned large language
+models in multiple languages with reinforcement learning
+from human feedback. In Proceedings of the 2023 Conference
+on Empirical Methods in Natural Language Processing: System
+Demonstrations (pp. 318–327).
+25. Lu, Y., Zhu, W., Li, L., Qiao, Y. & Yuan, F. Llamax: Scaling
+linguistic horizons of llm by enhancing translation
+capabilities beyond 100 languages. arXiv preprint
+arXiv:2407.05975 (2024).
+26. Nguyen, T. et al. Culturax: A cleaned, enormous, and
+multilingual dataset for large language models in 167
+languages. arXiv preprint arXiv:2309.09400 (2023).
+27. Crawl, C. Common crawl maintains a free, open repository of
+web crawl data that can be used by anyone.https://
+commoncrawl.org/ (Accessed on Apr. 2024).
+28. Tom, K. et al. Findings of the 2023 conference on machine
+translation (wmt23): Llms are here but not quite there yet. In
+WMT23-Eighth Conference on Machine Translation, 198–216
+(2023).
+29. Ahuja, K. et al. Mega: Multilingual evaluation of generative
+ai. In The 2023 Conference on Empirical Methods in Natural
+Language Processing.
+30. Zhang, W., Aljunied, M., Gao, C., Chia, Y. K. & Bing, L.
+M3exam: A multilingual, multimodal, multilevel benchmark
+for examining large language models. Adv. Neural Inf. Process.
+Syst. 36, 5484–5505 (2023).
+Google Scholar 
+31. Labrak, Y. et al. Biomistral: A collection of open-source
+pretrained large language models for medical domains. arXiv
+preprint arXiv:2402.10373 (2024).
+32. Wang, X. et al. Apollo: Lightweight multilingual medical llms
+towards democratizing medical ai to 6b people. arXiv preprint
+arXiv:2403.03640 (2024).
+33. Zhou, C. et al. Lima: Less is more for alignment. Advances in
+Neural Information Processing Systems 36 (2024).
+34. Li, Y., Dong, B., Lin, C. & Guerin, F. Compressing context to
+enhance inference efficiency of large language models. In
+Proceedings of the 2023 Conference on Empirical Methods in
+Natural Language Processing (pp. 6342–6353).
+35. Lu, K. et al. # instag: Instruction tagging for analyzing
+supervised fine-tuning of large language models. In The
+Twelfth International Conference on Learning Representations
+(2023).
+36. Wang, Y. et al. Self-instruct: Aligning language models with
+self-generated instructions. In The 61st Annual Meeting Of The
+Association For Computational Linguistics.
+37. Chen, T., Xu, B., Zhang, C. & Guestrin, C. Training deep nets
+with sublinear memory cost. arXiv preprint arXiv:1604.06174
+(2016).
+Download references
+Acknowledgements
+This work is supported by Science and Technology Commission of
+Shanghai Municipality (No. 22511106101, No. 18DZ2270700, No.
+21DZ1100100), 111 plan (No. BP0719010), State Key Laboratory of
+UHD Video and Audio Production and Presentation, National Key
+R&D Program of China (No. 2022ZD0160702).
+Author information
+Author notes
+1. These authors contributed equally: Chaoyi Wu, Pengcheng
+Qiu.
+Authors and Affiliations
+1. Shanghai Jiao Tong University, Shanghai, China
+Chaoyi Wu, Pengcheng Qiu, Ya Zhang, Yanfeng
+Wang & Weidi Xie
+2. Shanghai Artificial Intelligence Laboratory, Shanghai, China
+Chaoyi Wu, Pengcheng Qiu, Ya Zhang, Yanfeng
+Wang & Weidi Xie
+3. China Mobile Communications Group Co., Ltd., Beijing, China
+Jinxin Liu & Na Li
+4. China Mobile Communications Group Shanghai Co., Ltd.,
+Shanghai, China
+Hongfei Gu
+Authors
+1. Chaoyi Wu
+View author publications
+Search author on:PubMed Google Scholar
+2. Pengcheng Qiu
+View author publications
+Search author on:PubMed Google Scholar
+3. Jinxin Liu
+View author publications
+Search author on:PubMed Google Scholar
+4. Hongfei Gu
+View author publications
+Search author on:PubMed Google Scholar
+5. Na Li
+View author publications
+Search author on:PubMed Google Scholar
+6. Ya Zhang
+View author publications
+Search author on:PubMed Google Scholar
+7. Yanfeng Wang
+View author publications
+Search author on:PubMed Google Scholar
+8. Weidi Xie
+View author publications
+Search author on:PubMed Google Scholar
+Contributions
+All listed authors clearly meet the ICMJE 4 criteria. C.W. and P.Q.
+contribute equally to this work. Y.W. and W.X. are the
+corresponding authors. Specifically, C.W., P.Q, J.L., H.G., N.L., Y.Z.,
+Y.W., and W.X. all make contributions to the conception or design
+of the work, and C.W., P.Q. further perform acquisition, analysis, or
+interpretation of data for the work. In writing, C.W. and P.Q. draft
+the work. J.L., H.G., N.L., Y.Z., Y.W., and W.X. review it critically
+for important intellectual content. All authors approve of the
+version to be published and agree to be accountable for all aspects
+of the work to ensure that questions related to the accuracy or
+integrity of any part of the work are appropriately investigated and
+resolved.
+Corresponding authors
+Correspondence to Yanfeng Wang or Weidi Xie.
+Ethics declarations
+Competing interests
+The authors declare no competing interests.
+Additional information
+Publisher’s note Springer Nature remains neutral with regard to
+jurisdictional claims in published maps and institutional affiliations.
+Supplementary information
+Supplementary Information
+Rights and permissions
+Open Access This article is licensed under a Creative Commons
+Attribution-NonCommercial-NoDerivatives 4.0 International
+License, which permits any non-commercial use, sharing,
+distribution and reproduction in any medium or format, as long as
+you give appropriate credit to the original author(s) and the source,
+provide a link to the Creative Commons licence, and indicate if you
+modified the licensed material. You do not have permission under
+this licence to share adapted material derived from this article or
+parts of it. The images or other third party material in this article
+are included in the article’s Creative Commons licence, unless
+indicated otherwise in a credit line to the material. If material is not
+included in the article’s Creative Commons licence and your
+intended use is not permitted by statutory regulation or exceeds the
+permitted use, you will need to obtain permission directly from the
+copyright holder. To view a copy of this licence, visit http://
+creativecommons.org/licenses/by-nc-nd/4.0/.
+Reprints and permissions
+About this article
+[image]
+Cite this article
+Wu, C., Qiu, P., Liu, J. et al. Towards evaluating and building
+versatile large language models for medicine. npj Digit. Med. 8, 58
+(2025). https://doi.org/10.1038/s41746-024-01390-4
+Download citation
+•  Received: 24 September 2024
+•  Accepted: 12 December 2024
+•  Published: 27 January 2025
+•  DOI: https://doi.org/10.1038/s41746-024-01390-4
+Share this article
+Anyone you share the following link with will be able to read this
+content:
+Get shareable link
+Sorry, a shareable link is not currently available for this article.
+Copy shareable link to clipboard
+Provided by the Springer Nature SharedIt content-sharing initiative
+This article is cited by
+•  Large language models for clinical decision
+support in gastroenterology and hepatology
+○  Isabella Catharina Wiest
+○  Mamatha Bhat
+○  Jakob Nikolas Kather
+Nature Reviews Gastroenterology & Hepatology (2025)
+Download PDF 
+Advertisement
+[image]
+Explore content
+•  Research articles
+•  Reviews & Analysis
+•  News & Comment
+•  Collections
+•  Follow us on Twitter
+•  Sign up for alerts
+•  RSS feed
+About the journal
+•  Aims and scope
+•  Content types
+•  Journal Information
+•  About the Editors
+•  Contact
+•  Editorial policies
+•  Calls for Papers
+•  Journal Metrics
+•  About the Partner
+•  Open Access
+•  Early Career Researcher Editorial Fellowship
+•  Editorial Team Vacancies
+•  News and Views Student Editor
+•  Communication Fellowship
+Publish with us
+•  For Authors and Referees
+•  Language editing services
+•  Open access funding
+•  Submit manuscript
+Search
+Search articles by subject, keyword or author
+Show results from All journals This journal
+Search
+Advanced search
+Quick links
+•  Explore articles by subject
+•  Find a job
+•  Guide to authors
+•  Editorial policies
+npj Digital Medicine (npj Digit. Med.)
+ISSN 2398-6352 (online)
+nature.com sitemap
+About Nature Portfolio
+•  About us
+•  Press releases
+•  Press office
+•  Contact us
+Discover content
+•  Journals A-Z
+•  Articles by subject
+•  protocols.io
+•  Nature Index
+Publishing policies
+•  Nature portfolio policies
+•  Open access
+Author & Researcher services
+•  Reprints & permissions
+•  Research data
+•  Language editing
+•  Scientific editing
+•  Nature Masterclasses
+•  Research Solutions
+Libraries & institutions
+•  Librarian service & tools
+•  Librarian portal
+•  Open research
+•  Recommend to library
+Advertising & partnerships
+•  Advertising
+•  Partnerships & Services
+•  Media kits
+•  Branded content
+Professional development
+•  Nature Awards
+•  Nature Careers
+•  Nature Conferences
+Regional websites
+•  Nature Africa
+•  Nature China
+•  Nature India
+•  Nature Japan
+•  Nature Middle East
+•  Privacy Policy
+•  Use of cookies
+•  Your privacy choices/Manage cookies
+•  Legal notice
+•  Accessibility statement
+•  Terms & Conditions
+•  Your US state privacy rights
+[image]
+© 2025 Springer Nature Limited
+ Close
+[image]
+Sign up for the Nature Briefing newsletter — what matters in
+science, free to your inbox daily.
+Email address
+Sign up
+I agree my information will be processed in accordance with the
+Nature and Springer Nature Limited Privacy Policy.
+ Close
+Get the most important science stories of the day, free in your
+inbox. Sign up for Nature Briefing
+[image]

@@ -1,0 +1,965 @@
+Skip to main content
+Advertisement
+[image]
+[image]
+Log in
+Menu
+Find a journal Publish with us Track your research
+Search
+ Cart
+1. Home 
+2. Language Resources and Evaluation 
+3. Article
+Creation of a gold standard Dutch
+corpus of clinical notes for
+adverse drug event detection: the
+Dutch ADE corpus
+•  Original Paper
+•  Open access
+•  Published: 10 May 2025
+•  Volume 59, pages 2763–2779, (2025)
+•  Cite this article
+Download PDF 
+ You have full access to this open access article
+[image] Language Resources and Evaluation Aims and scope 
+Submit manuscript 
+Creation of a gold standard Dutch corpus of clinical notes for adverse
+drug event detection: the Dutch ADE corpus
+Download PDF 
+Show authors
+•  Rachel M. Murphy
+  ORCID:
+orcid.org/0000-0002-2602-56581,2,3 na1,
+•  Dave A. Dongelmans  ORCID:
+orcid.org/0000-0001-8477-66713,4 na1,
+•  Nicolette F. de Keizer  ORCID:
+orcid.org/0000-0002-6651-17301,2,3,
+•  Rosa J. Jongeneel1,
+•  Christiaan H. Koster5,
+•  Kitty J. Jager  ORCID: orcid.org/0000-0003-0444-85691,3,6,
+•  Ameen Abu-Hanna  ORCID: orcid.org/0000-0003-4324-79541,6,7,
+•  Iacer Calixto  ORCID: orcid.org/0000-0001-6244-79061,7,8 &
+•  …
+•  Joanna E. Klopotowska  ORCID:
+orcid.org/0000-0002-9707-57401,2,3 
+•  
+912 Accesses
+•  Explore all metrics 
+Abstract
+Our objective was to create a gold standard Dutch language annotated
+corpus of clinical notes with adverse drug event (ADE) mentions,
+specifically for Intensive Care patients with drug-related acute kidney
+injury. We used anonymized clinical notes from 102 adult intensive care
+unit (ICU) patients suspected of acute kidney injury (AKI) and admitted to
+Amsterdam University Medical Centre, The Netherlands, over a four-year
+period (November 2015– January 2020). The notes were extracted from
+the electronic health record (EHR) system and manually reviewed for
+drug-related causes. Each clinical note contained at least one ADE
+mention (drug-related AKI). Annotation guidelines were developed over
+three rounds of annotation based on review of annotations and
+clarifications during the process. Two clinical expert annotators labelled
+mentions of drugs and disorders, as well as the relationship between
+these entities indicating an ADE. The final gold standard corpus was a
+result of adjudication of the two sets of expert labels. The corpus
+contains 102 notes with 16,470 labels, consisting of 8,914 Disorder
+entities, 5,307 Drug entities, 134 Qualitative Concept entities, 1,501
+Indication relations, and 614 ADE relations. Annotation reached high
+agreement for all entities (F1 score 0.7724) with an expected lower
+agreement for relations (F1 score 0.4327). The Dutch ADE corpus is a
+real-world data set that can be used to evaluate natural language
+processing pipelines for ADE detection tasks. Although the corpus was
+developed for drug-related AKI, 158 additional ADEs were identified. The
+combination of iterative annotation guideline development and double
+annotation followed by adjudication produced high quality annotations.
+Future work will use this gold standard annotated corpus to train and
+validate NLP models to detect ADEs in Dutch clinical text.
+Similar content being viewed by others
+[image]
+Adverse Drug Events Detection in Clinical Notes by
+Jointly Modeling Entities and Relations Using Neural
+Networks
+Article 16 January 2019
+[image]
+Development of a Computer-Assisted Adverse Drug
+Events Alarm and Assessment System for Hospital
+Inpatients in China
+Article 06 January 2020
+[image]
+Adverse Drug Events in Ambulatory Care: A Cross-
+Sectional Study
+Article 02 December 2024
+ Discover the latest articles, books and news in related subjects,
+suggested using machine learning.
+Explore related subjects
+•  Corpus Linguistics
+•  Scandinavian Languages
+•  Sequence Annotation
+•  Standardization
+•  Standards
+Use our pre-submission checklist 
+Avoid common mistakes on your manuscript.
+1 Introduction
+Adverse drug events (ADEs) are a potentially preventable cause of harm
+in hospitalized patients (Perrone et al., 2014; Woo et al., 2020). ADEs
+have been associated with longer hospitalizations, increased morbidity
+and mortality, and higher costs (Bates et al., 1997; Classen et al., 1997;
+Patel et al., 2023). ADE prevention, monitoring, and treatment are
+hindered by ADE under-reporting (Hazell & Shakir, 2006; Olsen et al.,
+2007), which makes it difficult to quantify the number and type of ADEs
+experienced by inpatients. Therefore, several studies have examined
+routinely documented electronic health record (EHR) data to find
+evidence of ADEs. Hohl et al. focused on structured data and identified
+diagnosis codes associated with ADEs and gave them a causality rating
+based on how likely they are to indicate an ADE (Hohl et al., 2014).
+However, Nashed et al. demonstrated that the diagnosis codes may not
+always be a reliable source of ADE information (Nashed et al., 2021).
+Other studies have shown that information on ADEs is most often
+documented in free text notes of the EHR, i.e. unstructured data
+(Alvarez-Arango et al., 2021; Geva et al., 2020; Murphy et al., 2023a;
+Wasylewicz et al., 2022). Unfortunately, free text information about ADEs
+is still very time-consuming to retrieve manually (Murphy et al., 2023).
+A supervised natural language processing (NLP) approach can be used
+to obtain a model that identifies structured information from unstructured
+text. A supervised NLP model needs to be trained on text that has been
+human annotated with a predefined set of labels that add structured
+information to the unstructured data, known as an annotated corpus.
+Creating a high-quality clinical annotated corpus typically involves
+multiple trained human annotators who label the same texts, with the
+labels then being curated to create the final gold standard corpus
+(Deleger et al., 2014; Wissler et al., 2014; Xia & Yetisgen-Yildiz, 2012). A
+gold standard corpus can also be used to validate the output of
+unsupervised NLP approaches, including generative models such as
+REBEL (Cabot, 2021).
+While biomedical corpora for the task of ADE detection exist
+(D’Oosterlinck et al., 2023; Gurulingappa et al., 2012; Kors et al., 2015),
+these are not suitable for training NLP models to detect mentions of
+ADEs in clinical notes. This is due to the large difference in language
+used in biomedical text (such as drug labels and Medline abstracts)
+compared with clinical notes. Biomedical texts are written in formal
+register with technically correct medical terms (for example ‘non-insulin
+dependent diabetes mellitus’), grammar and punctuation. The purpose of
+clinical notes is for physicians and nurses to communicate with
+colleagues, and these notes are often written on a busy patient ward
+under time pressure (Rosenbloom et al., 2011). The use of abbreviations
+and jargon is common (for example, ‘NIDDM’), whitespace and new lines
+often replace punctuation, and words that can be inferred are left out.
+This means that detecting ADEs in clinical notes presents quite a
+different challenge to that of detecting ADEs in biomedical text.
+Furthermore, although in recent years much effort has been expended
+on NLP-based retrieval of ADE information from clinical notes (Murphy et
+al., 2023), most of the developed annotated clinical corpora for ADE
+detection contain clinical notes in English language from United States
+clinical setting (Henriksson et al., 2015; Henry et al., 2020; Jagannatha
+et al., 2019; Oronoz et al., 2015; Zitu et al., 2023). Furthermore, the
+majority of these corpora use annotation schemes where ADEs are
+labelled as entities, which means that some entities can have multiple
+labels, which is a source of avoidable error in NLP algorithm predictions.
+Lastly, none of these corpora are suitable for training NLP algorithms to
+detect ADEs in Dutch clinical notes due to differences in language and
+(in some cases) due to privacy concerns preventing sharing of data with
+personal identifiable information, and to the best of our knowledge, no
+corpus exists in the Dutch language designed specifically for the purpose
+of training NLP models to detect ADE mentions in Dutch clinical notes.
+Therefore, this study aims to address this gap by reporting on the
+creation of a gold standard corpus of Dutch clinical notes containing
+annotated mentions of ADEs and the entities involved in such harmful
+events. For this purpose, we focus on the specific ADE of drug-related
+acute kidney injury, an ADE of particular concern in the Intensive Care
+unit (ICU) (Koeze et al., 2017). Although this specific ADE was the
+starting point for identifying notes containing ADE mentions, we
+annotated any ADE found in the clinical notes. Furthermore, while ICU
+patients form a distinct patient population, these critically ill patients are
+admitted to the ICU from all other wards of the hospital and have a large
+and varied number of medications and diseases compared to specialty
+wards such as Cardiology or Neurology.
+2 Methods
+2.1 Data
+Our data set consisted of 102 anonymised intensive care clinical
+progress notes written by physicians and extracted from Epic® EHR
+system. Each note represents one patient admitted to an adult (> 
+18years) intensive care unit (ICU) of Amsterdam University Medical
+Centre in the Netherlands. The notes were selected based on a previous
+study in which anonymised notes of ICU patients with an acute kidney
+injury (AKI) were manually reviewed for drug-related causes; for patient
+characteristics, we refer interested readers to this study (Murphy et al.,
+2023). One note which matched the mention of drug-related AKI
+identified in the previous study was selected from each of those
+admissions.
+2.2 De-identification
+To de-identify the clinical notes the following procedure was
+implemented by authorized personnel. References to personal attributes
+that can be used to identify the patient and clinical staff were removed
+from the progress notes. This was carried out manually to ensure the
+quality of the de-identification. Information including names, addresses,
+date and place of birth, telephone and pager numbers, and names of
+referring hospitals were replaced with placeholders (for example, <
+NAME>, < ADDRESS>, and so forth). References to rare diseases,
+which were identified using the Dutch version of the Orphanet
+Knowledge base release of July 2023 (Orphadata Scientific Knowledge
+base release of July 2023 (Dutch)), were replaced with the placeholder < 
+RARE_DISEASE>. Finally, all the dates were randomly shifted to fall
+between the years 2100 and 2200. All dates for a single note were
+shifted by the same random amount to preserve the timeline described in
+the note. This procedure was approved by the privacy officer of
+Amsterdam UMC and the officer confirmed that the data set can be
+considered anonymous after the procedure was implemented on the
+clinical notes included in the Dutch ADE corpus.
+2.3 Annotation scope
+Our goal was to create a labelled corpus suitable to train supervised NLP
+models to detect mentions of ADEs. To this end, we focused on the key
+pieces of information relevant to this task; namely the identification of
+drug and disorder entities and the classification of the relationships that
+exist between entities of these two types.
+A drug or disorder entity is a labelled concept that exists in the Unified
+Medical Language System (UMLS) Metathesaurus. In line with the
+UMLS definition, a concept is a meaning, which can have many different
+names (synonyms, for example ‘diabetes mellitus type II’ can also be
+called ‘non-insulin dependent diabetes mellitus’) (“Concepts and Concept
+Identifiers,” 2009). In this context, the term disorder encompasses
+diseases, syndromes, signs, symptoms, and findings, which are
+semantic types in the UMLS Disorder semantic group. The UMLS
+semantic groups are used to group concepts and reduce the complexity
+of the UMLS Metathesaurus (The UMLS Semantic Network).
+In the corpus, ADEs are labelled as the relation between drug and
+disorder entities which, as we have previously highlighted (Murphy et al.,
+2023), tends to avoid issues which can arise when multiple entity labels
+apply to the same concept. The relationships we annotated were:
+adverse drug event (ADE, a disorder is thought to have been caused by
+a drug) and prescribing indication (INDICATION, a disorder is thought to
+be the reason the drug was prescribed). Therefore, in our corpus a
+relationship can only exist between a disorder entity and a drug entity
+(not between two disorder entities or two drug entities).
+Based on our previous research about drug-related AKI, we noticed that
+signal words indicating an ADE were present in the notes (‘toxic’,
+‘nephrotoxic’, and ‘iatrogenic’). These signal words fall under the UMLS
+semantic group ‘Qualitative Concept’. Given the potential relevance of
+these terms to the ADE task, a third entity type, Qualitative Concept, was
+added as an entity type. This was intended to cover the specific named
+terms rather than any qualitative concept term encountered in the notes.
+For example, the adjective ‘infectious’ (C1550587) is listed as a
+qualitative concept in UMLS but was not annotated as we don’t include
+qualitative concepts apart from the three specific ADE related signal
+words.
+As mentioned in the introduction, the annotated text containing the
+disease and drug entities and indication and ADE relationship labels can
+subsequently be used to train supervised NLP models to detect ADE
+mentions in clinical text. This includes named entity recognition (NER)
+tasks; i.e. computer recognition of entities like diseases and drugs, and
+relationship extraction and classification (REC) tasks; i.e. computer
+recognition of indications or adverse drug events relationships.
+Furthermore, in the context of unsupervised NLP, these labels can be
+used to validate the output of generative models such as REBEL (Cabot,
+2021).
+2.4 Annotation guidelines
+A draft set of annotation guidelines was adapted from those described by
+(Bitton et al., 2020) as these also use UMLS semantic groups of
+‘Disorders’ and ‘Chemicals & Drugs’. We modified these guidelines to
+add sections on relation annotation for ADEs and prescribing indication
+relations. To identify gaps and areas for improvement, we employed an
+iterative annotation procedure (see Fig. 1) based on that of
+(Gurulingappa et al., 2012). The annotators used the initial draft
+guidelines to annotate the first ten notes. Based on both an examination
+of the annotations and feedback from the annotators, the guidelines were
+updated with additional information and clarifications. The annotators
+used the updated guidelines to annotate the next ten notes. Based on
+the outcome of the second round, we made updates to the guidelines
+and the annotators were asked to use these to annotate a larger set of
+twenty notes. The third round led to only minor changes to the annotation
+guidelines, therefore we deemed that consensus had been reached. The
+annotators then used this version of the guidelines to annotate the fourth
+and largest set of notes (n = 62). Any discrepancies between earlier
+annotated sets of notes and later annotation guidelines were resolved
+during adjudication. The final version of the annotation guidelines is
+available in the supplementary material.
+Fig. 1
+[image]
+Iterative annotation guideline development
+Full size image
+2.5 Annotation procedure
+Two annotators (RJ and CK) carried out the annotation task on the whole
+dataset. Neither had prior experience in annotation and both are native
+Dutch speakers with medical training (a third-year medical student and
+an anaesthesiology resident). The time spent annotating the data was
+recorded to the nearest minute using a stopwatch. The time spent
+annotating the first ten notes was not included in the calculations as this
+was considered training time. The annotations were made using
+doccano, an open-source annotation tool (Nakayama et al., 2018).
+2.6 Gold standard adjudication
+A third annotator (RM, a pharmacist) adjudicated all labels in the two
+sets of annotations to create the final gold standard. Once the annotation
+guidelines had been finalised, any labels from the earlier rounds of
+annotation were updated to match the final annotation guidelines as part
+of gold standard adjudication. Where the annotators agreed in the earlier
+rounds, this will have been taken into account in calculating the inter-
+annotator agreement between A1 and A2. Where the two annotators
+disagreed and RM could not determine the correct label, the correct label
+was discussed and agreed with a senior intensive care physician (DD).
+2.7 Performance measures
+We calculated the inter-annotator agreement (IAA) using the balanced F-
+measure as described by (Hripcsak & Rothschild, 2005). We calculated
+the agreement between the annotators and between each annotator and
+the gold standard. We calculated the agreement for both strict (exact)
+and lenient (partial) matches. For lenient matching, the span of text
+marked by one annotator had to overlap with that of the second
+annotator, and usually occurred where both annotators marked the same
+concept, but not the exact same words (see Fig. 2 for an example).
+Fig. 2
+[image]
+Illustration of lenient matching. The first annotator has marked ‘diabetes
+mellitus’ as a Disorder entity, while the second annotator has marked the
+‘insulin-dependent diabetes mellitus’ as a Disorder entity. For calculating
+inter-annotator agreement, this is not counted as a strict match but is
+counted as a lenient match
+Full size image
+2.8 Clinical review of ADE relations
+We aim to create a corpus that can be used to train supervised NLP
+models to identify ADE mentions in clinical notes. Identifying ADE
+relations would be the first step in a process to automate the
+identification of clinically relevant ADEs. This is because each drug entity
+and disorder entity that is part of an ADE relation can be part of a bigger
+mention of an ADE, as one disorder could be caused by multiple drugs,
+or one drug could cause multiple disorders (see Fig. 3 for an illustrated
+example). Furthermore, the same ADE could be mentioned multiple
+times in one note. In a complete ADE detection pipeline, identification of
+the ADE relations between the entities in the text would need to be
+followed by removing duplicate mentions, and grouping a disorder
+mention that has an ADE relation to multiple medications, or
+synonymous disorders. Although an automated method for this was
+outside the scope of this paper, we wanted to get a more accurate
+picture of the number of ADEs described in the corpus. Therefore, the
+ADE relations were manually reviewed and quantified by a pharmacist
+(RM) to identify the distinct ADE mentions.
+Fig. 3
+[image]
+Illustration of ADE review. The text contains five disorder entities, seven
+drug entities, and seven ADE relationships (black lines linking entities).
+However, the text describes a single clinically relevant adverse event:
+AKI, with seven potential causative drugs, which is counted as one ADE.
+The text is an excerpt from a note in the corpus. English translation: “AKI
+with anuria; dd (combination of) pre-renal (infection + enalapril,
+doxazosine and furosemide), TIN (ampho B, voriconazole, amoxicillin),
+contrast nephropathy)”. AKI: acute kidney injury, TIN: tubulo-interstitial
+nephritis
+Full size image
+3 Results
+3.1 Characteristics of the gold standard corpus
+The Dutch ADE corpus consists of 102 EHR notes with 16,470 labels. In
+total there are 14,355 entity labels, of which the largest group is Disorder
+labels (8,914) followed by Drug labels (5,307) and Qualitative concept
+labels (134). There are 2,115 relation labels, of which 614 ADE labels
+and 1,501 are Indication labels. See Table 1 for a few important
+characteristics of the notes in the Dutch ADE corpus.
+Table 1 Characteristics of the notes in the Dutch ADE corpus
+Full size table
+3.2 Clinical review of ADE relations
+In total 614 ADE relations were identified. From these 614 ADE relation
+labels (mean 6.02 ADE relation labels per note), we identified 261
+distinct ADE mentions (median 2 ADEs per note). Most notes (n = 79,
+77.5%) mentioned one, two, or three ADEs, with the remaining (n = 23,
+22.5%) notes containing four or more distinct ADE mentions. Of the 261
+distinct ADE mentions, 158 (60.8%) pertained to other type of ADEs than
+drug-related AKI. The highest number of ADE mentions in a single note
+was 11. The name of the suspected drug or drug group was specified in
+83.7% of the ADE mentions.
+3.3 Inter-annotator agreement
+Annotation reached high agreement between A1 (medical student) and
+A2 (anaesthesiology resident) for all entities, with IAA for Drug labels
+particularly high, i.e., F-measure of 0.8918 for strict (exact) matches (see
+Table 2). When comparing the annotators to the gold standard, both
+annotators performed similarly well on entity labels and the ADE relation
+labels, while A2 performed better on the Indication relation labels.
+Table 2 Inter-annotator agreement (calculated by balanced F-
+measure) on gold standard corpus
+Full size table
+The iterative annotation procedure generally resulted in a steady
+increase in IAA, as clarifications and more detailed instructions were
+added to the guidelines (see Table 3).
+Table 3 Inter-annotator agreement between A1 (medical student)
+and A2 (anaesthesiology resident) for each round of annotation
+guideline development
+Full size table
+3.4 Time spent annotating
+The annotators spent over 47 h on the annotation task (20.77 h for A1
+and 26.35 h for A2), not including the annotation of the first ten notes.
+The mean time annotating each note was 13.54 min for A1 and
+17.18 min for A2.
+3.5 Resolving annotation inconsistencies, errors, and
+ambiguities
+There were several different types of annotation errors and
+inconsistencies noted during the process of corpus creation. Some led to
+changes to the annotation guidelines, some led to loss of information and
+others could be corrected during gold standard adjudication. Loss of
+information refers to the fact that clinically relevant details in the notes
+could not be captured (either as labelled entities or relations) due to
+limitations of the annotation tool, of UMLS concepts, or of the phrasing in
+the text needing a very high degree of interpretation. Many of the
+inconsistencies observed in the UMLS Metathesaurus arose from the
+fact that it is a Metathesaurus of many different dictionaries and
+ontologies, which don’t necessarily align to each other in terms of
+coverage or language use. Table 4 lists some examples of the
+inconsistencies, errors, and ambiguities tackled during the annotation
+task.
+Table 4 Inconsistencies, errors, and ambiguities noted during
+corpus creation
+Full size table
+4 Discussion
+4.1 Main findings
+Using standardised annotation guidelines, we developed the Dutch ADE
+corpus, a gold standard corpus of 102 Dutch anonymised clinical
+progress notes. Although the data for the corpus was selected on the
+basis of drug-related AKI and is from an ICU population, the additional
+non-drug-related AKI ADEs means that this corpus can be useful for
+general ADE detection tasks. The corpus is annotated with 16,470 labels
+pertaining to disorder and drug entities and ADE and prescribing
+indication relations. These entities and relations are vital for the
+development and/or evaluation of (un)supervised NLP tools, innovation
+highly needed to improve our insight about frequency and type of ADEs
+in hospitalized patients.
+In total we identified five other corpora of clinical notes that were
+developed for the task of ADE detection (Henriksson et al., 2015; Henry
+et al., 2020; Jagannatha et al., 2019; Oronoz et al., 2015; Zitu et al.,
+2023). In identifying ADE corpora, we include corpora that label adverse
+drug reactions (ADRs), which are a subtype of ADEs, and include them
+under the term ‘ADE’ (Nebeker et al., 2004). These corpora range in the
+number of clinical notes included from 75 in the IxaMed-GS corpus
+(Oronoz et al., 2015) to 1,394 in ICI-OSU corpus (Zitu et al., 2023), and
+contain between 162 ADE labels in IxaMed-GS corpus to 2612 ADE
+labels in MADE 1.0 corpus (Jagannatha et al., 2019). The number of
+ADEs per note (calculated by dividing the number of ADE labels by the
+number of clinical notes) ranges from 0.14 (ICI-OSU corpus) to 3.57
+(n2c2 2018 corpus) (Henry et al., 2020). The Dutch ADE corpus is on the
+smaller side in terms of number of notes, lies in the middle of the range
+in terms of the number of ADE labels, and has the highest number of
+ADE labels per note. The approach to selecting the clinical notes for
+inclusion in the corpus had an impact on the number of ADE labels per
+note, with corpora where notes were selected to contain an ADE mention
+having the highest rate of ADE labels per note (Henry et al., 2020). As
+none of the other corpora of clinical notes identified their number of
+distinct ADEs, we cannot make comparisons on this measure.
+The combination of iterative annotation guideline development and
+double-annotation followed by adjudication produced high quality
+annotations. This is reflected in the high IAA scores between both the
+annotators and each annotator and the gold standard (ref. Tables 2 and
+3). The IAA for disorder entities (0.7048–0.9455) and drug entities
+(0.8918–0.9529) in our study is comparable to previous studies: Kittner
+et al. reported 0.69–0.88 for diagnosis entities and 0.87–0.94 for
+medications in the creation of their BRONCO (non-ADE) corpus (Kittner
+et al., 2021), while Henriksson et al. achieved IAA scores of 0.780–0.872
+for Finding/Disorder entities and 0.905–0.914 for Drug entities
+(Henriksson et al., 2015). The iterative annotation process allowed us to
+identify areas for clarification in the annotation guidelines and helped to
+increase the consistency between the annotators. This is illustrated in
+the progressive increase in IAA during the rounds of annotation guideline
+development. While the agreement is generally lower for relations, this
+reflects the fact that the annotators must first agree on the entity label for
+them to agree on the relation label. Similar decreases in agreement from
+entity to relation annotation has also been observed in other studies;
+Henriksson et al. achieved lower IAA scores in the relation task (0.553–
+0.673 for Indication and 0.619–0.718 for ADE) compared to those for
+entities (Henriksson et al., 2015), while Jagannatha et al. reported IAA of
+0.628 for entities and 0.424 for relations (measured using Fleiss’ Kappa)
+in the creation of MADE 1.0 challenge dataset (Jagannatha et al., 2019).
+It is also interesting to compare the IAA scores between each annotator
+and the gold standard. Both annotators achieved similar results for the
+entity labels and for the ADE relation labels, while the medical student
+achieved somewhat lower agreement on the Indication relation labels.
+The lower agreement arose primarily from the medical student not
+recognising some relations (both Indication and ADE) between drugs
+and disorders (false negatives). The difference in score is potentially due
+to the anaesthesiology resident having more experience in the ICU than
+the medical student, or due to differences in annotation approach
+between the individuals. However, the performance on the other labels
+shows that medical students can achieve comparable results on the task
+of clinical entity annotation to physicians. Given that there is generally a
+low availability of physicians for the task of annotation, medical students
+would appear to be a sound alternative. Our findings reflect those of
+Raghavan et al., who demonstrated that annotators with varying levels of
+clinical experience can achieve good agreement in clinical annotation
+tasks (Raghavan et al., 2012).
+In spite of the generally high IAA, the annotation task was a challenging
+one. Applying an annotation guideline based on the UMLS
+Metathesaurus to free text clinical notes highlighted the stark difference
+in the language used in these formal dictionaries and ontologies to
+language used by clinicians in communicating with each other, as is the
+main purpose of free text clinical notes. In addition, some information
+was lost due to limitations of annotation software (for example, disjoint
+spans not being facilitated, in spite of the fact that several instances of
+disjoint spans were observed in the data; see Table 4 for an example of
+a disjoint span). It is also worth mentioning that gold standard
+adjudication, a necessary step in harmonizing the annotations of multiple
+annotators, was not easily facilitated by the annotation software.
+The dataset for the corpus was defined during a previous study (Murphy
+et al., 2023) on a particular ADE, drug-related AKI, and consequently we
+knew that every note should at least mention this one type of ADE.
+However, we found many more ADEs during the course of this study (in
+total 261 distinct ADEs in the 102 notes), with a median of two ADE
+mentions per note. This illustrates that free text clinical notes are a rich
+source of ADE information. Our findings align with other studies which
+have suggested that information on ADE occurrence is often
+documented in free text rather than the structured documentation such
+as coded diagnoses, drug allergy or drug intolerance reactions (Goss et
+al., 2017; Rukasin et al., 2020) and that free text can contain valuable
+additional information compared to structured data (Mehra et al., 2024).
+Structured data, while especially useful for reuse, can be too inflexible to
+easily or fully describe a clinical circumstance (Rosenbloom et al., 2011).
+Therefore, labelled corpora such as the one described here are an
+essential in enabling information retrieval in an increasingly digitalized
+healthcare ecosystem.
+4.2 Strengths and limitations
+The strengths of this corpus include the fact that it is the first corpus of
+clinical notes in the Dutch language created for the purpose of ADE
+detection using natural language processing, use of comprehensive
+annotation guidelines, and the use of two annotators with medical
+training and adjudication to produce the gold standard data.
+Furthermore, iterative development of the annotation guidelines allowed
+us to identify areas for clarification, resulting in high agreement between
+the annotators.
+A potential limitation of this corpus is that the data are derived from a
+single hospital and a single setting (Intensive Care), and the notes
+chosen on the basis of containing mentions of a specific ADE (drug-
+related AKI). It is possible that it will not generalize for use in other
+hospitals and/or specialties. Nevertheless, due to their critical illness,
+Intensive Care patients have a greater burden of diseases, symptoms,
+signs and drugs used resulting in a larger variety of entities that can be
+labelled, in comparison to non-critically ill patients. Furthermore, while
+102 ADEs in the corpus are variations on one specific type of ADE (drug-
+related AKI), we found a further 158 ADEs that were not related to AKI. A
+second potential limitation is that the corpus has not been annotated for
+entity attributes such as negation. However, NLP models have been
+shown to achieve good performance in this task in Dutch clinical text
+(van Es et al., 2023).
+5 Conclusion
+The contributions of this paper include the first gold standard Dutch
+corpus created for the purpose of ADE detection in clinical notes using
+natural language processing and a set of annotation guidelines. The
+Dutch ADE corpus can be used to evaluate NLP pipelines for NER and
+REC tasks. Furthermore, the corpus can be used to benchmark
+(un)supervised NLP models for the task of ADE detection in Dutch
+clinical text. A high number of additional ADEs were identified in a
+dataset known to contain at least one ADE per note, highlighting the
+importance of the clinical notes as a source of information on ADEs in
+hospitalized patients. Future work should use this gold standard
+annotated corpus to train NLP models to detect clinical findings,
+symptoms, diseases, disorders, and drugs and ADE mentions in Dutch
+clinical text.
+Data availability
+The re-use of the dataset is possible upon reasonable request and
+subject to certain limitations. For enquiries about re-use of the dataset,
+please visit Fishare repository using the following Digital Object Identifier
+(DOI): https://doi.org/10.21942/uva.28846991
+References
+•  Alvarez-Arango, S., Yerneni, S., Tang, O., Zhou, L., Mancini, C.
+M., Blackley, S. V., Keet, C. A., & Blumenthal, K. G. (2021).
+Vancomycin hypersensitivity reactions documented in electronic
+health records. The Journal of Allergy and Clinical Immunology: in
+Practice, 9(2), 906–912. https://doi.org/10.1016/j.jaip.2020.09.027
+Article  Google Scholar 
+•  Bates, D. W., Spell, N., Cullen, D. J., Burdick, E., Laird, N.,
+Petersen, L. A., Small, S. D., Sweitzer, B. J., & Leape, L. L. (1997).
+The costs of adverse drug events in hospitalized patients. Adverse
+drug events prevention study group. Jama, 277(4), 307–311.
+Article  Google Scholar 
+•  Bitton, Y., Cohen, R., Schifter, T., Bachmat, E., Elhadad, M., &
+Elhadad, N. (2020). Cross-lingual unified medical Language
+system entity linking in online health communities. Journal of the
+American Medical Informatics Association, 27(10), 1585–1592.
+https://doi.org/10.1093/jamia/ocaa150
+Article  Google Scholar 
+•  Cabot, P. L. H., & a., N. (2021). Roberto. November 7–11, 2021).
+REBEL: Relation extraction by end-to-end language generation
+Findings of the Association for Computational Linguistics: EMNLP.
+•  Classen, D. C., Pestotnik, S. L., Evans, R. S., Lloyd, J. F., &
+Burke, J. P. (1997). Adverse drug events in hospitalized patients.
+Excess length of stay, extra costs, and attributable mortality. Jama,
+277(4), 301–306.
+Article  Google Scholar 
+•  Concepts and Concept Identifiers (2009). In UMLS Reference
+Manual [Internet]. National Library of Medicine (US). https://
+www.ncbi.nlm.nih.gov/books/NBK9684/
+•  D’Oosterlinck, K., Remy, F., Deleu, J., Demeester, T., Develder,
+C., Zaporojets, K., Ghodsi, A., Ellershaw, S., Collins, J., & Potts, C.
+(2023, December). BioDEX Large-Scale Biomedical Adverse Drug
+Event Extraction for Real-World Pharmacovigilance. In H.
+Bouamor, J. Pino, & K. Bali, Findings of the Association for
+Computational Linguistics EMNLP 2023 Singapore.
+•  Deleger, L., Lingren, T., Ni, Y., Kaiser, M., Stoutenborough, L.,
+Marsolo, K., Kouril, M., Molnar, K., & Solti, I. (2014). Preparing an
+annotated gold standard corpus to share with extramural
+investigators for de-identification research. Journal of Biomedical
+Informatics, 50, 173–183. https://doi.org/10.1016/j.jbi.2014.01.014
+Article  Google Scholar 
+•  Geva, A., Abman, S. H., Manzi, S. F., Ivy, D. D., Mullen, M. P.,
+Griffin, J., Lin, C., Savova, G. K., & Mandl, K. D. (2020). Adverse
+drug event rates in pediatric pulmonary hypertension: A
+comparison of real-world data sources. Journal of the American
+Medical Informatics Association, 27(2), 294–300. https://
+doi.org/10.1093/jamia/ocz194
+Article  Google Scholar 
+•  Goss, F. R., Lai, K. H., Topaz, M., Acker, W. W., Kowalski, L.,
+Plasek, J. M., Blumenthal, K. G., Seger, D. L., Slight, S. P., Wah
+Fung, K., Chang, F. Y., Bates, D. W., & Zhou, L. (2017). A value
+set for documenting adverse reactions in electronic health records.
+Journal of the American Medical Informatics Association, 25(6),
+661–669. https://doi.org/10.1093/jamia/ocx139
+Article  Google Scholar 
+•  Gurulingappa, H., Rajput, A. M., Roberts, A., Fluck, J., Hofmann-
+Apitius, M., & Toldo, L. (2012). Development of a benchmark
+corpus to support the automatic extraction of drug-related adverse
+effects from medical case reports. Journal of Biomedical
+Informatics, 45(5), 885–892. https://doi.org/10.1016/
+j.jbi.2012.04.008
+Article  Google Scholar 
+•  Hazell, L., & Shakir, S. A. (2006). Under-reporting of adverse drug
+reactions: A systematic review. Drug Safety, 29(5), 385–396.
+https://doi.org/10.2165/00002018-200629050-00003
+Article  Google Scholar 
+•  Henriksson, A., Kvist, M., Dalianis, H., & Duneld, M. (2015).
+Identifying adverse drug event information in clinical notes with
+distributional semantic representations of context. Journal of
+Biomedical Informatics, 57, 333–349. https://doi.org/10.1016/
+j.jbi.2015.08.013
+Article  Google Scholar 
+•  Henry, S., Buchan, K., Filannino, M., Stubbs, A., & Uzuner, O.
+(2020). 2018 n2c2 shared task on adverse drug events and
+medication extraction in electronic health records. Journal of the
+American Medical Informatics Association, 27(1), 3–12. https://
+doi.org/10.1093/jamia/ocz166
+Article  Google Scholar 
+•  Hohl, C. M., Karpov, A., Reddekopp, L., Doyle-Waters, M., &
+Stausberg, J. (2014). ICD-10 codes used to identify adverse drug
+events in administrative data: A systematic review. Journal of the
+American Medical Informatics Association, 21(3), 547–557. https://
+doi.org/10.1136/amiajnl-2013-002116
+Article  Google Scholar 
+•  Hripcsak, G., & Rothschild, A. S. (2005). Agreement, the f-
+measure, and reliability in information retrieval. Journal of the
+American Medical Informatics Association, 12(3), 296–298. https://
+doi.org/10.1197/jamia.M1733
+Article  Google Scholar 
+•  Jagannatha, A., Liu, F., Liu, W., & Yu, H. (2019). Overview of the
+first natural Language processing challenge for extracting
+medication, indication, and adverse drug events from electronic
+health record notes (MADE 1.0). Drug Safety, 42(1), 99–111.
+https://doi.org/10.1007/s40264-018-0762-z
+Article  Google Scholar 
+•  Kittner, M., Lamping, M., Rieke, D. T., Götze, J., Bajwa, B., Jelas,
+I., Rüter, G., Hautow, H., Sänger, M., Habibi, M., Zettwitz, M., de
+Bortoli, T., Ostermann, L., Ševa, J., Starlinger, J., Kohlbacher, O.,
+Malek, N. P., Keilholz, U., & Leser, U. (2021). Annotation and initial
+evaluation of a large annotated German oncological corpus.
+JAMIA Open, 4(2), ooab025. https://doi.org/10.1093/jamiaopen/
+ooab025
+Article  Google Scholar 
+•  Koeze, J., Keus, F., Dieperink, W., van der Horst, I. C., Zijlstra, J.
+G., & van Meurs, M. (2017). Incidence, timing and outcome of AKI
+in critically ill patients varies with the definition used and the
+addition of urine output criteria. Bmc Nephrology, 18(1), 70. https://
+doi.org/10.1186/s12882-017-0487-8
+Article  Google Scholar 
+•  Kors, J. A., Clematide, S., Akhondi, S. A., van Mulligen, E. M., &
+Rebholz-Schuhmann, D. (2015). A multilingual gold-standard
+corpus for biomedical concept recognition: The mantra GSC.
+Journal of the American Medical Informatics Association, 22(5),
+948–956. https://doi.org/10.1093/jamia/ocv037
+Article  Google Scholar 
+•  Mehra, T., Wekhof, T., & Keller, D. I. (2024). Additional value from
+Free-Text diagnoses in electronic health records: Hybrid dictionary
+and machine learning classification study [Original Paper]. JMIR
+Med Inform, 12, e49007. https://doi.org/10.2196/49007
+Article  Google Scholar 
+•  Murphy, R. M., Dongelmans, D. A., Kom, I. Y., Calixto, I., Abu-
+Hanna, A., Jager, K. J., de Keizer, N. F., & Klopotowska, J. E.
+(2023a). Drug-related causes attributed to acute kidney injury and
+their Documentation in intensive care patients. Journal of Critical
+Care, 154292. https://doi.org/10.1016/j.jcrc.2023.154292
+•  Murphy, R. M., Klopotowska, J. E., de Keizer, N. F., Jager, K. J.,
+Leopold, J. H., Dongelmans, D. A., Abu-Hanna, A., & Schut, M. C.
+(2023b). Adverse drug event detection using natural Language
+processing: A scoping review of supervised learning methods. Plos
+One, 18(1), e0279842. https://doi.org/10.1371/
+journal.pone.0279842
+Article  Google Scholar 
+•  Nakayama, H., Kubo, T., Kamura, J., Taniguchi, Y., & Liang, X.
+(2018). doccano: Text Annotation Tool for Human. Software
+available from https://github.com/doccano/doccano
+•  Nashed, A., Zhang, S., Chiang, C. W., Zitu, M., Otterson, G. A.,
+Presley, C. J., Kendra, K., Patel, S. H., Johns, A., Li, M., Grogan,
+M., Lopez, G., Owen, D. H., & Li, L. (2021). Comparative
+assessment of manual chart review and ICD claims data in
+evaluating immunotherapy-related adverse events. Cancer
+Immunology, Immunotherapy, 70(10), 2761–2769. https://
+doi.org/10.1007/s00262-021-02880-0
+Article  Google Scholar 
+•  Nebeker, J. R., Barach, P., & Samore, M. H. (2004). Clarifying
+adverse drug events: A clinician’s guide to terminology,
+documentation, and reporting. Annals of Internal Medicine,
+140(10), 795–801. https://
+doi.org/10.7326/0003-4819-140-10-200405180-00009
+Article  Google Scholar 
+•  Olsen, S., Neale, G., Schwab, K., Psaila, B., Patel, T., Chapman,
+E. J., & Vincent, C. (2007). Hospital staff should use more than
+one method to detect adverse events and potential adverse
+events: Incident reporting, pharmacist surveillance and local real-
+time record review May all have a place. Quality Management in
+Health Care, 16(1), 40–44. https://doi.org/10.1136/
+qshc.2005.017616
+Article  Google Scholar 
+•  Oronoz, M., Gojenola, K., Perez, A., de Ilarraza, A. D., & Casillas,
+A. (2015). On the creation of a clinical gold standard corpus in
+Spanish: Mining adverse drug reactions. Journal of Biomedical
+Informatics, 56, 318–332. https://doi.org/10.1016/j.jbi.2015.06.016
+Article  Google Scholar 
+•  Orphadata Scientific Knowledge base release of July 2023
+(Dutch)https://www.orphadata.com/alignments/
+•  Patel, T. K., Patel, P. B., Bhalla, H. L., Dwivedi, P., Bajpai, V., &
+Kishore, S. (2023). Impact of suspected adverse drug reactions on
+mortality and length of hospital stay in the hospitalised patients: A
+meta-analysis. European Journal of Clinical Pharmacology, 79(1),
+99–116. https://doi.org/10.1007/s00228-022-03419-7
+Article  Google Scholar 
+•  Perrone, V., Conti, V., Venegoni, M., Scotto, S., Degli Esposti, L.,
+Sangiorgi, D., Prestini, L., Radice, S., Clementi, E., & Vighi, G.
+(2014). Seriousness, preventability, and burden impact of reported
+adverse drug reactions in Lombardy emergency departments: A
+retrospective 2-year characterization. Clinicoecon Outcomes Res,
+6, 505–514. https://doi.org/10.2147/ceor.S71301
+Article  Google Scholar 
+•  Raghavan, P., Fosler-Lussier, E., & M Lai, A. (2012). Inter-
+annotator reliability of medical events, coreferences and Temporal
+relations in clinical narratives by annotators with varying levels of
+clinical expertise. Amia. Annual Symposium Proceedings / Amia
+Symposium. Amia Symposium, 2012, 1366–1374.
+Google Scholar 
+•  Rosenbloom, S. T., Denny, J. C., Xu, H., Lorenzi, N., Stead, W.
+W., & Johnson, K. B. (2011). Data from clinical notes: A
+perspective on the tension between structure and flexible
+Documentation. Journal of the American Medical Informatics
+Association, 18(2), 181–186. https://doi.org/10.1136/
+jamia.2010.007237
+Article  Google Scholar 
+•  Rukasin, C. R. F., Henderlight, S., Bosen, T., Nelson, S. D., &
+Phillips, E. J. (2020). Implications of electronic health record
+transition on drug allergy labels. J Allergy Clin Immunol Pract, 8(2),
+764–766. https://doi.org/10.1016/j.jaip.2019.07.017
+Article  Google Scholar 
+•  The UMLS Semantic Network. https://lhncbc.nlm.nih.gov/
+semanticnetwork/
+•  van Es, B., Reteig, L. C., Tan, S. C., Schraagen, M., Hemker, M.
+M., Arends, S. R. S., Rios, M. A. R., & Haitjema, S. (2023).
+Negation detection in Dutch clinical texts: An evaluation of rule-
+based And machine learning methods. Bmc Bioinformatics, 24(1),
+10. https://doi.org/10.1186/s12859-022-05130-x
+Article  Google Scholar 
+•  Wasylewicz, A., van de Burgt, B., Weterings, A., Jessurun, N.,
+Korsten, E., Egberts, T., Bouwman, A., Kerskes, M., Grouls, R., &
+van der Linden, C. (2022). Identifying adverse drug reactions from
+free-text electronic hospital health record notes. British Journal of
+Clinical Pharmacology, 88(3), 1235–1245. https://doi.org/10.1111/
+bcp.15068
+Article  Google Scholar 
+•  Wissler, L., Almashraee, M., Monett, D., & Paschke, A. (2014).
+The Gold Standard in Corpus Annotation. https://
+doi.org/10.13140/2.1.4316.3523
+•  Woo, S. A., Cragg, A., Wickham, M. E., Villanyi, D.,
+Scheuermeyer, F., Hau, J. P., & Hohl, C. M. (2020). Preventable
+adverse drug events: Descriptive epidemiology. British Journal of
+Clinical Pharmacology, 86(2), 291–302. https://doi.org/10.1111/
+bcp.14139
+Article  Google Scholar 
+•  Xia, F., & Yetisgen-Yildiz, M. (2012). Corpus Annotation:
+Challenges and Strategies.
+•  Zitu, M. M., Zhang, S., Owen, D. H., Chiang, C., & Li, L. (2023).
+Generalizability of machine learning methods in detecting adverse
+drug events from clinical narratives in electronic medical records
+[Original Research]. Frontiers in Pharmacology, 14. https://
+doi.org/10.3389/fphar.2023.1218679
+Download references
+Acknowledgements
+The authors gratefully acknowledge the technical assistance of Tsvetan
+Yordanov and Tom Welter from Amsterdam UMC.
+Funding
+This study was funded partly by Innovation fund 2019 of Amsterdam
+UMC (project number: 23088) and by The Netherlands Organization for
+Health Research and Development (ZonMw project number:
+848018004). The funders had no role in the design of the study, the
+collection, analysis, and interpretation of data or in writing the
+manuscript. IC is funded by project CaRe-NLP with file number
+NGF.1607.22.014 of the research programme AiNed Fellowship Grants
+which is (partly) financed by the Dutch Research Council (NWO).
+Author information
+Author notes
+1. Iacer Calixto and Joanna E. Klopotowska shared last authors.
+Authors and Affiliations
+1. Department of Medical Informatics, Amsterdam UMC location
+Universiteit van Amsterdam, Meibergdreef 9, Amsterdam, The
+Netherlands
+Rachel M. Murphy, Nicolette F. de Keizer, Rosa J. Jongeneel, Kitty
+J. Jager, Ameen Abu-Hanna, Iacer Calixto & Joanna E.
+Klopotowska
+2. Amsterdam Public Health, Digital Health, Amsterdam, The
+Netherlands
+Rachel M. Murphy, Nicolette F. de Keizer & Joanna E.
+Klopotowska
+3. Amsterdam Public Health, Quality of Care, Amsterdam, The
+Netherlands
+Rachel M. Murphy, Dave A. Dongelmans, Nicolette F. de
+Keizer, Kitty J. Jager & Joanna E. Klopotowska
+4. Department of Intensive Care Medicine, Amsterdam UMC Location
+Universiteit van Amsterdam, Meibergdreef 9, Amsterdam, The
+Netherlands
+Dave A. Dongelmans
+5. Department of Anesthesiology, Amsterdam UMC Location Vrije
+Universiteit, De Boelelaan 1117, Amsterdam, The Netherlands
+Christiaan H. Koster
+6. Amsterdam Public Health, Aging & Later Life, Amsterdam, The
+Netherlands
+Kitty J. Jager & Ameen Abu-Hanna
+7. Amsterdam Public Health, Methodology, Amsterdam, The
+Netherlands
+Ameen Abu-Hanna & Iacer Calixto
+8. Amsterdam Public Health, Mental Health, Amsterdam, The
+Netherlands
+Iacer Calixto
+Authors
+1. Rachel M. Murphy
+View author publications
+Search author on:PubMed Google Scholar
+2. Dave A. Dongelmans
+View author publications
+Search author on:PubMed Google Scholar
+3. Nicolette F. de Keizer
+View author publications
+Search author on:PubMed Google Scholar
+4. Rosa J. Jongeneel
+View author publications
+Search author on:PubMed Google Scholar
+5. Christiaan H. Koster
+View author publications
+Search author on:PubMed Google Scholar
+6. Kitty J. Jager
+View author publications
+Search author on:PubMed Google Scholar
+7. Ameen Abu-Hanna
+View author publications
+Search author on:PubMed Google Scholar
+8. Iacer Calixto
+View author publications
+Search author on:PubMed Google Scholar
+9. Joanna E. Klopotowska
+View author publications
+Search author on:PubMed Google Scholar
+Contributions
+RMM: Conceptualization, Methodology, Data curation, Investigation,
+Formal analysis, Validation, Visualization, Writing– original draft, Writing–
+review & editing. DAD: Methodology, Data curation, Validation,
+Resources, Supervision, Funding acquisition, Writing– review & editing.
+NFdK: Methodology, Resources, Supervision, Funding acquisition,
+Writing– review & editing. RJJ: Data curation, Writing– review & editing.
+CHK: Data curation, Writing– review & editing. KJJ: Methodology,
+Funding acquisition, Writing– review & editing. AAH: Methodology,
+Resources, Funding acquisition, Supervision, Writing– review & editing.
+IC: Conceptualization, Methodology, Validation, Supervision, Writing–
+review & editing. JEK: Conceptualization, Methodology, Validation,
+Supervision, Resources, Project administration, Funding acquisition,
+Writing– review & editing.
+Corresponding author
+Correspondence to Rachel M. Murphy.
+Ethics declarations
+Ethical considerations
+This study was exempted from requiring ethics approval on 03/06/2019
+(non-WMO waiver W19_207 # 19.252) by the Medical Ethics Committee
+of the Amsterdam University Medical Centre, location University of
+Amsterdam, The Netherlands, as it did not fall within the scope of the
+Dutch Medical Research Involving Human Subjects Act (WMO). Prior to
+obtaining the data from Research Data Management office of
+Amsterdam UMC, we performed a Data Protection Impact Assessment
+which was assessed and approved by the privacy officer of Amsterdam
+UMC. In accordance with Dutch and Amsterdam UMC regulation
+regarding reuse of routine care data for research, informed consent of
+patients is not required for anonymised data. Patients who do not agree
+to the reuse of their routine care data for research are excluded from
+data extractions by the Research Data Management office.
+Competing interests
+The authors declare no competing interests.
+Additional information
+Publisher’s note
+Springer Nature remains neutral with regard to jurisdictional claims in
+published maps and institutional affiliations.
+Electronic supplementary material
+Below is the link to the electronic supplementary material.
+Supplementary Material 1
+Rights and permissions
+Open Access This article is licensed under a Creative Commons
+Attribution 4.0 International License, which permits use, sharing,
+adaptation, distribution and reproduction in any medium or format, as
+long as you give appropriate credit to the original author(s) and the
+source, provide a link to the Creative Commons licence, and indicate if
+changes were made. The images or other third party material in this
+article are included in the article’s Creative Commons licence, unless
+indicated otherwise in a credit line to the material. If material is not
+included in the article’s Creative Commons licence and your intended
+use is not permitted by statutory regulation or exceeds the permitted use,
+you will need to obtain permission directly from the copyright holder. To
+view a copy of this licence, visit http://creativecommons.org/licenses/
+by/4.0/.
+Reprints and permissions
+About this article
+[image]
+Cite this article
+Murphy, R.M., Dongelmans, D.A., de Keizer, N.F. et al. Creation of a
+gold standard Dutch corpus of clinical notes for adverse drug event
+detection: the Dutch ADE corpus. Lang Resources & Evaluation 59,
+2763–2779 (2025). https://doi.org/10.1007/s10579-025-09832-5
+Download citation
+•  Accepted: 16 April 2025
+•  Published: 10 May 2025
+•  Issue Date: September 2025
+•  DOI: https://doi.org/10.1007/s10579-025-09832-5
+Keywords
+•  Real-world data
+•  Data curation
+•  Natural language processing
+•  Electronic health records
+•  Drug-related side effects and adverse reactions
+Use our pre-submission checklist 
+Avoid common mistakes on your manuscript.
+Advertisement
+Search
+Search by keyword or author
+ Search
+Navigation
+•  Find a journal
+•  Publish with us
+•  Track your research
+Discover content
+•  Journals A-Z
+•  Books A-Z
+Publish with us
+•  Journal finder
+•  Publish your research
+•  Language editing
+•  Open access publishing
+Products and services
+•  Our products
+•  Librarians
+•  Societies
+•  Partners and advertisers
+Our brands
+•  Springer
+•  Nature Portfolio
+•  BMC
+•  Palgrave Macmillan
+•  Apress
+•  Discover
+•  Your privacy choices/Manage cookies
+•  Your US state privacy rights
+•  Accessibility statement
+•  Terms and conditions
+•  Privacy policy
+•  Help and support
+•  Legal notice
+•  Cancel contracts here
+34.106.106.208
+Not affiliated
+[image]
+© 2025 Springer Nature

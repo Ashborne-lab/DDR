@@ -1,0 +1,1244 @@
+Skip to main content
+Advertisement
+[image]
+[image]
+Log in
+Menu
+Find a journal Publish with us Track your research
+Search
+ Cart
+1. Home 
+2. Drug Safety 
+3. Article
+Performance and Reproducibility
+of Large Language Models in
+Named Entity Recognition:
+Considerations for the Use in
+Controlled Environments
+•  Original Research Article
+•  Open access
+•  Published: 11 December 2024
+•  Volume 48, pages 287–303, (2025)
+•  Cite this article
+Download PDF 
+ You have full access to this open access article
+[image] Drug Safety Aims and scope 
+ Submit manuscript 
+Performance and Reproducibility of Large Language Models in Named
+Entity Recognition: Considerations for the Use in Controlled
+Environments
+Download PDF 
+•  Jürgen Dietrich
+  ORCID: orcid.org/0000-0002-5494-34991 &
+•  André Hollstein1 
+•  
+2923 Accesses
+•  
+4 Citations
+•  Explore all metrics 
+A Letter to the Editor to this article was published on 02 September 2025
+Abstract
+Introduction
+Recent artificial intelligence (AI) advances can generate human-like
+responses to a wide range of queries, making them a useful tool for
+healthcare applications. Therefore, the potential use of large language
+models (LLMs) in controlled environments regarding efficacy,
+reproducibility, and operability will be of paramount interest.
+Objective
+We investigated if and how GPT 3.5 and GPT 4 models can be directly
+used as a part of a GxP validated system and compared the
+performance of externally hosted GPT 3.5 and GPT 4 against LLMs,
+which can be hosted internally. We explored zero-shot LLM performance
+for named entity recognition (NER) and relation extraction tasks,
+investigated which LLM has the best zero-shot performance to be used
+potentially for generating training data proposals, evaluated the LLM
+performance of seven entities for medical NER in zero-shot experiments,
+selected one model for further performance improvement (few-shot and
+fine-tuning: Zephyr-7b-beta), and investigated how smaller open-source
+LLMs perform in contrast to GPT models and to a small fine-tuned T5
+Base.
+Methods
+We performed reproducibility experiments to evaluate if LLMs can be
+used in controlled environments and utilized guided generation to use
+the same prompt across multiple models. Few-shot learning and
+quantized low rank adapter (QLoRA) fine-tuning were applied to further
+improve LLM performance.
+Results and Conclusion
+We demonstrated that zero-shot GPT 4 performance is comparable with
+a fine-tuned T5, and Zephyr performed better than zero-shot GPT 3.5,
+but the recognition of product combinations such as product event
+combination was significantly better by using a fine-tuned T5. Although
+Open AI launched recently GPT versions to improve the generation of
+consistent output, both GPT variants failed to demonstrate reproducible
+results. The lack of reproducibility together with limitations of external
+hosted systems to keep validated systems in a state of control may affect
+the use of closed and proprietary models in regulated environments.
+However, due to the good NER performance, we recommend using GPT
+for creating annotation proposals for training data as a basis for fine-
+tuning.
+Similar content being viewed by others
+[image]
+Based on Medicine, The Now and Future of Large
+Language Models
+Article 01 August 2024
+[image]
+Closing the gap between open source and commercial
+large language models for medical evidence
+summarization
+Article Open access 09 September 2024
+[image]
+Benchmarking large language models for biomedical
+natural language processing applications and
+recommendations
+Article Open access 06 April 2025
+ Discover the latest articles, books and news in related subjects,
+suggested using machine learning.
+Explore related subjects
+•  Big Data
+•  Machine Learning
+•  Molecular Target Validation
+•  Open Source
+•  Performance Development
+•  Site-Specific Performance
+Use our pre-submission checklist 
+Avoid common mistakes on your manuscript.
+FormalPara Key Points
+Reproducibility of generated text is a prerequisite when using LLMs in
+regulated environments.
+Open-source LLMs ensure reproducibility and provide good results by
+fine-tuning, few-shot learning, and guided generation.
+LLM zero-shot performance is a good starting point to support training-
+data generation.
+1 Introduction and Objective
+Over the last few years artificial intelligence/machine learning (AI/ML)
+has been increasingly used throughout drug development and across
+therapeutic areas from drug discovery, non-clinical and clinical research,
+clinical trial management, and drug manufacturing to post marketing
+safety surveillance [1,2,3,4,5,6,7,8]. With the increased use of AI in
+healthcare, ethical challenges become more apparent. In 2021 the WHO
+issued a report on AI in health with six guiding principles for its design
+and use to address ethical considerations [9]. Managing the permanently
+increasing volume, variety, and velocity of pharmacovigilance (PV) data
+in the framework of regulatory requirements presents a remarkable
+challenge. One important AI/ML benefit resides in its ability to learn from
+real-world use and experience, and the AI/ML capability for performance
+improvement. AI-based automation in PV and especially in individual
+case safety report (ICSR) processing represents a significant opportunity
+for efficiency improvement and cost reduction [10,11,12].
+Recent publications are addressing quality aspects of AI/ML use as
+software as a medical device (SaMD) in health care focused on risk
+considerations [13,14,15] and the use of AI in the medicinal product life
+cycle [16]. Although requirements for validation largely remain the same,
+additional activities tailored to AI/ML systems are required to document
+evidence that those systems are fit for purpose [17]. US Food and Drug
+Administration (FDA) proposes to place AI/ML-based systems into one of
+four categories to reflect the risk associated with the clinical situation and
+the significance of information provided [13], and introduced a total
+product lifecycle (TPLC) approach for the regulation of AI/ML-based
+software products [18]. Beside common computer validation aspects,
+Kompa et al. described in a systematic review that a lot of AI/ML
+implementations do not reflect current characteristics of good machine
+learning practices and trends in machine learning [19]. Intensifying
+efforts to identify potential adverse drug reactions (ADRs), and
+subsequently create, store, analyze, and communicate results in
+individual case safety reports (ICSRs), could potentially produce more
+reports, but would not necessarily result in more rapid or accurate
+identification or understanding of true safety issues [20].
+Besides classical computer validation aspects like result reproducibility,
+system performance, controlled state persistence, the investigation of
+which system, methodology, and appropriate training data are best for
+the intended AI/ML system use is of paramount importance.
+In machine learning, the system evaluation analyzes how well a model
+performs its intended task. Accuracy may be insufficient in situations with
+imbalanced classes, which is mainly given for instance in adverse event
+(AE) detection in real-world datasets. In pharmacovigilance, model
+evaluation is therefore focusing on F1 score as the harmonic mean of
+precision and recall (i.e., with increased precision and maintained F1
+score recall is decreased) and preferably on recall, since recall measures
+indicate how well the model finds all positive occurrences in a dataset.
+A GxP validated system must be kept in a state of control. Therefore, it is
+important to establish appropriate measures for process and system
+maintenance to keep the validated state during routine operation. This
+ongoing process and system verification provides documented evidence
+that the system remains in a state of control during production use [21].
+The system remains in a GxP validated state as long as conditions and
+control parameters remain unchanged. By using the current externally
+hosted OpenAI model family, this status can hardly be preserved due to
+the lack of direct control over system infrastructure, which may
+potentially affect system quality by provider’s system or infrastructure
+changes.
+Reproducibility is an essential ingredient of computer system validation,
+meant to verify the documented results and claims and to enable a
+continuous life cycle management process. AI methods and algorithms
+are increasingly used in critical systems or applications, where their
+decisions can have an impact on people and society, and their improper
+operation may cause harm. Therefore, ensuring reproducibility of
+algorithm results is a method to test their quality and a signal of their
+credibility [22].
+Measuring the closeness of results under the same repeatability
+conditions (e.g., same sample, measurement procedure, operating
+conditions) establishes scientific evidence during validation that the
+process is reproducible and will consistently deliver the requested quality
+[23].
+The validation protocol should specify a sufficient number of replicate
+process runs to demonstrate reproducibility and provide an accurate
+measure of variability among successive runs [24].
+In our study we investigated the performance (partial F1 score and
+partial recall) of several externally hosted OpenAI models versus
+internally hosted large language models (LLMs) to explore, by example
+of AE detection tasks in pharmacovigilance, if pre-trained or fine-tuned
+smaller LLMs would reach the efficacy of OpenAI models like GPT 4. We
+considered NLP tasks that go beyond named-entity recognition (NER)
+(e.g., detection of a drug or dose) such as linking two entities with each
+other (e.g., extracting product dose combinations). Recent advances in
+text-generating models make it possible to cast many tasks relevant for
+the medical domain as text-generation tasks to solve multiple use-cases
+with a unified approach. We emphasize here named-entity recognition
+and linking, as they are important applications with many downstream
+use-cases such as detection of adverse events or entity-based search.
+As a baseline model, we used in our experiments T5-Base since it was
+shown that T5 outperformed other AE detection models based on
+bidirectional encoder representations from transformers (BERT) variants
+and can be used to apply the same model for multiple and diverse
+datasets [25, 26]. In addition, we investigated the reproducibility of
+OpenAI models as since November 2023 OpenAI introduced new
+methods to ensure better reproducibility of their models.
+A recent publication by Wadhwa et al. [27] demonstrated that relation
+extraction on the adverse drug effect (ADE) corpus [28] and non-medical
+datasets can be achieved using GPT-3 and few-shot learning, Hu et al.
+[29] showed good results for named entity recognition on data from
+vaccine adverse event reporting system (VAERS) using GPT 3.5 and 4
+with prompt engineering and few-shot learning. Li et al. [30] focused on
+LLMs to extract adverse events from surveillance reports on influenza
+vaccine adverse events from VAERS.
+Since those publications have already demonstrated that current LLMs
+can deliver results that match with or improve previous methods, we do
+not focus in our paper on further improving model performance, but
+•  to investigate if and how GPT 3.5Footnote 1 and GPT 4 models can
+be directly used as a part of a GxP-validated system,
+•  to investigate if the expected better performance of GPT 4 versus
+GPT 3.5 justifies the higher costs and longer execution time per
+request,
+•  to investigate the LLM zero-shot NER performance to find the best
+open-source model for further performance improvement steps
+(i.e., few-shot learning, fine-tuning),
+•  to investigate which LLM has the best zero-shot performance to be
+used potentially for generating training data proposals,
+•  to investigate how smaller open-source LLMs perform in contrast
+to GPT models and to a small fine-tuned T5 Base, since smaller
+open-source LLMs are easier to implement in local infrastructures,
+easier to maintain, and faster to train with less resources and
+costs,
+•  and to recommend a solution for LLMs for the use in a controlled
+environment.
+2 Methods
+2.1 Overview
+In our study we were using a fine-tuned T5 Base as a reference model
+which shows good performance in PV-related NER tasks [31, 32]. Our
+assumption was that all larger model sizes compared to T5 Base would
+typically result in better performance, but it would also require more
+computing resources to train and run. In our experiments we strove to
+find the best balance between efforts and performance depending on the
+results of our experiments.
+LLMs are trained with large amounts of text data to determine the most
+likely continuation of an input text. The model proposes a list of the most
+probable subsequent words, and a text generation algorithm is employed
+to select them. Algorithms that do not consistently select the most likely
+word can enhance the overall probability of the complete output and
+generate more variable and natural text. Temperature is a common
+parameter, which regulates the probability of selecting the most likely
+next word. Its value typically starts at 0 and progress to higher values,
+which introduce greater randomness or creativity. In our study, the
+temperature parameter for all models was set to 0 to reduce the degree
+of randomness in response generation.
+The term zero-shot refers to a prompting technique wherein the model is
+presented with a task without any additional examples, whereas in the
+case of a few-shot prompt, the prompt comprises multiple examples of
+the task and the anticipated outcome [33,34,35].
+Experiments were executed between October 2023 and February 2024.
+We started with prompt engineeringFootnote 2 of GPT 3.5 Turbo [33]
+(gpt-3.5-turbo-1106) and GPT 4 Turbo [36] (gpt-4-1106-preview) models
+[37]. Although GPT 3.5 and GPT 4 experiments were originally executed
+using Microsoft Azure, we repeated our experiments with Open AIs
+public API (version 1.6.1) to allow reproducibility for the research
+community. Results obtained by the OpenAI API Python SDK for text
+generation did not principally deviate from those executed in Azure.
+Both GPT models return a maximum of 4096 output tokensFootnote 3,
+while the context window of GPT 3.5 Turbo with 16,385 tokens is lower
+when compared with GPT 4 Turbo context window of 128,000 tokens.
+We performed qualitative prompt experiments independent of entity
+performance. We focused on modifying the system and user prompt to
+achieve adequate prompt interpretability by OpenAI models in terms of
+result format and complete and correct interpretation of all prompt
+information.
+There are various sizes available for pre-trained T5 models [26] based
+on a Colossal Clean Crawled Corpus (C4), including small (60 million
+parameters), base (220 million parameters), large (770 million
+parameters), 3B (3 billion parameters), and 11B (11 billion parameters).
+For evaluating the model performance (see section 2.5.1), we used
+several LLMs published on the HuggingFace hub, such as argilla/
+notus-7b-v1, epfl-llm/meditron-7b, HuggingFaceH4/zephyr-7b-beta,
+meta-llama/Llama-2-13b-hf, and togethercomputer/Llama-2-7B-32K-
+Instruct [38,39,40,41,42].
+Table 1 summarizes methods and expected objectives of our study.
+Table 1 Overview about the experiments executed and their related
+objective
+Full size table
+2.2 Dataset
+The annotated dataset used for all experiments consists of four sources:
+Bayer Literature Database (PubMed), ADECorpus (PubMed) [28], Social
+Media Mining for Health Applications (SMM4H, Twitter) [43], and
+drugs.com[44] and 890 records and is publicly available as
+supplementary material in [32]. Each record consists of one or several
+sentences. The dataset was consistently annotated with controlled
+quality, contains diverse data sources, and the entities are relevant for
+PV. The dataset is small, diverse, and very clean and allows to train ML
+models with limited resources. The detailed entity description, data
+selection, and the annotation process are described in [32].
+2.3 Prompting
+We performed manual prompt optimization for OpenAI models to obtain
+the best results based on a few samples of input texts and describe our
+approach below. Many additional methods exist, and a growing body of
+literature is discussing additional methods like adding personas or chain-
+of-thought prompting [45]. We decided to stop spending additional effort
+in prompt engineering once we reached satisficing results.
+We used OpenAI’s prompt engineering guide [46] to achieve better
+results in terms of adequate prompt interpretability of the text provided.
+We applied some strategies which are adequate for the given tasks:
+•  Ask the model to adopt a persona
+•  Use delimiters to clearly indicate distinct parts of the input
+•  Instruct the model to answer using a reference text
+In contrast to Hu et al. [29], who provided annotation guideline-based
+prompts and annotated samples via few-shot learning, we intentionally
+started with zero shot experiments and without any further explanation
+what is meant by a given entity description (e.g., indication or adverse
+event) to investigate the native LLM entity extraction capability.
+We realized that the task definition in our prompt should be as exact as
+possible (e.g., three directly consecutive hashtags instead of three
+consecutive hashtags) and preferably with an example (e.g., for product
+event combination: “Aspirin|Rash”).
+For all our experiments, the following prompt example was used with the
+variable part embedded by three hashtags as start and end tag (except
+for fine-tuned T5 which did not require any prompting). We used all entity
+labels which are described in [32]:
+•  System prompt (only OpenAI models, system prompt refers to the
+set of instructions that guide the output): “I want you to act as an
+experienced and diligent annotator in a Pharmacovigilance
+department. Follow the user's instructions carefully. Respond
+using plain text.”
+•  User prompt (with an input text example used for all
+reproducibility experiments, the user prompt is the specific input or
+question you want the AI to respond to):
+•  “Use the following items and identify all items in the text marked by
+three directly consecutive hashtags (e.g., ###text to be
+analyzed###) put in front and at the end of the text:
+01. Adverse event
+02. Mode of action
+03. Administration form / Primary packaging
+04. Administration route
+05. Comorbidity
+06. Dosage
+07. Drug / Device
+08. Indication
+09. Intended effect
+10. Medical history / condition
+11. Method / Procedure / Administration
+12. Outcome
+13. Product Dose Combination (PDC)
+14. Product Event Combination (PEC)
+15. Product Indication Combination (PIC)
+16. Product Technical Complaint (PTC)
+17. Target parameter
+18. Target population
+Present the results in the following form:
+- Per item use a new line with the format: 'item: hit(s)'
+- List multiple hits separated by semi-colon
+- When you do not find an entry fill the field with 'None'
+- When you find a product combination (PEC, PIC, PDC) separate Drug /
+Device from the other Adverse Event, Indication, or Dose term by a pipe
+character (e.g., 'Aspirin|Rash')
+- List all items with preceding numbers
+- Stop generating after the list is complete
+Input text:
+“###After TACE for intrahepatic metastasis, localized CCRT (45 Gy over
+5 weeks with conventional fractionation and hepatic artery infusional
+chemotherapy using 5-fluorouracil as a radiosensitizer, administered
+during the first and fifth weeks of radiotherapy) was used to treat main
+HCC with PVT.###”
+2.4 Reproducibility Experiments
+Reproducibility is of paramount importance for production use of AI
+models in a regulated environment. This was also acknowledged by the
+OpenAI developers. In November 2023, two new OpenAI model versions
+were released addressing this need (gpt-4-1106-preview, gpt-35-
+turbo-1106). Both models were used for our reproducibility experiments.
+In the OpenAI Cookbook [47] the following explanation is provided:
+“Reproducibility has always been a big request from
+user communities when using our APIs … Developers
+can now specify seed parameter in the Chat Completion
+request to receive (mostly) consistent outputs. To help
+you keep track of these changes, we expose the
+system_fingerprint field… The system fingerprint is an
+identifier for the current combination of model weights,
+infrastructure, and other configuration options used by
+OpenAI servers to generate the completion.”
+The reproducibility of model results (used models: gpt-4-1106-preview,
+gpt-35-turbo-1106, HuggingFaceH4/zephyr-7b-beta) was evaluated by
+providing a single record multiple times as the same request (n = 100)
+and analyzing the number of different model responses. The prompting
+described in section 2.3 was used.
+For reproducibility assessment, the number of different responses was
+counted. In all experiments and all models, the temperature was set to
+zero and the seed number was omitted or set to 42 to analyze result
+differences.
+2.5 Model Performance
+Our motivation for this experiment was to compare the performance of
+externally hosted OpenAI models versus internally hosted LLMs. In our
+experiments, we were focusing on partial scores on the positive class
+(F1 and recall) to evaluate overlapping hits between prediction and truth
+[32]. We started by running zero-shot performance studies with a range
+of transformer models to select the best model for further development
+steps like few-shot prompting or fine-tuning and compared the results of
+the selected model against two OpenAI models (gpt-4-1106-preview,
+gpt-35-turbo-1106) as well as a fine-tuned T5.
+We assumed that GPT 4 would outperform GPT 3.5, but we also wanted
+to investigate if the potentially better performance justifies the higher
+costs and longer execution time per request.
+2.5.1 Model Selection
+Transformer models were selected, which could be potentially run and
+fine-tuned with reasonable technical efforts and costs. Therefore, we
+focused on recent 7B and 13B parameter models which were at the time
+of selecting LLMs for our study (November / December 2023) ranking
+high on Hugging Face leader boards [48]: argilla/notus-7b-v1, epfl-llm/
+meditron-7b, HuggingFaceH4/zephyr-7b-beta, meta-llama/Llama-2-13b-
+hf, and togethercomputer/Llama-2-7B-32K-Instruct.
+Any selection of models will be an extreme reduction compared to the
+models published on the Hugging Face hub, which hosts, as of June
+2024, over 100k models for the Text Generation task. It's common for
+models to be published in different versions, like meta-llama/
+Llama-2-13b-hf or meta-llama/Llama-2-13b-chat-hf. When multiple
+versions of a candidate model were available, we focused on the instruct
+models in favor of chat models. This was because instruct models tend
+to perform better in use cases that require adherence to structured
+output to make use of the generated text. Chat models tend to excuse
+themselves and are wordy in their outputs, which makes them suitable
+for use in chat applications but less favorable for data processing tasks.
+We compared the model performance against a T5 model fine-tuned on
+splits of the published dataset [32]. The performance evaluation was
+executed to identify the candidate model for further processing (few-shot
+and fine-tuning experiments). We focused a) on the named entities
+indication, adverse event, drug/device, dose, product event combination,
+product indication combination, and product dose combination due to
+business relevance and since the dataset provides the highest number of
+occurrences for those entities and b) on one data source (ADE Corpus),
+because the majority of dataset records originated from this source (n =
+500 of 890 records). All model selection experiments were performed as
+zero-shot and executed only once (n = 1).
+2.5.2 Guided Generation
+Initial experiments indicated that the prompt for GPT 3.5 and GPT 4 was
+not generating useful results with the selected 7B or 13B LLMs. The
+major issue was that open-source models did not adhere to the desired
+output format and output termination.
+Performance of LLMs is highly sensitive to how they are prompted, and a
+growing body of literature is addressing various techniques to optimize
+results [45, 46]. One important issue of open-source models is
+adherence to the expected output format, which is unlikely to be fixed by
+prompt optimization alone.
+One possible option to address the issue with the output format is to use
+optimized single prompts per entity, but with the disadvantage of
+additional work and complexity.
+We used guided generation (version 0.1.10, 22 December 2023), which
+offers a guaranteed and stable solution for this issue without the need for
+additional prompting efforts to compare multiple open-source LLMs with
+the same user prompt developed for GPT. There are several approaches
+of controlling the output of LLMs, e.g., [49, 50]. In our paper we
+evaluated two approaches of guidance-ai for guided generation [50]:
+•  Constrained generation to input words: Enforcing output
+structure, hard constraints on text generation to words occurring in
+the input text and in addition, generation termination after
+newlines. This approach is based on the idea that the output of a
+NER task can be limited to the input text since generated words
+which do not occur in the input text are by definition non-valid
+responses. This constraint works well for NER tasks but breaks
+down quickly when more free form answers are needed (as
+required e.g., for relation extraction).
+•  Guided generation: Enforcing output structure and unconstrained
+generation within free text blocks, with termination of generation
+after newlines. This approach entirely focuses on adherence to a
+consistent output structure, which greatly simplifies downstream
+processing of model inference results and separates the model
+ability to adhere to a described output format and generating
+meaningful answers.
+Due to the use of product combinations and the use of pipe characters in
+the expected results, we focused on guided generation for the following
+analysis. Our experiments with these two approaches showed that
+imposing known constraints on LLM inference greatly simplifies further
+usage and processing of LLM results and can bridge the gap between
+model performance of vastly different parameter sizes.
+2.6 T5 and Zephyr Fine-Tuning
+T5 was fine-tuned as described in [32] by using the published dataset,
+executing stratified five-fold cross validation with 80:20 splits.
+Stratification was performed based on data source and entity type.
+HuggingFaceH4/zephyr-7b-beta was selected for fine-tuning as we saw
+the most consistent and promising results from this model. The same
+dataset as for the T5 models was used for training and testing to create
+5-fold cross validation Zephyr models. The quantized low rank adapter
+(QLoRA) method [51] was used to quantize a pre-trained model to 4-bit
+and adds a small set of learnable (QLoRA) weights which are tuned by
+back propagating gradients through the quantized weights. QLoRA
+reduces the average GPU memory requirements significantly by using
+novel high-precision techniques such as 4-bit NormalFloat, double
+quantization, and paged optimizers without significant performance
+degradation [51]. We used the X-LLM library for streamlining model
+training optimization and LLM finetuning [52].
+For the fine-tuning of HuggingFaceH4/zephyr-7b-beta, we used an Adam
+optimizer (paged_adamw_8bit) and set the maximum quantization
+samples to 1024. The learning rate was set to 0.0002, batch size was set
+to 1, and the epoch was set to 1. The T5 fine-tuning parameter are
+described in [32].
+2.6.1 Few-Shot Experiments
+As a first step towards optimizing model performance, we performed few-
+shot experiments which were based on the same conditions as for the
+zero-shot experiments. In total, eight samples (about 1% of dataset)
+were selected (two samples per data source) which represented per data
+source the highest number of entities per record. We ensured that
+“None” was present in our few-shot experiments to teach the models that
+“None” is a valid option. We executed the experiments with the original
+HuggingFaceH4/zephyr-7b-beta model and our fine-tuned Zephyr
+models. For the evaluation we focused on the source ADE Corpus
+(which contains the most records, n = 500).
+3 Results
+3.1 Prompting
+Table 2 shows two examples of GPT 4 model responses representing
+the two most frequent model results by using system and user prompts
+introduced in section 2.3 [Input text: “After TACE for intrahepatic
+metastasis, localized CCRT (45 Gy over 5 weeks with conventional
+fractionation and hepatic artery infusional chemotherapy using 5-
+fluorouracil as a radiosensitizer, administered during the first and fifth
+weeks of radiotherapy) was used to treat main HCC with PVT.”].
+Table 2 Two GPT 4 examples are shown to demonstrate the
+responses selected from the highest and second highest numbers
+of total response shown in Fig 1. The differences between both
+results are shown in bold faces
+Full size table
+Fig. 1
+[image]
+Distribution of gpt-4-1106-preview responses (blue) and of system
+fingerprints (red) observed by providing 100 times the same request. The
+bars are sorted by unique total response count in descending order
+Full size image
+Both GPT models created a string as a response. In a post-processing
+step, we searched for the entity label and used, for comparison of
+prediction and truth, the information after the colon until the end of line.
+The T5 procedure is described in [32]. For all other models, we used
+guided generation and directly created structured data in the same
+format.
+3.2 Reproducibility Experiments
+As described in section 2.4, reproducibility experiments were executed to
+evaluate the number of different responses without a post-processing
+step on three different models with a temperature of 0.0. The model
+HuggingFaceH4/zephyr-7b-beta showed the expected behavior, i.e., in
+case the seed number was omitted we observed different responses (n =
+7, data not shown), when seed number was set, we observed only one
+unique response (i.e., n = 1, data not shown). Using gpt-35-turbo-1106
+and gpt-4-1106-preview we observed while omitting the seed number
+different results as expected (gpt-35-turbo-1106, n = 10, number of
+different system fingerprints = 1, and gpt-4-1106-preview n = 33, number
+of different system fingerprints = 6, data not shown), but when we set the
+seed number, GPT 3.5 and GPT 4 did not show a significant reduction in
+the response variability (gpt-35-turbo-1106, n = 8, number of system
+fingerprints = 1, data not shown, and gpt-4-1106-preview n = 24, number
+of system fingerprints = 4). In Figure 1, the GPT 4 distribution of different
+responses and the number of system fingerprints per response is shown.
+About 1/3 of all system responses (n = 33 of 100) contain the same
+contents but distributed over all four available system fingerprints (see
+Fig. 1, left blue bar and left red bar). In Fig. 2 the total number and the
+unique number of responses is displayed. Nearly half of all responses
+(blue bar, n = 48 of 100) are related to one system fingerprint and
+represent about 44 % of all unique responses (red bar, n = 20 of 45).
+Figures 1 and 2 demonstrate that different fingerprints can generate the
+same result, and one fingerprint can generate different responses. It is
+obvious that the established OpenAI concept of system fingerprint and
+seed number provides only insufficient capabilities to achieve consistent
+reproducibility. As a consequence of our results, we will not invest in
+further performance improvements of GPT 3.5 and 4 since in their
+current state they are not fit for application in a regulated environment.
+We do not claim this to be a discovery and are not speculating about
+potential explanations for this behavior.
+Fig. 2
+[image]
+Distribution of gpt-4-1106-preview total (blue) and unique responses
+(red) observed per system fingerprint. The bars are sorted by the total
+response count per fingerprint in descending order
+Full size image
+We do not see any inherent reason why these models could not be
+technically made reproducible with technical or legal efforts. Especially
+since this issue does not occur when running models locally and
+controlling for reproducibility, as our application of open models show in
+other parts of this paper.
+3.3 Measurement of Model Performance
+3.3.1 Zeroshot Experiments
+Figures 3 and 4 show the partial F1 and partial recall of selected 7B and
+13B LLMs for seven entities for all models under consideration and by
+using the same prompt. HuggingFaceH4/zephyr-7b-beta and argilla/
+notus-7b-v1 performed best compared to the other three open-source
+LLMs. The meta-llama/Llama-2-13b-hf performed significantly worse
+than the other LLM models. As shown in Fig. 4, the Zephyr model in our
+experiment performs better regarding partial recall than the Notus model,
+and therefore, was selected for further investigation (i.e., fine-tuning and
+few-shot inference).
+Fig. 3
+[image]
+Partial F1 entity performance of open-source LLMs. AE, adverse event;
+PDC, product dose combination; PEC, product event combination; PIC,
+product indication combination
+Full size image
+Fig. 4
+[image]
+Partial recall entity performance of open-source LLMs. AE, adverse
+event; PDC, product dose combination; PEC, product event combination;
+PIC, product indication combination
+Full size image
+3.3.2 Comparison Between Fine-Tuned Zephyr and Fine-Tuned T5
+Models
+Figure 5 shows the partial F1 and partial recall results of the fine-tuned
+T5 and fine-tuned Zephyr models. The partial F1 score of a fine-tuned T5
+is higher compared with Zephyr for all selected entities. Especially for
+product combinations, T5 performs much better than Zephyr with the
+given prompt.
+Fig. 5
+[image]
+Partial F1 score and recall results (median and standard deviation) of
+entities from stratified cross-validation with fine-tuned T5 and fine-tuned
+Zephyr models. AE, adverse event; PDC, product dose combination;
+PEC, product event combination; PIC, product indication combination
+Full size image
+3.3.3 Comparison of Fine-Tuned T5 with Few-Shot Pre-trained and
+Fine-Tuned Zephyr
+Figure 6 shows the partial F1 score of few-shot experiments for seven
+selected entities by comparing the zero-shot Zephyr model with fine-
+tuned Zephyr and fine-tuned T5 models. Please note that zero-shot
+experiments were executed once (n = 1), while each model of the cross-
+validated fine-tuned model types was tested (n = 5). The fine-tuned
+Zephyr model shows slightly higher F1 scores compared to the zero-shot
+Zephyr model and when referring to the non-overlapping standard
+deviations, the performance of T5 may be considered as significantly
+higher than with fine-tuned Zephyr. Independent of any possible prompt
+optimization, we assume the reason for the better performance observed
+may originate from the fact that in contrast to fine-tuned Zephyr all T5
+weights were adjusted by fine-tuning. Please note that we did not
+execute a complete adjustment of all Zephyr weights since the efforts
+and computation costs would be significantly increased due to the vast
+differences in model parameters (T5 Base: 220 million parameters
+versus 7 billion parameters).
+Fig. 6
+[image]
+Few-shot median partial F1 score of fine-tuned T5 and Zephyr compared
+with zero-shot Zephyr. Standard deviation is shown for all fine-tuned
+models. AE, adverse event; PDC, product dose combination; PEC,
+product event combination; PIC, product indication combination
+Full size image
+In Figs. 7 and 8 the median partial F1 scores and partial recall of all zero-
+and few-shot experiments are displayed. Figures 7 and 8 demonstrate
+that the scores for non-product combination entities of GPT 4 and T5 are
+similar, while the scores for product combination entities of T5 are
+significantly higher compared to all other models. The F1 score of AE
+detection with GPT 4 is significantly higher than with GPT 3.5. The recall
+of the fine-tuned Zephyr model with regard to AE, drug/device, and dose
+seems to perform slightly better than the scores of other models.
+Comparing zero-shot Zephyr with GPT 3.5, the Zephyr AE F1 and recall
+performance is better. Figure 8 demonstrates that the recall performance
+can be increased even by a small number of samples (n = 8) in few-shot
+learning.
+Fig. 7
+[image]
+Comparison of median partial F1 scores of fine-tuned T5 and Zephyr
+versus zero-shot Zephyr, GPT 3.5, and GPT 4. AE, adverse event; PDC,
+product dose combination; PEC, product event combination; PIC,
+product indication combination; zephyr-FT, fine-tuned Zephyr-7b-beta
+Full size image
+Fig. 8
+[image]
+Comparison of median partial recall of fine-tuned T5 and Zephyr versus
+zero-shot Zephyr, GPT 3.5, and GPT 4. AE, adverse event; PDC,
+product dose combination; PEC, product event combination; PIC,
+product indication combination; zephyr-FT, fine-tuned Zephyr-7b-beta
+Full size image
+4 Discussion
+4.1 Selection of the Best Performing Open-Source LLM
+In section 3.3.1 we investigated the performance of selected LLM models
+[53,54,55] in zero-shot experiments. We selected models with seven and
+thirteen billion parameters which allows to run and fine-tune those
+models with reasonable technical efforts and costs. We could
+demonstrate that a higher parameter count (number of model
+parameters) does not necessarily imply a better performance for a given
+NER task.
+Parameter count is an obvious but alluring proxy to predict model
+performance on unseen tasks, which can be summarized as the “bigger
+is better” heuristic [56]. This heuristic holds badly if applied too broadly
+but can be a good guiding principle when applied in a narrower sense
+where one focuses on models that are based on the same general
+architecture, similar training data, similar training tasks, as well as
+objective functions.
+We demonstrated that model parameter count is not a suitable proxy
+metric for downstream task performance. As shown in this paper, by
+considering our study framework as prompts and text generation
+techniques, the LLMs investigated were not able to outperform a
+relatively small model by today's standards, such as T5 for the task
+discussed here. This only considers task performance; once one factors
+in that smaller models greatly simplify the complexity and effort to
+develop and maintain the overall system, the benefit of small local
+models starts to become more and more significant in many industry-
+relevant settings.
+One example of this observation is that a popular open model like
+LLAMA-2 13B can be outperformed by smaller models based on similar
+architecture when the training data is chosen carefully. Especially
+instruction tuning, such as for Zephyr-7b-beta, can efficiently bridge the
+gap in model size.
+Figure 3 shows two models with a similar architecture, such as
+Llama-2-7B-32K-Instruct and Llama-2-13b-hf, but different pre-training
+data, where the smaller model outperforms the bigger one, but the bigger
+one was not trained with instruction tuning using reinforcement learning
+with human feedback (RLHF). This highlights that various methods of
+instruction tuning can increase model performance on unseen tasks
+since they shape the trained model in a way that focuses less on next
+token or masked token predictions, but more on fulfilling a task that is
+given to the model in the form of text input. Kirstain et al. demonstrated
+that in open question answering tasks, enlarging the training set does not
+improve performance. In contrast, classification, extractive question
+answering, and multiple choice tasks benefit so much from additional
+examples that collecting a few hundred examples is often “worth” billions
+of parameters [57].
+As shown in Figs. 3 and 4, the Zephyr model performs better than all
+other open-source models, and therefore, was selected for further
+investigation (i.e., fine-tuning and few-shot inference)
+Zephyr-7b-beta was derived from a strong baseline LLM Mistral-7B [58]
+and was further fine-tuned with the aim of fulfilling tasks using direct
+preference optimization (DPO) as a novel and promising fine-tuning
+approach [59]. We are using in our study a small, but well curated
+dataset [32]. We fine-tuned a small T5 model with this dataset, which
+shows in our study an excellent performance for designated NER tasks
+(see Figs. 6, 7, 8). This is in line with recent publications which
+demonstrates that remarkably strong performance can be achieved from
+only a handful of examples in the training data [32, 60].
+4.2 Comparison of Zephyr, GPT 3.5, and GPT 4 Zero-Shot
+Performance
+In comparing the OpenAI models, GPT 4 shows a better NER
+performance in general in Fig. 7, but only the GPT 4 AE F1 score is
+significantly higher than the GPT 3.5 score. As shown in Fig. 8, the better
+recall performance of GPT 4 is even more pronounced. Both GPT and
+Zephyr models demonstrate good NER zero-shot performance, while
+Zephyr shows a very good recall performance. Zero-shot GPT
+performance of named entity linking with product combination entities
+could be improved by few-shot learning as shown in relation extraction
+experiments [27]. AE detection is considered as a more difficult task for
+LLMs compared with other entities used in this study (as drug, dose, or
+indication) [32]. For complex NER tasks, the significant performance
+increase would likely justify the higher GPT 4 costs and longer execution
+time per request compared with GPT 3.5. For AE detection, zero-shot
+Zephyr demonstrates better performance than GPT 3.5 and could
+alternatively be used.
+4.3 Comparison of Best Performing Open-Source LLM
+(Zero-Shot, Few-Shot, Fine-Tuned) with Fine-Tuned T5,
+and Zero-Shot GPT
+With the given prompt, we observed similar F1 performances of zero-
+shot GPT 4 and fine-tuned T5 for non-product combination entities, while
+the product combination scores of T5 are significantly higher compared
+with all other models. The results imply that compared with a small T5-
+Base with complete weight fine-tuning performance, QLoRA fine-tuned
+models could not achieve comparable performance especially with
+regard to production combination entities. To improve non-T5 models,
+further efforts in prompt engineering are possible (e.g., few-shot
+techniques or prompt optimization). All quantitative results regarding
+model performance are lower bounds and must be interpreted as such.
+They do not inform about a potential performance ceiling that could be
+achieved with more efforts on prompting or fine-tuning. Zero-shot
+experiments with minimal prompting efforts are an adequate measure to
+predict how well a model will work with minimal effort.
+In Figs. 7 and 8 we found that the F1 performances of zero-shot, few-
+shot, and fine-tuned Zephyr model show similar results, but the recall
+performance of fine-tuned Zephyr improved significantly. We
+demonstrated that a zero-shot Zephyr model performance could be
+increased by fine-tuning and few-shot learning, even by using a very
+small sample (n = 8).
+The same data were used for fine-tuning T5 and fine-tuning Zephyr.
+When comparing fine-tuned Zephyr with T5, T5 had a better F1
+performance, especially with product combination entities.
+All approaches used in this paper offer potential for additional gains in
+task performance, and a balance needs to be found between time spent
+on specific approaches. From the experiments we performed, we expect
+that few-shot approaches offer the potential for additional performance
+gains with relatively little additional investment, which could be
+addressed in future research.
+The technical content of this study is concerned with named entity
+recognition and linking (i.e., product combination entities), but the
+conclusions drawn here may hold in principle for many more use cases
+in the text modality, which is due to the new paradigm opened by LLMs.
+Traditionally, different use cases (e.g., sentiment classification, question
+answering) were approached using different methods, but LLMs allow
+casting any use case that operates in a modality covered by a model as
+a text generation task based on a prompt and input data.
+4.4 Proposal for Use of LLMs in a Regulated Environment
+Translating such results into qualified applications running as regulated
+systems will prove challenging, and several hurdles are needed to be
+overcome. One such hurdle is the reproducibility of model inference,
+which is discussed in this paper. Reproducibility is a cornerstone of a
+computer validation process [21,22,23,24], as it allows to independently
+verify and validate the documented findings of previous validation runs.
+In our study we investigated the overall performance and reproducibility
+capability of the responses produced by LLMs, regarding NER
+conducted upon PV texts. We demonstrated in section 3.2 that in
+contrast to a fine-tuned Zephyr, recent OpenAI model implementations
+failed in showing reproducible results, which is a prerequisite for
+computer system validation to demonstrate that a system is suitable for
+its intended purpose.
+Our results clearly show that this point needs special attention, which
+might include and is not limited to legal efforts and technical
+considerations. Given the time at which the experiments were done and
+presented here, it is evident that the current level of publicly available
+GPT 4 and 3.5 models do not provide the level of reproducibility needed
+in these contexts.
+Depending on the provider of an external LLM, one might also need to
+consider the additional need to keep a validated model in a controlled
+state and available over longer time periods. Additional documentation of
+the training data and inference logic might also be useful for developing
+sufficient levels of trust in the model's performance on new and unseen
+data.
+When models are running internally, one can control hardware as well as
+inference code and can technically ensure reproducibility. Open models
+[61] can additionally offer better understanding in terms of training data
+and procedures used for model training and offer paths towards the
+explainability of specific model inferences.
+Running inference locally on LLMs is demanding in terms of hardware
+requirements such as CPU inference speed or available GPU memory.
+Today’s data centers and cloud providers offer the capability to run LLMs
+from a few billion to much larger number of parameters, but the
+complexity and costs increase steeply with the number of model
+parameters. Currently, models in the range of 7B to 13B are in a
+reasonable spot of potentially sufficient capabilities and simplicity of
+operation, system development, and experimentation.
+Depending on the task and available experience, even in smaller
+organizations, one can be confident that open models may be the most
+reasonable choice for many tasks. This is especially true when dedicated
+domain-relevant prior knowledge is deployed within the overall system of
+model inference and additional components.
+Out-of-the-box and without changing prompts, smaller open models
+show a big capability gap compared with state-of-the-art hosted models
+such as GPT 4 and GPT 3.5. Our analysis clearly showed that for this
+task, the gap can be closed using guided generation and fine-tuning with
+modest amounts of training data. Creating this training data are costly
+and need to be factored in when developing AI systems. However, using
+hosted models does not mean one can safely develop a system without
+the generation of training data, since it is needed to evaluate and monitor
+model performance. Data-efficient training regimes emphasize that the
+combination of open and smaller models with dedicated task-specific
+data can reach and outperform closed models’ performance.
+Generating training data requires domain expertise, adherence to well-
+described labeling protocols, and measures for quality control like inter-
+annotator agreement. Time and cost requirements of generating high-
+quality data can potentially be reduced by using the best available
+hosted model to generate data candidates, which are mostly quality
+controlled by domain experts. Our findings and those of other
+publications clearly demonstrate that LLMs possess the capability to
+accomplish this task [27, 29, 30]. This approach shows that initially
+opposing ideas of open versus closed and internal versus external
+models are not that relevant for many practical applications.
+5 Conclusion
+LLM-based AI systems have great innovative potential for applications in
+the pharmaceutical industry. Our case study shows that, notwithstanding
+the current rate of progress, general rules of system implementation in a
+controlled environment have not lost their importance. At the center of
+developing a pharmacovigilance system, efficacy (i.e., system
+performance metrics), reproducibility of results, and operability (i.e., to
+remain a validated system in a controlled status) should be the focus.
+For system deployment a robust technical and legal guardrail framework
+needs to ensure that models remain in a controlled status and provide
+availability over time, as well as reproducible model inference, as
+minimum criteria for them to be deployed operationally. These issues
+aside, they could be used to greatly reduce the effort to generate
+proposals for fine-tuning data or automated system evaluation and
+monitoring. This is clear from the fact that GPT 3.5 and 4 showed
+promising results with limited prompting efforts in zero-shot settings.
+Hence, their results could replace annotating efforts to generate training
+data needed to train bespoke models like T5.
+Here we took the traditional route of using data labeled by domain
+experts to ensure high data quality, as it is most suitable for a regulated
+environment. We were unable to reach sufficient levels of reproducible
+model inference with GPT 3.5 and GPT 4 models in contrast to locally
+maintained open-source models, which implies that for the current GPT
+versions an independent verification in computer system validation of
+previous validation runs is hardly to achieve.
+Smaller model sizes offer great advantages in effort and complexity
+when developing and maintaining an LLM-based AI system. It seems
+plausible that model size and the size of fine-tuning data could be traded
+off to reach the required levels of system performance. However, we
+have not shown this explicitly here.
+Based on this case study, we recommend using the model which
+performs best for NER and relation extraction (e.g., GPT), irrespective of
+reproducibility to generate proposals for data annotation or to generate
+synthetic data for fine-tuning. Then, one should fine-tune, evaluate, and
+deploy the most operationally feasible LLM that reaches the required
+level of performance on the task to find the optimal balance of
+complexity, stability, and quality for the overall system in a regulated
+environment.
+The key contributions of our paper to the research community are as
+follows:
+•  GPT 3.5 and GPT 4, as of today, should not be used as a part of a
+GxP validated system due to missing guarantees of reproducibility.
+•  Due to promising results of Zephyr or GPT in terms of NER tasks
+tested in our study it seems in many relevant cases to be sufficient
+to use only zero-shot experiments to generate training data for
+further manual review.
+•  This training data could be used to train a smaller, e.g., T5 Base
+system. This would be a straightforward process to train a high-
+quality and resource-efficient model, which could be used as a part
+of a GxP system.
+Notes
+1. Please note that ‘T5’, ‘GPT 3.5’, and ‘GPT 4’ refer in our
+experiments to the models ‘T5-Base’, ‘GPT 3.5 Turbo’, and ‘GPT 4
+Turbo’, respectively.
+2. Prompt engineering is the process of writing, refining, and
+optimizing inputs to allow AI models to create specific, high-quality
+outputs.
+3. Language models read and write text in chunks called tokens. In
+English, a token can be as short as one character or as long as
+one word.
+References
+1. Mak K-K, Wong Y-H, Pichika MR. Artificial intelligence in drug
+discovery and development. Drug Discov Eval Saf Pharmacokinet
+Assays. 2023:1–38.
+2. Jiménez-Luna J, Grisoni F, Weskamp N, Schneider G. Artificial
+intelligence in drug discovery: recent advances and future
+perspectives. Expert Opin Drug Discov. 2021;16(9):949–59.
+Article  PubMed  Google Scholar 
+3. Nasnodkar S, Cinar B, Ness S. Artificial intelligence in toxicology
+and pharmacology. J Eng Res Rep. 2023;25(7):192–206.
+Article  Google Scholar 
+4. Harrer S, Shah P, Antony B, Hu J. Artificial intelligence for clinical
+trial design. Trends Pharmacol Sci. 2019;40(8):577–91.
+Article  PubMed  CAS  Google Scholar 
+5. Angus DC. Randomized clinical trials of artificial intelligence.
+JAMA. 2020;323(11):1043–5.
+Article  PubMed  Google Scholar 
+6. Rathore AS, Nikita S, Thakur G, Mishra S. Artificial intelligence
+and machine learning applications in biopharmaceutical
+manufacturing. Trends Biotechnol. 2023;41(4):497–510.
+Article  PubMed  CAS  Google Scholar 
+7. Abatemarco D, Perera S, Bao SH, Desai S, Assuncao B,
+Tetarenko N, et al. Training augmented intelligent capabilities for
+pharmacovigilance: applying deep-learning approaches to
+individual case safety report processing. Pharm Med.
+2018;32:391–401.
+Article  CAS  Google Scholar 
+8. Wang H, Ding YJ, Luo Y. Future of ChatGPT in
+pharmacovigilance. Drug Saf. 2023;46(8):711–3.
+Article  PubMed  PubMed Central  Google Scholar 
+9. Ethics and governance of artificial intelligence for health—who
+guide. 2021. https://iris.who.int/bitstream/
+handle/10665/341996/9789240029200-eng.pdf. Accessed 29 July
+2024.
+10. Schmider J, Kumar K, LaForest C, Swankoski B, Naim K, Caubel
+PM. Innovation in pharmacovigilance: use of artificial intelligence in
+adverse event case processing. Clin Pharmacol Ther.
+2019;105(4):954–61.
+Article  PubMed  Google Scholar 
+11. Ghosh R, Kempf D, Pufko A, Barrios Martinez LF, Davis CM, Sethi
+S. Automation opportunities in pharmacovigilance: an industry
+survey. Pharm Med. 2020;34:7–18.
+Article  Google Scholar 
+12. Kassekert R, Grabowski N, Lorenz D, Schaffer C, Kempf D, Roy P,
+et al. Industry perspective on artificial intelligence/machine learning
+in pharmacovigilance. Drug Saf. 2022;45(5):439–48.
+Article  PubMed  PubMed Central  Google Scholar 
+13. Proposed regulatory framework for modifications to artificial
+intelligence/machine learning (AI/ML)-based software as a medical
+device (SaMD)—discussion paper and request for Feedbac. 2019.
+https://www.fda.gov/media/122535/download. Accessed 26 Feb
+2024.
+14. Informal innovation network horizon scanning assessment report—
+artificial intelligence. 2021. https://www.icmra.info/drupal/sites/
+default/files/2021-08/
+horizon_scanning_report_artificial_intelligence.pdf. Accessed 29
+July 2024.
+15. Medical device software: considerations for device and risk
+characterization, IMDRF/SaMD WG/N81 DRAFT: 2024. 2024.
+https://www.imdrf.org/sites/default/files/2024-02/
+IMDRFSaMD%20WGN81%20DRAFT%202024%2C%20Medical%20De
+%20final%20draft.pdf. Accessed 29 June 2024.
+16. Reflection paper on the use of Artificial Intelligence (AI) in the
+medicinal product lifecycle (Draft). 2023. https://
+www.ema.europa.eu/en/documents/scientific-guideline/draft-
+reflection-paper-use-artificial-intelligence-ai-medicinal-product-
+lifecycle_en.pdf. Accessed 29 July 2024.
+17. Huysentruyt K, Kjoersvik O, Dobracki P, Savage E, Mishalov E,
+Cherry M, et al. Validating intelligent automation systems in
+pharmacovigilance: insights from good manufacturing practices.
+Drug Saf. 2021;44:261–72.
+Article  PubMed  PubMed Central  Google Scholar 
+18. Developing a software precertification program: a working model
+v1.0 2019. https://www.fda.gov/media/119722/download.
+Accessed 26 Feb 2024.
+19. Kompa B, Hakim JB, Palepu A, Kompa KG, Smith M, Bain PA, et
+al. Artificial intelligence based on machine learning in
+pharmacovigilance: a scoping review. Drug Saf. 2022;45(5):477–
+91.
+Article  PubMed  PubMed Central  Google Scholar 
+20. Bate A, Stegmann J-U. Artificial intelligence and
+pharmacovigilance: what is happening, what could happen and
+what should happen? Health Policy Technol. 2023;12(2): 100743.
+Article  Google Scholar 
+21. Guideline on process validation for finished products—information
+and data to be provided in regulatory submissions. 2016. https://
+www.ema.europa.eu/en/documents/scientific-guideline/guideline-
+process-validation-finished-products-information-and-data-be-
+provided-regulatory-submissions-revision-1_en.pdf. Accessed 01
+Feb 2024.
+22. Albertoni R, Colantonio S, Skrzypczyński P, Stefanowski J.
+Reproducibility of machine learning: Terminology,
+recommendations and open issues. 2023. arXiv:230212691.
+23. Guidance for Industry Process Validation: General Principles and
+Practices. 2011. https://www.fda.gov/files/drugs/published/
+Process-Validation--General-Principles-and-Practices.pdf.
+Accessed 01 Feb 2024.
+24. Katz P, Campbell C. FDA 2011 process validation guidance:
+process validation revisited. J Valid Technol. 2012;18(4):33.
+Google Scholar 
+25. Raffel C, Shazeer N, Roberts A, Lee K, Narang S, Matena M, et al.
+Exploring the limits of transfer learning with a unified text-to-text
+transformer. J Mach Learn Res. 2020;21(140):1–67.
+Google Scholar 
+26. Hugging Face T5 V4.24.0. https://www.huggingface.co/docs/
+transformers/model_doc/t5#transformers.T5Model. Accessed 10
+Nov 2023.
+27. Wadhwa S, Amir S, Wallace BC. Revisiting relation extraction in
+the era of large language models. In: Proceedings of the
+conference association for computational linguistics meeting;
+2023: NIH public access; 2023. p. 15566.
+28. Gurulingappa H, Rajput AM, Roberts A, Fluck J, Hofmann-Apitius
+M, Toldo L. Development of a benchmark corpus to support the
+automatic extraction of drug-related adverse effects from medical
+case reports. J Biomed Inform. 2012;45(5):885–92.
+Article  PubMed  Google Scholar 
+29. Hu Y, Chen Q, Du J, Peng X, Keloth VK, Zuo X, et al. Improving
+large language models for clinical named entity recognition via
+prompt engineering. J Am Med Inform Assoc. 2024.
+30. Li Y, Li J, He J, Tao C. AE-GPT: using large language models to
+extract adverse events from surveillance reports-a use case with
+influenza vaccine adverse events. PLoS ONE. 2024;19(3):
+e0300919.
+Article  PubMed  PubMed Central  CAS  Google Scholar 
+31. Raval S, Sedghamiz H, Santus E, Alhanai T, Ghassemi M,
+Chersoni E. Exploring a unified sequence-to-sequence transformer
+for medical product safety monitoring in social media. 2021
+November; Punta Cana, Dominican Republic: Association for
+Computational Linguistics; 2021. pp. 3534–46.
+32. Dietrich J, Kazzer P. Provision and characterization of a corpus for
+pharmaceutical, biomedical named entity recognition for
+pharmacovigilance: evaluation of language registers and training
+data sufficiency. Drug Saf. 2023;46(8):765–79. https://
+doi.org/10.1007/s40264-023-01322-3.
+Article  PubMed  PubMed Central  Google Scholar 
+33. Brown T, Mann B, Ryder N, Subbiah M, Kaplan JD, Dhariwal P, et
+al. Language models are few-shot learners. Adv Neural Inf
+Process Syst. 2020;33:1877–901.
+Google Scholar 
+34. Lu Y, Bartolo M, Moore A, Riedel S, Stenetorp P. Fantastically
+ordered prompts and where to find them: overcoming few-shot
+prompt order sensitivity. 2021. arXiv:210408786.
+35. Rubin O, Herzig J, Berant J. Learning to retrieve prompts for in-
+context learning. 2021. arXiv:211208633.
+36. Achiam J, Adler S, Agarwal S, Ahmad L, Akkaya I, Aleman FL, et
+al. Gpt-4 technical report. 2023. arXiv:230308774.
+37. OpenAI Platform. https://platform.openai.com/docs/models.
+Accessed 05 Dec 2023.
+38. Notus 7B v1. https://huggingface.co/argilla/notus-7b-v1. Accessed
+15 Oct 2023.
+39. Meditron-7B-v1.0. https://huggingface.co/epfl-llm/meditron-7b.
+Accessed 15 Oct 2023.
+40. Zephyr 7B β. https://huggingface.co/HuggingFaceH4/zephyr-7b-
+beta. Accessed 15 Oct 2023.
+41. Llama 2 13B. https://huggingface.co/meta-llama/Llama-2-13b-hf.
+Accessed 15 Oct 23.
+42. Llama-2-7B-32K-Instruct. https://huggingface.co/togethercomputer/
+Llama-2-7B-32K-Instruct. Accessed 15 Oct 2023.
+43. Sarker A, Belousov M, Friedrichs J, Hakala K, Kiritchenko S,
+Mehryary F, et al. Data and systems for medication-related text
+classification and concept normalization from Twitter: insights from
+the Social Media Mining for Health (SMM4H)-2017 shared task. J
+Am Med Inform Assoc. 2018;25(10):1274–83.
+Article  PubMed  PubMed Central  Google Scholar 
+44. New drug approvals archive for 2010–2021. https://
+www.drugs.com/newdrugs-archive/2021.html. Accessed 30 Sept
+2021
+45. Schulhoff S, Ilie M, Balepur N, Kahadze K, Liu A, Si C, et al. The
+prompt report: a systematic survey of prompting techniques.
+arXiv:240606608. 2024.
+46. Prompt engineering guide. https://www.promptingguide.ai/.
+Accessed 15 June 2024.
+47. Anadkat S. How to make your completions outputs consistent with
+the new seed parameter. https://cookbook.openai.com/examples/
+reproducible_outputs_with_the_seed_parameter. Accessed 01
+Mar 2024.
+48. Wolf EBaCFaNHaSHaNLaNRaOSaLTaT. Open LLM Leaderboard.
+2023. https://huggingface.co/spaces/HuggingFaceH4/
+open_llm_leaderboard. Accessed 05 Dec 2023.
+49. Rebedea T, Dinu R, Sreedhar MN, Parisien C, Cohen J. NeMo
+guardrails: a toolkit for controllable and safe LLM applications with
+programmable rails. In: Proceedings of the 2023 conference on
+empirical methods in natural language processing: system
+demonstrations; 2023; 2023. pp. 431–45.
+50. A guidance language for controlling large language models. https://
+github.com/guidance-ai/guidance. Accessed 01 Mar 2024.
+51. Dettmers T, Pagnoni A, Holtzman A, Zettlemoyer L. QLoRA:
+efficient finetuning of quantized llms. Adv Neural Inf Process Syst.
+2024;36.
+52. X—LLM: cutting edge & easy LLM finetuning. https://github.com/
+BobaZooba/xllm. Accessed 20 Dec 2023.
+53. Taori R, Gulrajani I, Zhang T, Dubois Y, Li X, Guestrin C, et al.
+Alpaca: a strong, replicable instruction-following model. Stanford
+Center Res Found Models. 2023;3(6):7.
+Google Scholar 
+54. Touvron H, Martin L, Stone K, Albert P, Almahairi A, Babaei Y, et
+al. Llama 2: open foundation and fine-tuned chat models. 2023.
+arXiv:230709288.
+55. Tunstall L, Beeching E, Lambert N, Rajani N, Rasul K, Belkada Y,
+et al. Zephyr: direct distillation of lm alignment. 2023.
+arXiv:231016944.
+56. Kaplan J, McCandlish S, Henighan T, Brown TB, Chess B, Child
+R, et al. Scaling laws for neural language models. 2020.
+arXiv:200108361.
+57. Kirstain Y, Lewis P, Riedel S, Levy O. A few more examples may
+be worth billions of parameters. 2021. arXiv:211004374.
+58. Jiang AQ, Sablayrolles A, Mensch A, Bamford C, Chaplot DS,
+Casas Ddl, et al. Mistral 7B. 2023. arXiv:231006825.
+59. Rafailov R, Sharma A, Mitchell E, Manning CD, Ermon S, Finn C.
+Direct preference optimization: your language model is secretly a
+reward model. Adv Neural Inf Process Syst. 2024;36.
+60. Zhou C, Liu P, Xu P, Iyer S, Sun J, Mao Y, et al. Lima: Less is
+more for alignment. Adv Neural Inf Process Syst. 2024;36.
+61. Kapoor S, Bommasani R, Klyman K, Longpre S, Ramaswami A,
+Cihon P, et al. On the societal impact of open foundation models.
+2024.
+Download references
+Acknowledgements
+We would like to thank, in alphabetic order, Philipp Kazzer, Katrin Manlik,
+Nikola Milosevic, John Pietsch, Theresa Schmitt, and Angelo Ziletti for
+constructive comments.
+Author information
+Authors and Affiliations
+1. Pharmaceuticals, Medical Affairs and Pharmacovigilance, Data
+Science and Insights, Bayer AG, Müllerstr. 178, 13353, Berlin,
+Germany
+Jürgen Dietrich & André Hollstein
+Authors
+1. Jürgen Dietrich
+View author publications
+Search author on:PubMed Google Scholar
+2. André Hollstein
+View author publications
+Search author on:PubMed Google Scholar
+Corresponding author
+Correspondence to Jürgen Dietrich.
+Ethics declarations
+Funding
+Not applicable.
+Conflict of interest
+Jürgen Dietrich holds shares in Bayer AG. Jürgen Dietrich is a full-time
+employee of Bayer AG. André Hollstein holds shares in Bayer AG. André
+Hollstein is a full-time employee of Bayer AG. Jürgen Dietrich and André
+Hollstein have no conflict of interest that are directly relevant to the
+content of this experiment. The views expressed in this paper are those
+of the authors and do not necessarily reflect the official policy or position
+of Bayer AG.
+Ethics approval
+Not applicable.
+Consent to participate
+Not applicable.
+Consent for publication
+Not applicable.
+Availability of data and material
+The dataset used is publicly available in publication [32] under
+Supplementary file 1, https://static-content.springer.com/esm/
+art%3A10.1007%2Fs40264-023-01322-3/
+MediaObjects/40264_2023_1322_MOESM1_ESM.xlsx
+Code availability
+The code used for this experiment is not provided, as a patent is
+pending.
+Authors’ contributions
+Jürgen Dietrich and André Hollstein were involved in the conception and
+design of the experiments and result interpretation. André Hollstein was
+responsible for code generation of guidance AI implementation and the
+execution of few-shot experiments, Jürgen Dietrich was responsible for
+the rest of the code generation tasks and the execution of cross-
+validation and LLM finetuning experiments. All authors contributed to the
+interpretation of the data analysis results and assisted with the concept
+and draft revisions of the manuscript. All authors reviewed and approved
+the final manuscript and accept full responsibility for its overall content.
+Rights and permissions
+Open Access This article is licensed under a Creative Commons
+Attribution-NonCommercial 4.0 International License, which permits any
+non-commercial use, sharing, adaptation, distribution and reproduction in
+any medium or format, as long as you give appropriate credit to the
+original author(s) and the source, provide a link to the Creative
+Commons licence, and indicate if changes were made. The images or
+other third party material in this article are included in the article's
+Creative Commons licence, unless indicated otherwise in a credit line to
+the material. If material is not included in the article's Creative Commons
+licence and your intended use is not permitted by statutory regulation or
+exceeds the permitted use, you will need to obtain permission directly
+from the copyright holder. To view a copy of this licence, visit http://
+creativecommons.org/licenses/by-nc/4.0/.
+Reprints and permissions
+About this article
+[image]
+Cite this article
+Dietrich, J., Hollstein, A. Performance and Reproducibility of Large
+Language Models in Named Entity Recognition: Considerations for the
+Use in Controlled Environments. Drug Saf 48, 287–303 (2025). https://
+doi.org/10.1007/s40264-024-01499-1
+Download citation
+•  Accepted: 11 November 2024
+•  Published: 11 December 2024
+•  Issue Date: March 2025
+•  DOI: https://doi.org/10.1007/s40264-024-01499-1
+Use our pre-submission checklist 
+Avoid common mistakes on your manuscript.
+Advertisement
+Search
+Search by keyword or author
+ Search
+Navigation
+•  Find a journal
+•  Publish with us
+•  Track your research
+Discover content
+•  Journals A-Z
+•  Books A-Z
+Publish with us
+•  Journal finder
+•  Publish your research
+•  Language editing
+•  Open access publishing
+Products and services
+•  Our products
+•  Librarians
+•  Societies
+•  Partners and advertisers
+Our brands
+•  Springer
+•  Nature Portfolio
+•  BMC
+•  Palgrave Macmillan
+•  Apress
+•  Discover
+•  Your privacy choices/Manage cookies
+•  Your US state privacy rights
+•  Accessibility statement
+•  Terms and conditions
+•  Privacy policy
+•  Help and support
+•  Legal notice
+•  Cancel contracts here
+34.106.106.208
+Not affiliated
+[image]
+© 2025 Springer Nature

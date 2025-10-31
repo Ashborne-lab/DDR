@@ -1,0 +1,3 @@
+T1	Drug 0 7	Aspirin
+T2	AdverseEffect 14 21	bleeding
+R1	Adverse T1 T2

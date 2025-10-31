@@ -1,0 +1,140 @@
+Skip to main content
+[image] [image]
+•  Home
+•  About
+•  FAQ
+•  My Account
+•   
+•   
+Home > Turkish Journal of Electrical Engineering and Computer
+Sciences > Vol. 28 (2020) > No. 2
+ 
+Turkish Journal of Electrical
+Engineering and Computer
+Sciences
+Chemical disease relation
+extraction task using genetic
+algorithm with two
+novelvoting methods for
+classifier subset selection
+Authors
+STANLEY CHIKA ONYE
+NAZİFE DİMİLİLER
+ARİF AKKELEŞ
+Abstract
+Biomedical relation extraction is an important preliminary step for
+knowledge discovery in the biomedical domain. This paper
+proposes a multiple classifier system (MCS) for the extraction of
+chemical-induced disease relations. A genetic algorithm (GA) is
+employed to select classifier ensembles from a pool of base
+classifiers. Moreover, the voting method used for combining the
+members of each of the ensembles is also selected during evolution
+in the GA framework. The performances of the MCSs are
+determined by the algorithms used for selecting the classifiers, the
+diversity among the selected classifiers, and the voting method used
+in the classifier combination. The base classifiers are represented in
+the form of chromosomes, where each chromosome contains all
+information on the ensemble it represents: the subset of classifiers
+voting and the voting method. The chromosomes are evolved using
+a variety of genetic selection, mating, and mutation techniques in
+order to find an optimal solution. The aim of the proposed system is
+to select the subset of classifiers with diverse abilities while
+maximizing the strengths of the best classifiers in the classifier
+ensemble for a given voting method. Two main contributions of this
+work are the evolution of the voting bit as part of the GA and the
+novel approach of using two different decision-making under
+uncertainty techniques as voting methods. Furthermore, two
+different selection algorithms and crossover operators are employed
+as ways of increasing variations during evolution. We validated our
+proposed method on nine different experimental settings and they
+produced good results comparable to the state-of-the-art systems,
+thereby justifying our approach.
+DOI
+10.3906/elk-1906-46
+Keywords
+Multiple classifier systems, genetic algorithm, chemical disease
+relation, relation extraction, text mining, classifier ensemble
+First Page
+1179
+Last Page
+1196
+Recommended Citation
+ONYE, S. C, DİMİLİLER, N, & AKKELEŞ, A (2020). Chemical disease
+relation extraction task using genetic algorithm with two
+novelvoting methods for classifier subset selection. Turkish Journal
+of Electrical Engineering and Computer Sciences 28 (2): 1179-1196.
+https://doi.org/10.3906/elk-1906-46
+Download
+DOWNLOADS
+Since January 27, 2022
+Included in
+Computer Engineering Commons, Computer Sciences Commons,
+Electrical and Computer Engineering Commons
+Share
+COinS
+ 
+ 
+ 
+•  Journal Home
+•  About This Journal
+•  Aims & Scope
+•  Open Access Statement
+•  Peer Review
+•  Editorial Board
+•  Information For Authors
+•  Abstracting and Indexing
+•  Publishing Policy & Ethics
+•  Special Issue Policy
+•  Contact
+•  Submit Article
+•  Manuscript Template (New!)
+•  Most Popular Papers
+•  Receive Email Notices or RSS
+Select an issue:
+All Issues Vol. 33, No. 4 Vol. 33, No. 3 Vol. 33, No. 2 Vol. 33, No. 1
+Vol. 32, No. 6 Vol. 32, No. 5 Vol. 32, No. 4 Vol. 32, No. 3 Vol. 32,
+No. 2 Vol. 32, No. 1 Vol. 31, No. 7 Vol. 31, No. SI-1 Vol. 31, No. 5
+Vol. 31, No. 4 Vol. 31, No. 3 Vol. 31, No. 2 Vol. 31, No. 1 Vol. 30,
+No. 7 Vol. 30, No. 6 Vol. 30, No. 5 Vol. 30, No. 4 Vol. 30, No. 3
+Vol. 30, No. SI-1 Vol. 30, No. 1 Vol. 29, No. SI-1 Vol. 29, No. 7 Vol.
+29, No. 5 Vol. 29, No. 4 Vol. 29, No. 3 Vol. 29, No. 2 Vol. 29, No. 1
+Vol. 28, No. 6 Vol. 28, No. 5 Vol. 28, No. 4 Vol. 28, No. 3 Vol. 28,
+No. 2 Vol. 28, No. 1 Vol. 27, No. 6 Vol. 27, No. 5 Vol. 27, No. 4
+Vol. 27, No. 3 Vol. 27, No. 2 Vol. 27, No. 1 Vol. 26, No. 6 Vol. 26,
+No. 5 Vol. 26, No. 4 Vol. 26, No. 3 Vol. 26, No. 2 Vol. 26, No. 1
+Vol. 25, No. 6 Vol. 25, No. 5 Vol. 25, No. 4 Vol. 25, No. 3 Vol. 25,
+No. 2 Vol. 25, No. 1 Vol. 24, No. 6 Vol. 24, No. 5 Vol. 24, No. 4
+Vol. 24, No. 3 Vol. 24, No. 2 Vol. 24, No. 1 Vol. 23, No. Sup. 1 Vol.
+23, No. 6 Vol. 23, No. 5 Vol. 23, No. 4 Vol. 23, No. 3 Vol. 23, No. 2
+Vol. 23, No. 1 Vol. 22, No. 6 Vol. 22, No. 5 Vol. 22, No. 4 Vol. 22,
+No. 3 Vol. 22, No. 2 Vol. 22, No. 1 Vol. 21, No. Sup. 2 Vol. 21, No.
+Sup. 1 Vol. 21, No. 6 Vol. 21, No. 5 Vol. 21, No. 4 Vol. 21, No. 3
+Vol. 21, No. 2 Vol. 21, No. 1 Vol. 20, No. Sup. 2 Vol. 20, No. Sup. 1
+Vol. 20, No. 6 Vol. 20, No. 5 Vol. 20, No. 4 Vol. 20, No. 3 Vol. 20,
+No. 2 Vol. 20, No. 1 Vol. 19, No. 6 Vol. 19, No. 5 Vol. 19, No. 4
+Vol. 19, No. 3 Vol. 19, No. 2 Vol. 19, No. 1 Vol. 18, No. 6 Vol. 18,
+No. 5 Vol. 18, No. 4 Vol. 18, No. 3 Vol. 18, No. 2 Vol. 18, No. 1
+Vol. 17, No. 3 Vol. 17, No. 2 Vol. 17, No. 1 Vol. 16, No. 3 Vol. 16,
+No. 2 Vol. 16, No. 1 Vol. 15, No. 3 Vol. 15, No. 2 Vol. 15, No. 1
+Vol. 14, No. 3 Vol. 14, No. 2 Vol. 14, No. 1 Vol. 13, No. 3 Vol. 13,
+No. 2 Vol. 13, No. 1 Vol. 12, No. 3 Vol. 12, No. 2 Vol. 12, No. 1
+Vol. 11, No. 3 Vol. 11, No. 2 Vol. 11, No. 1 Vol. 10, No. 3 Vol. 10,
+No. 2 Vol. 10, No. 1 Vol. 9, No. 2 Vol. 9, No. 1 Vol. 8, No. 2 Vol. 8,
+No. 1 Vol. 7, No. 1-3 Vol. 6, No. 3 Vol. 6, No. 2 Vol. 6, No. 1 Vol. 5,
+No. 3 Vol. 5, No. 2 Vol. 5, No. 1 Vol. 4, No. 1-2-3 Vol. 3, No. 2-3
+ 
+Issues by Year
+Search
+Enter search terms:
+in this journal in this repository across all repositories
+Advanced Search
+ISSN: 1300-0632
+eISSN: 1303-6203
+ 
+[image]
+[image] [image] [image]
+[image]
+ 
+Elsevier - Digital Commons
+Home | About | FAQ | My Account | Accessibility Statement
+Privacy Copyright

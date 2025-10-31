@@ -1,0 +1,1043 @@
+GLOBAL POINTER: NOVEL EFFICIENT SPAN-BASED APPROACH
+FOR NAMED ENTITY RECOGNITION
+Jianlin Su
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+bojonesu@wezhuiyi.com
+Ahmed Murtadha
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+mengjiayi@wezhuiyi.com
+Shengfeng Pan
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+nickpan@wezhuiyi.com
+Jing Hou
+School of Economics and Management,
+University of Chinese Academy of Sciences
+Beijing, China
+houjing21@mails.ucas.ac.cn
+Jun Sun
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+jainasun@wezhuiyi.com
+Wanwei Huang
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+huangwanwei@wezhuiyi.com
+Bo Wen
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+brucewen@wezhuiyi.com
+Yunfeng Liu
+Zhuiyi Technology Co., Ltd.
+Shenzhen, China
+glenliu@wezhuiyi.com
+August 8, 2022
+ABSTRACT
+Named entity recognition (NER) task aims at identifying entities from a piece of text that belong to
+predeﬁned semantic types such as person, location, organization, etc. The state-of-the-art solutions for
+ﬂat entities NER commonly suffer from capturing the ﬁne-grained semantic information in underlying
+texts. The existing span-based approaches overcome this limitation, but the computation time is still
+a concern. In this work, we propose a novel span-based NER framework, namely Global Pointer
+(GP), that leverages the relative positions through a multiplicative attention mechanism. The ultimate
+goal is to enable a global view that considers the beginning and the end positions to predict the
+entity. To this end, we design two modules to identify the head and the tail of a given entity to
+enable the inconsistency between the training and inference processes. Moreover, we introduce a
+novel classiﬁcation loss function to address the imbalance label problem. In terms of parameters,
+we introduce a simple but effective approximate method to reduce the training parameters. We
+extensively evaluate GP on various benchmark datasets. Our extensive experiments demonstrate that
+GP can outperform the existing solution. Moreover, the experimental results show the efﬁcacy of the
+introduced loss function compared to softmax and entropy alternatives.
+Keywords Named Entity Recognition , Relation Extraction, Natural Language Processing, Multi-label loss, Deep
+Neural Networks
+1
+introduction
+Named entity recognition (NER) task aims to recognize entities, also called mentions, from a piece of text that belong
+to predeﬁned semantic types such as person, location, organization, etc. NER is a key component in natural language
+processing (NLP) systems for information retrieval, automatic text summarization, question answering, machine
+translation, knowledge base construction, etc.Guo et al. [2009], Petkova and Croft [2007], Aone [1999], Mollá et al.
+[2006], Babych and Hartley [2003], Etzioni et al. [2005]. Note that NER has been introduced in two forms, including ﬂat
+arXiv:2208.03054v1  [cs.CL]  5 Aug 2022
+Global Pointer
+and nested entities. Flat NER has been widely addressed as a sequence labeling problem Lample et al. [2016a]. Nested
+entities have shown importance in various real-world applications due to their multi-granularity semantic meaning Alex
+et al. [2007], Yuan et al. [2020]. However, a given token may have multiple labels and thus renders applying sequence
+labeling-based approaches unattainable Finkel and Manning [2009].
+With the rapid development of deep neural network (DNN), NER task has experienced a shift towards the contextual
+representation learning. The earlier DNN-based approaches have treated NER as a sequence labeling problem Huang
+et al. [2015], Wang et al. [2020], Lample et al. [2016b]. They commonly attempt to address each token individually
+by capturing the type and position information. Despite the effectiveness of these approaches, they cannot perform
+span-based NER, also called nested NER, in which the entity consists of more than one token Finkel and Manning
+[2009]. DNN-based approaches for nested NER usually attempt to learn span-speciﬁc deep representation in order to
+classify the corresponding typeZheng et al. [2019], Wadden et al. [2019], Tan et al. [2020], Wang et al. [2020], Yu et al.
+[2020]. Recently, nested NER has experienced a shift towards pretrained language model. Several works show that
+the ﬁne-tuning approach for span representation and classiﬁcation can achieve satisfactory results Luan et al. [2019],
+Zhong and Chen [2020]. The authors of Yuan et al. [2021] introduced modeling heterogeneous factors (e.g., inside
+tokens) to enhance span representation learning.
+Despite the effectiveness of the aforementioned approaches for nested NER, the representation of a given span is simply
+the combination of its head and tail and thus ignores the boundary information. To carry out a segment classiﬁcation,
+the number of segments is set to the maximum length of span. Moreover, the low-quality spans, especially with long
+entities, dominate the corpus and thus requires high computational costs. To address the aforementioned limitations,
+there exist some approaches initiated the solution. The authors of Fu et al. proposed to take the span length information
+into account during the training process. Another work Shen et al. introduced to jointly address span classiﬁcation and
+boundary regression in a uniﬁed framework to alleviate boundary information issue. However, the implantation of these
+approaches is a bit complicated and may be bothersome in real-world scenarios.
+In this paper, we propose a novel solution, namely Global Pointer (GP), to address span-based NER task. Speciﬁcally,
+we leverage the relative positions through a multiplicative attention mechanism Su et al. [2021]. The ultimate goal
+is to enable a global view that considers the beginning and the end positions (i.e., the head and tail information) to
+predict the entity. To achieve this, we design two modules to identify the head and the tail of a given entity to enable
+the inconsistency between the training and inference processes. In addition, to alleviate the burden of class imbalance
+in NER, we extend the softmax and cross-entropy in a universal loss function. It is noteworthy that the number of
+parameters of the proposed solution increases when a new entity type is added. Note that the introduced loss can be
+applied to any task suffering from the label imbalance issue. To remedy this issue, we introduce another extension of
+GP, namely efﬁcient GP, based on an effective approximate method to reduce the number of parameters. We extensively
+evaluate GP on various benchmark datasets. Our extensive experiments demonstrate that GP can outperform the existing
+solution. Moreover, the experimental results show the efﬁcacy of the introduced loss function compared to softmax and
+entropy alternatives.
+In brief, the main contributions are three-fold:
+• We propose a novel solution, namely Global Pointer (GP), to address span-based NER task that leverages the
+relative positions through a multiplicative attention mechanism.
+• we extend the softmax and cross-entropy in a universal loss function to perform class imbalance scenarios,
+NER is an example. In addition, we propose an effective approximation method to reduce the training
+parameters when a new entity type is added.
+• We extensively evaluate the proposed solution on various benchmark datasets. Our extensive experiments
+demonstrate that the proposed solution can outperform the existing solutions. Moreover, the experimental
+results validate the efﬁcacy of the introduced loss function compared to softmax and entropy alternatives.
+The remaining of the paper is organized as follows. Section 2 reviews related work. Section 3 describes the propose
+solution. Section 4 presents the experimental settings and empirically evaluates the performance of the proposed
+solution. Finally, we conclude this paper with Section 5.
+2
+Related work
+NER has received extensive attention of researchers in the last decades. The earlier solutions include rule-based Kim
+and Woodland [2000], Sekine and Nobata [2004], Hanisch et al. [2005], Quimbaya et al. [2016], Unsupervised learning
+Etzioni et al. [2005], Zhang and Elhadad [2013], Feature-based supervised learning approaches Szarvas et al. [2006],
+Liu et al. [2011], Rocktäschel et al. [2012]. However, the performance of these approaches heavily relies on feature
+extraction and hand-crafted rules, which may be bothersome in real-world scenarios.
+2
+Global Pointer
+BERT
+Michael
+Jeffery
+Jordan
+was
+born
+in
+Brooklyn
+New
+York
+0
+0
+1
+1
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+Michael
+Jeffery
+Jordan
+was
+born
+in
+Brooklyn
+New
+York
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+1
+0
+0
+0
+0
+0
+0
+Michael
+Jeffery
+Jordan
+was
+born
+in
+Brooklyn
+New
+York
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+Michael
+Jeffery
+Jordan
+was
+born
+in
+Brooklyn
+New
+York
+Head-2: location
+Head-1: person
+Head-3: organization
+Class Imbalance 
+Loss
+𝑤1 
+𝑤2 
+𝑤3 
+𝑤4 
+𝑤5 
+𝑤6 
+𝑤7 
+𝑤8 
+𝑤9 
+Input
+Input 
+Representation
+Entity Type Prediction
+Figure 1: An example of our proposed Global Pointer.
+With the rapid development of deep neural networks, various approaches were introduced to address NER task as a
+classiﬁcation problem Zhang et al. [2015]. The key idea is to learn entity-speciﬁc representation to model the semantic
+relation between two entities. Convolutional neural networks Yao et al. [2015], Strubell et al. [2017], Zhai et al. [2017],
+recursive neural networks Li et al. [2017], Gridach [2017], Wang et al. [2018], Akbik et al. [2018], Liu et al. [2019a],
+Ghaddar and Langlais [2018] and long-short term memory based approaches Huang et al. [2015], Tran et al. [2017], Jie
+and Lu [2019]. The authors of Zheng et al. [2017], Zhou et al. [2017] introduced to jointly extract the entities and their
+relations in a uniﬁed framework.
+Recently, pre-trained language models (PLMs) have mostly achieved the state-of-the-art performance of various NLP
+tasks Devlin et al. [2018], Liu et al. [2019b], Yang et al. [2019]. Following this approach, NER has experienced a shift
+towards PLMs. An end-to-end model based on sequence-to-sequence learning with copy mechanism and the graph
+convolutional networks, which introduced to jointly extract relation and entity from sentences Zeng et al. [2018], Fu
+et al. [2019]. A reinforcement learning-based approach Zeng et al. [2019] was proposed to tackle the extraction order of
+relation extraction task. A cascade binary tagging-based framework Wei et al. [2020] was introduced to treat relations
+as functions mapping subjects to objects in a sentence to alleviate the overlapping problem in relation extraction.
+Table-Sequence Wang and Lu [2020] consists of two encoders, including a table encoder and a sequence encoder, that
+work together to learn the entity-speciﬁc representation. A partition ﬁlter network-based approach Yan et al. introduced
+to model two-way interaction between entity and relation extraction tasks. The authors of Yuan et al. [2021] introduced
+modeling relevant features by leveraging heterogeneous factors, e.g., inside tokens, boundaries, and related spans to
+enhance learn span representation, resulting in accurate classiﬁcation performance.
+3
+Approach
+In this section, we describe the proposed solution. We begin by deﬁning span-based NER task. Then, we present the
+technical details of our approach. Finally, we present the approximation method to reduce the number of parameters.
+3.1
+Problem deﬁnition
+Named Entity Recognition (NER) task aims to extract the entity segments and then correspondingly identify their types
+in the given text. Let S = [s1, s2, ...sm] be the possible spans in the sentence. The span s is represented as s[i : j]
+where i and j are the head and tail indexes, respectively. The goal of NER is to identify all s ∈E, where E is the entity
+type set.
+3.2
+Global Pointer
+The architecture of our proposed GP consists of two layers, including token representation span prediction. An
+illustrative example of GP is shown in Figure 1.
+3
+Global Pointer
+3.2.1
+Token Representation
+Given a sentence X = [x1, x2, ...xn] with n token, we begin by associating each token in X with its corresponding
+representation in the pre-training language model (PLM), e.g., BERT. We end up with a new matrix H ∈Rn×v, where
+v is dimension of representation:
+h1, h2, ...hn = PLM(x1, x2, ...xn).
+(1)
+3.2.2
+Span Prediction
+Now that we have already obtained the sentence representation H, we then compute the span representation. To this
+end, we use two feedforward layers that rely on the begin and end indices of the span.
+qi,α = Wq,αhi + bq,α,
+(2)
+ki,α = Wk,αhi + bk,α,
+(3)
+where qi,α ∈Rd, ki,α ∈Rd is the vector representation of the token which used to identify the entity of type α.
+Speciﬁcally, the representation of the start and end position is qi,α and ki,α for span s[i : j] of type α. Then, the score
+of the span s[i : j] to be an entity of type α is calculated as follows:
+sα(i, j) = q⊤
+i,αkj,α
+(4)
+To leverage the boundary information, we explicitly inject relative position information to the model. We apply ROPE
+position coding into the entity representation, which satisﬁes R⊤
+i Rj = Rj−i. In this way, our scoring function is
+calculated as follows:
+(5)
+sα(i, j) = (Riqi,α)⊤(Rjkj,α)
+= q⊤
+i,αR⊤
+i Rjkj,α
+= q⊤
+i,αRj−ikj,α
+3.3
+Parameter Reduction
+It is noteworthy to mention that when Wq,α, Wk,α ∈Rv×d, the parameters increase to 2vd for each new added entity
+type. Compared with the method of sequence labeling, the increase of parameters under the same conditions is about
+2v. Generally speaking, v >> d, in the bert-base model v is 768, while the common choice of d is 64.
+To alleviate this issue, we introduce an approximation technique to enable Global Pointer to perform under fewer
+parameters settings. In the next sections, we refer to it as Efﬁcient Global Pointer. The key idea is to capture the shared
+score calculation under each entity type. Speciﬁcally, we treat NER task as two subtasks, including extraction and
+classiﬁcation. The former extracts segments as entities, and the latter identiﬁes the type of each entity. In this way,
+the extraction step is equivalent to the NER task with only one entity type. We can complete it with a scoring matrix
+(Wqhi)⊤(Wkhj). The classiﬁcation step can be read as w⊤
+α [hi; hj], where wα ∈R2v denotes the identiﬁcation of the
+entity type α, and [hi; hj] is the span representation, which is the concatenation of the start and end representations .
+The new scoring function is the combination of :
+sα(i, j) = (Wqhi)⊤(Wkhj) + w⊤
+α [hi; hj].
+(6)
+Note that the extraction task’s parameters are shared by all entity types. Therefore, when a new entity type is added, the
+parameters of classiﬁcation task increase by 2v, which is less compared to the original number of parameters 2vd.
+To further reduce the parameters, we consider using [qi; ki] instead of hi to represent a token. Then, the ﬁnal scoring
+function becomes:
+sα(i, j) = q⊤
+i kj + w⊤
+α [qi; ki; qj; kj],
+(7)
+where wα ∈R4d, [qi; ki; qj; kj] is the span representation. Intuitively, the number of parameters increases for each new
+entity type is 4d, which is indeed less than And 4v.
+4
+Global Pointer
+3.4
+Class Imbalance Loss
+Inspired by the circle loss, we introduce a loss function to alleviate class imbalance. In single-class classiﬁcation, the
+cross-entropy loss function is:
+(8)
+log
+est
+nP
+i =1
+esi
+= −log
+1
+nP
+i=1
+esi−st
+= log
+n
+X
+i=1
+esi−st
+= log
+
+1 +
+n
+X
+i=1,i̸=t
+esi−st
+
+,
+where si is the non target score and st is the target score. Here, we consider the loss function in the scenario of
+multi-label classiﬁcation. The goal is to make the score of the target class not less than that of the non-target class.
+Therefore, the loss function is:
+log
+
+1 +
+X
+i∈Ωneg
+esi
+X
+j∈Ωpos
+e−sj
+
+
+(9)
+where Ωpos and Ωneg are positive sample set and negative sample set, respectively. Considering the multi-label scenario
+where the number of classes is not ﬁxed, we introduce an additional class TH as the threshold value. We expect that the
+scores of target classes are greater than sT H and those of non-target classes are less than sT H. Then, the loss function
+is calculated as:
+log
+
+1 +
+X
+i∈Ωneg,j∈Ωpos
+esi−sj +
+X
+i∈Ωneg
+esi−sT H +
+X
+j∈Ωpos
+esT H−sj
+
+
+(10)
+Equation 10 can be further simpliﬁed as follows:
+log
+
+esT H +
+X
+i∈Ωneg
+esi
+
++ log
+
+e−sT H +
+X
+j∈Ωpos
+e−sj
+
+
+(11)
+For sake of simplicity, we set the threshold to 0 and the ﬁnal loss function:
+log
+
+1 +
+X
+i∈Ωneg
+esi
+
++ log
+
+1 +
+X
+j∈Ωpos
+e−sj
+
+
+(12)
+Speciﬁcally, the entity type of α is represented by:
+log
+
+1 +
+X
+(q,k)∈Pα
+e−sα(q,k)
+
++ log
+
+1 +
+X
+(q,k)∈Qα
+esα(q,k)
+
+
+(13)
+where q, k represent the start and tail indexes of a span, Pα represents a collection of spans with entity type α, Qα
+represents a collection of spans that are not entities or whose entity type is not α, sα(q, k) is the score that a span
+s[q : k] is an entity of type α.
+In inference step, the segments that satisfy sα(q, k) > 0 are the output of the entity of type α.
+4
+Experiments and Evaluation
+4.1
+Experimental Setup
+Dataset. To validate the proposed solution, we conduct extensive experiments on various benchmark datasets. Speciﬁ-
+cally, we rely on three Chinese NER datasets, including The People’s daily, CLUENER Xu et al. [2020] and CMeEE
+5
+Global Pointer
+Dataset
+Train
+Test
+Sentence length
+Number of Entities
+The People’s daily
+23,182
+46,36
+46.93
+3
+CLUENER
+10,748
+1,343
+37.38
+10
+CMeEE
+15,000
+5,000
+54.15
+9
+CONLL04
+4,270
+1,079
+28.77
+4
+Genia
+16,692
+1,854
+25.35
+5
+NYT
+56,195
+5,000
+128
+-
+WebNLG
+5,019
+703
+128
+-
+ADE
+4,272 (10-fold)
+128
+2
+Table 1: Statistics of datasets.
+Method
+The People’s daily
+CLUENER
+CMeEE
+CONLL04
+Genia
+Bert-CRF
+95.46
+78.70
+64.39
+85.46
+73.02
+PFN Yan et al.
+94.00
+79.29
+63.68
+87.43
+74.31
+Global Pointer
+95.51
+79.44
+65.98
+88.57
+74.64
+Table 2: Comparative evaluation on various benchmark dataset for ﬂat and nested NER. The results represent the Macro-
+F1 scores averaged of ﬁve runs with different randomization. The Note that all the results are our implementations and
+best scores are highlighted in bold.
+Hongying et al. [2020], which has been widely used in the literature. Moreover, we also experiment with various English
+datasets, including CONLL04 Roth and Yih [2004], Genia Ohta et al. [2002], NYT Riedel et al. [2010], WebNLG Zeng
+et al. [2018] and ADE Gurulingappa et al. [2012]. Note that CMeEE and Genia were designed for nested NER task,
+while the others are ﬂat task. Table 4 shows the statistics of the datasets.
+Evaluation Metrics. We use strict evaluation metrics that if the entity type and the corresponding entity boundary are
+correct, the entity is correct. We use F1-score to evaluate the performance of our model.
+Parameter Settings. We use 12 heads and layers and keep the dropout probability at 0.1 with 30 epochs. The initial
+learning rate is 2e −5 for all layers with a batch size of 32 Note that we used the bert-base model Devlin et al. [2018]
+to initialize the weights of our GP with Adam optimizer.
+Comparative Baselines. We validate the performance of our Global Pointer by comparing it with its alternatives:
+• Bert-CRF. A baseline for entity extraction task that incorporates pre-trained language model BERT Devlin
+et al. [2018] and the additional Conditional Random Field (CRF) layer Lafferty et al. [2001].
+• CopyRE Zeng et al. [2018]. An end-to-end model based on sequence-to-sequence learning with copy
+mechanism, which introduced to jointly extract relation and entity from sentences.
+• GraphRel Fu et al. [2019]. An end-to-end relation extraction model built upon the graph convolutional
+networks to jointly learn named entities and their corresponding relations.
+• CasRel Wei et al. [2020]. A cascade binary tagging-based framework introduced to treat relations as functions
+mapping subjects to objects in a sentence to alleviate the overlapping problem in relation extraction.
+• PFN Yan et al.. A partition ﬁlter network-based approach introduced to model two-way interaction between
+entity and relation extraction tasks.
+Moreover, we also compare to the baselines that achieve competitive performance, including Multi-head Bekoulis et al.
+[2018a], Multi-head + AT Bekoulis et al. [2018b], Rel-Metric Tran and Kavuluru [2019], SpERT Eberts and Ulges
+[2019].
+4.2
+Main results
+We use the Dev set to select the best model and report the average of ﬁve runs on each dataset as shown in Table
+2 from which we have made the following observations: (1) our proposed solution gives the best Macro-F1 scores
+compared to the baselines across all datasets; (2) our Global Pointer can signiﬁcantly outperform BERT-CRF with
+more challenging datasets. For example, Global Pointer can achieve even about 0.74 and 1.59 with CLUENER
+CMeEE datasets, respectively, over BERT-CRF. Due to the widely recognized challenge of these datasets, the achieved
+improvements can be deemed very considerable. Moreover, the experimental results in Table 3 have shown that our
+proposed solution can achieve a competitive performance compared to the state-of-the-art baselines with less training
+and inference costs.
+6
+Global Pointer
+Method
+F1 score
+NYT △
+CopyRE Zeng et al. [2018]
+86.2
+GraphRel Fu et al. [2019]
+89.2
+CasRel Wei et al. [2020] †
+93.5
+PFN Yan et al.†
+95.8
+Global Pointer †
+95.6
+WebNLG △
+CopyRE Zeng et al. [2018]
+82.1
+GraphRel Fu et al. [2019]
+91.9
+CasRel Wei et al. [2020]†
+95.5
+PFN Yan et al.†
+98.0
+Global Pointer †
+98.0
+ADE ▲
+Multi-head Bekoulis et al. [2018a]
+86.4
+Multi-head + AT Bekoulis et al. [2018b]
+86.7
+Rel-Metric (Tran and Kavuluru, 2019)
+87.1
+SpERT Eberts and Ulges [2019]†
+89.3
+PFN Yan et al.†
+89.6
+Global Pointer †
+90.1
+Table 3: Comparative evaluation, †,‡ and § denotes the use of BERT, ALBERT and SCIBERT Devlin et al. [2018], Lan
+et al. [2019], Beltagy et al. [2019] pre-trained embedding. △and ▲denotes the use of micro-F1 and macro-F1 score.
+Dataset
+Training Speed
+Inference Speed
+BERT-CRF
+Global Pointer
+BERT-CRF
+Global Pointer
+The People’s daily
+1x
+1.56x
+1x
+1.11x
+CLUENER
+1x
+1.22x
+1x
+1x
+CMeEE
+1x
+1.52x
+1x
+1.13x
+Table 4: Comparative evaluation in terms of computational cost between the proposed Global Pointer and BERT-CRF
+Furthermore, we compared Global Pointer to its alternative Bert-CRF in terms of computational costs of both training
+and inference steps. The comparative results are reported in Table 4. As can be seen, our Global Pointer is faster than
+CRF, especially, with large datasets, such as the People’s daily and CMeEE.
+4.3
+Relative Position & Class Imbalance loss Evaluation
+To illustrate the affect of encoding the relative position information, we conduct an ablation study on the CONLL04
+dataset as follows. We drop Non-ROPE encoding component of our Global Pointer and compare the performance as
+shown in Table 7. As can be seen, the Macro-F1 scores drop even about 11.43%, and thus suggests that a well-designed
+mechanism that leverages the relative position information can boost the performance on NER task. Moreover, we
+validate the efﬁcacy of the proposed class imbalance loss function as follows. We replace the proposed loss function
+with the binary cross-entropy (BCE). We observe that the performance of Global Pointer with BCE drops in terms of
+precision and F1 scores and thus demonstrates the effectiveness of our proposed loss function.
+Dataset
+Global Pointer
+Efﬁcient Global Pointer
+The People’s daily
+95.51
+95.36
+CLUENER
+79.44
+80.04
+CMeEE
+65.98
+66.54
+Table 5: Comparison of the Efﬁcient Global Pointer with the original Global Pointer in F1 score. Best scores are
+highlighted in bold.
+7
+Global Pointer
+Category
+Number of sentences
+Global Pointer
+PFN
+P
+R
+F1
+P
+R
+F1
+L-1
+120
+94.24
+90.82
+92.50
+91.30
+91.30
+91.30
+L-2
+161
+86.42
+85.87
+86.15
+85.04
+85.71
+85.38
+L-3
+7
+82.05
+91.43
+86.49
+72.09
+88.57
+79.49
+D-1
+10
+100.0
+90.0
+94.74
+100.0
+90.0
+94.74
+D-2
+172
+87.23
+87.23
+87.23
+84.07
+87.69
+85.84
+D-3
+120
+94.24
+90.82
+92.50
+91.30
+91.30
+91.30
+Table 6: Comparative evaluation of Global Pointer and PFN in terms of entity length and entity density. Best scores are
+highlighted in bold.
+Ablations
+Precision
+Recall
+F1
+Non ROPE
+77.14
+77.14
+77.14
+BCE loss
+88.72
+88.22
+88.48
+Global Pointer
+89.19
+87.95
+88.57
+Table 7: The comparative evaluation of relative position information and class imbalance loss on CONLL04 dataset.
+4.4
+Reduce Parameters Evaluation
+In Section 3.3, we introduce a new variant of the proposed solution, namely Efﬁcient Global Pointer, which can perform
+under less parameters settings. We conduct empirical experiments on the people’s daily, CLUENER and CMeEE
+datasets to evaluate the performance of both variants. The comparative results are shown in Table 5 from which we
+have made the following observations. (1) Overall, Efﬁcient Global Pointer can mostly give the best F1 scores. (2)
+Despite the limited number of parameters, Efﬁcient Global Pointer can still be competitive on the easy dataset, e.g.,
+People’s daily dataset. (3) CLUENER and CMeEE were annotated with 10 and 9 entity types, respectively, which are
+widely recognized as more challenging datasets; however, Efﬁcient Global Pointer with less parameters can still perform
+better than its alternative with all parameters. The performance is expected as the number of parameters increases with
+each entity type leading to an overﬁting problem. In brief, the experimental results suggest that a carefully-designed
+mechanism to reduce the number of parameters can enhance the performance of NER.
+4.5
+Empirical Analysis
+In the section, we perform in-depth analysis in terms of entity length and entity density. Speciﬁcally, we conducted
+relevant experiments on CONLL04 dataset to evaluate the performance of Global Pointer and PFN Yan et al.. First, we
+map the sentences into three groups according to their length: L < 3, 3 =< L < 6, and L >= 6, denoted as L1, L2
+and L3, respectively. Second, we categorized the sentences according to their density: dense<=0.1, 0.1 < dense < = 0.3,
+dense > 0.3, denoted as D1, D2 and D3. Note that we use the ratio of the number of entity words to the total number of
+text words as the index of entity density.
+The comparative evaluation is depicted in Table 6. We observe that when the entity length exceeds the half (e.g., 6),
+Global Pointer can achieve even about 7% improvements higher than PFN in terms of F1 score. These improvements
+demonstrate the importance of relative position information in the large number of entities recognition. In addition,
+we also observe that when the density of entities in the text is at the middle level, both models give the worse scores.
+However, as can be seen, Global Pointer performs better in most scenarios.
+5
+Conclusions
+In this paper, we presented a novel solution to address span-based NER framework, namely Global Pointer (GP), by
+leveraging the relative positions through a multiplicative attention mechanism. GP is designed of two modules that
+aim to identify the head and the tail of a given entity to enable the inconsistency between the training and inference
+processes. Moreover, GP contributed with a novel loss function to address the imbalance label problem. To reduce
+the training cost, we introduced a new variant of GP based on approximate method to reduce the training parameters.
+We extensively evaluated GP on various benchmark datasets. Our extensive experiments demonstrate that GP can
+outperform the existing solution. Moreover, the experimental results show the efﬁcacy of the introduced loss function
+compared to softmax and entropy alternatives.
+8
+Global Pointer
+References
+Jiafeng Guo, Gu Xu, Xueqi Cheng, and Hang Li. Named entity recognition in query. In Proceedings of the 32nd
+international ACM SIGIR conference on Research and development in information retrieval, pages 267–274, 2009.
+Desislava Petkova and W Bruce Croft. Proximity-based document representation for named entity retrieval. In
+Proceedings of the sixteenth ACM conference on Conference on information and knowledge management, pages
+731–740, 2007.
+Chinatsu Aone. A trainable summarizer with knowledge acquired from robust nlp techniques. Advances in automatic
+text summarization, pages 71–80, 1999.
+Diego Mollá, Menno Van Zaanen, and Daniel Smith. Named entity recognition for question answering. In Proceedings
+of the Australasian language technology workshop 2006, pages 51–58, 2006.
+Bogdan Babych and Anthony Hartley. Improving machine translation quality with automatic named entity recognition.
+In Proceedings of the 7th International EAMT workshop on MT and other language technology tools, Improving MT
+through other language technology tools, Resource and tools for building MT at EACL 2003, 2003.
+Oren Etzioni, Michael Cafarella, Doug Downey, Ana-Maria Popescu, Tal Shaked, Stephen Soderland, Daniel S Weld,
+and Alexander Yates. Unsupervised named-entity extraction from the web: An experimental study. Artiﬁcial
+intelligence, 165(1):91–134, 2005.
+Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami, and Chris Dyer. Neural architectures
+for named entity recognition. In Proceedings of the 2016 Conference of the North American Chapter of the Association
+for Computational Linguistics: Human Language Technologies, pages 260–270, San Diego, California, June 2016a.
+Association for Computational Linguistics. doi:10.18653/v1/N16-1030. URL https://aclanthology.org/
+N16-1030.
+Beatrice Alex, Barry Haddow, and Claire Grover. Recognising nested named entities in biomedical text. In Biological,
+translational, and clinical language processing, pages 65–72, 2007.
+Zheng Yuan, Yuanhao Liu, Qiuyang Yin, Boyao Li, Xiaobin Feng, Guoming Zhang, and Sheng Yu. Unsupervised
+multi-granular chinese word segmentation and term discovery via graph partition. Journal of Biomedical Informatics,
+110:103542, 2020.
+Jenny Rose Finkel and Christopher D Manning. Nested named entity recognition. In Proceedings of the 2009 conference
+on empirical methods in natural language processing, pages 141–150, 2009.
+Zhiheng Huang, Wei Xu, and Kai Yu.
+Bidirectional lstm-crf models for sequence tagging.
+arXiv preprint
+arXiv:1508.01991, 2015.
+Jue Wang, Lidan Shou, Ke Chen, and Gang Chen. Pyramid: A layered model for nested named entity recognition.
+In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 5918–5928,
+Online, jul 2020. Association for Computational Linguistics. doi:10.18653/v1/2020.acl-main.525. URL https:
+//aclanthology.org/2020.acl-main.525.
+Guillaume Lample, Miguel Ballesteros, Sandeep Subramanian, Kazuya Kawakami, and Chris Dyer. Neural architectures
+for named entity recognition. In Proceedings of the 2016 Conference of the North American Chapter of the Association
+for Computational Linguistics: Human Language Technologies, pages 260–270, San Diego, California, June 2016b.
+Association for Computational Linguistics. doi:10.18653/v1/N16-1030. URL https://aclanthology.org/
+N16-1030.
+Changmeng Zheng, Yi Cai, Jingyun Xu, HF Leung, and Guandong Xu. A boundary-aware neural model for nested
+named entity recognition. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Pro-
+cessing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP). Association
+for Computational Linguistics, 2019.
+David Wadden, Ulme Wennberg, Yi Luan, and Hannaneh Hajishirzi. Entity, relation, and event extraction with
+contextualized span representations. In Proceedings of the 2019 Conference on Empirical Methods in Natural
+Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-
+IJCNLP), pages 5784–5789, Hong Kong, China, November 2019. Association for Computational Linguistics.
+doi:10.18653/v1/D19-1585. URL https://aclanthology.org/D19-1585.
+Chuanqi Tan, Wei Qiu, Mosha Chen, Rui Wang, and Fei Huang. Boundary enhanced neural span classiﬁcation for
+nested named entity recognition. In Proceedings of the AAAI Conference on Artiﬁcial Intelligence, volume 34, pages
+9016–9023, 2020.
+Juntao Yu, Bernd Bohnet, and Massimo Poesio. Named entity recognition as dependency parsing. In Proceedings of
+the 58th Annual Meeting of the Association for Computational Linguistics, pages 6470–6476, Online, July 2020.
+9
+Global Pointer
+Association for Computational Linguistics. doi:10.18653/v1/2020.acl-main.577. URL https://aclanthology.
+org/2020.acl-main.577.
+Yi Luan, Dave Wadden, Luheng He, Amy Shah, Mari Ostendorf, and Hannaneh Hajishirzi. A general framework for
+information extraction using dynamic span graphs. In Proceedings of the 2019 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and
+Short Papers), pages 3036–3046, Minneapolis, Minnesota, June 2019. Association for Computational Linguistics.
+doi:10.18653/v1/N19-1308. URL https://aclanthology.org/N19-1308.
+Zexuan Zhong and Danqi Chen. A frustratingly easy approach for entity and relation extraction. arXiv preprint
+arXiv:2010.12812, 2020.
+Zheng Yuan, Chuanqi Tan, Songfang Huang, and Fei Huang. Fusing heterogeneous factors with triafﬁne mechanism
+for nested named entity recognition. arXiv preprint arXiv:2110.07480, 2021.
+Jinlan Fu, Xuanjing Huang, and Pengfei Liu.
+SpanNER: Named entity re-/recognition as span prediction.
+In
+Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International
+Joint Conference on Natural Language Processing (Volume 1: Long Papers), pages 7183–7195, Online. Association
+for Computational Linguistics.
+Yongliang Shen, Xinyin Ma, Zeqi Tan, Shuai Zhang, Wen Wang, and Weiming Lu. Locate and label: A two-stage
+identiﬁer for nested named entity recognition. In Proceedings of the 59th Annual Meeting of the Association for
+Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1:
+Long Papers), pages 2782–2794, Online. Association for Computational Linguistics.
+Jianlin Su, Yu Lu, Shengfeng Pan, Bo Wen, and Yunfeng Liu. Roformer: Enhanced transformer with rotary position
+embedding. arXiv preprint arXiv:2104.09864, 2021.
+Ji-Hwan Kim and Philip C Woodland. A rule-based named entity recognition system for speech input. In Sixth
+International Conference on Spoken Language Processing, 2000.
+Satoshi Sekine and Chikashi Nobata. Deﬁnition, dictionaries and tagger for extended named entity hierarchy. In LREC,
+pages 1977–1980. Lisbon, Portugal, 2004.
+Daniel Hanisch, Katrin Fundel, Heinz-Theodor Mevissen, Ralf Zimmer, and Juliane Fluck. Prominer: rule-based
+protein and gene entity recognition. BMC bioinformatics, 6(1):1–9, 2005.
+Alexandra Pomares Quimbaya, Alejandro Sierra Múnera, Rafael Andrés González Rivera, Julián Camilo Daza
+Rodríguez, Oscar Mauricio Muñoz Velandia, Angel Alberto Garcia Peña, and Cyril Labbé. Named entity recognition
+over electronic health records through a combined dictionary-based approach. Procedia Computer Science, 100:
+55–61, 2016.
+Shaodian Zhang and Noémie Elhadad. Unsupervised biomedical named entity recognition: Experiments with clinical
+and biological texts. Journal of biomedical informatics, 46(6):1088–1098, 2013.
+György Szarvas, Richárd Farkas, and András Kocsor. A multilingual named entity recognition system using boosting
+and c4. 5 decision tree learning algorithms. In International Conference on Discovery Science, pages 267–278.
+Springer, 2006.
+Xiaohua Liu, Shaodian Zhang, Furu Wei, and Ming Zhou. Recognizing named entities in tweets. In Proceedings of the
+49th annual meeting of the association for computational linguistics: human language technologies, pages 359–367,
+2011.
+Tim Rocktäschel, Michael Weidlich, and Ulf Leser. Chemspot: a hybrid system for chemical named entity recognition.
+Bioinformatics, 28(12):1633–1640, 2012.
+Shiliang Zhang, Hui Jiang, Mingbin Xu, Junfeng Hou, and Li-Rong Dai. The ﬁxed-size ordinally-forgetting encoding
+method for neural network language models. In Proceedings of the 53rd Annual Meeting of the Association for
+Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 2:
+Short Papers), pages 495–500, 2015.
+Lin Yao, Hong Liu, Yi Liu, Xinxin Li, and Muhammad Waqas Anwar. Biomedical named entity recognition based on
+deep neutral network. Int. J. Hybrid Inf. Technol, 8(8):279–288, 2015.
+Emma Strubell, Patrick Verga, David Belanger, and Andrew McCallum. Fast and accurate entity recognition with
+iterated dilated convolutions. arXiv preprint arXiv:1702.02098, 2017.
+Feifei Zhai, Saloni Potdar, Bing Xiang, and Bowen Zhou. Neural models for sequence chunking. In Proceedings of the
+AAAI Conference on Artiﬁcial Intelligence, volume 31, 2017.
+10
+Global Pointer
+Peng-Hsuan Li, Ruo-Ping Dong, Yu-Siang Wang, Ju-Chieh Chou, and Wei-Yun Ma. Leveraging linguistic structures
+for named entity recognition with bidirectional recursive neural networks. In Proceedings of the 2017 Conference on
+Empirical Methods in Natural Language Processing, pages 2664–2669, 2017.
+Mourad Gridach. Character-level neural network for biomedical named entity recognition. Journal of biomedical
+informatics, 70:85–91, 2017.
+Changhan Wang, Kyunghyun Cho, and Douwe Kiela. Code-switched named entity recognition with embedding
+attention. In Proceedings of the Third Workshop on Computational Approaches to Linguistic Code-Switching, pages
+154–158, 2018.
+Alan Akbik, Duncan Blythe, and Roland Vollgraf. Contextual string embeddings for sequence labeling. In Proceedings
+of the 27th international conference on computational linguistics, pages 1638–1649, 2018.
+Tianyu Liu, Jin-Ge Yao, and Chin-Yew Lin. Towards improving neural named entity recognition with gazetteers. In
+Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 5301–5307, 2019a.
+Abbas Ghaddar and Philippe Langlais. Robust lexical features for improved neural network named-entity recognition.
+arXiv preprint arXiv:1806.03489, 2018.
+Quan Tran, Andrew MacKinlay, and Antonio Jimeno Yepes. Named entity recognition with stack residual lstm and
+trainable bias decoding. arXiv preprint arXiv:1706.07598, 2017.
+Zhanming Jie and Wei Lu. Dependency-guided lstm-crf for named entity recognition. arXiv preprint arXiv:1909.10148,
+2019.
+Suncong Zheng, Feng Wang, Hongyun Bao, Yuexing Hao, Peng Zhou, and Bo Xu. Joint extraction of entities and
+relations based on a novel tagging scheme. arXiv preprint arXiv:1706.05075, 2017.
+Peng Zhou, Suncong Zheng, Jiaming Xu, Zhenyu Qi, Hongyun Bao, and Bo Xu. Joint extraction of multiple relations
+and entities by using a hybrid neural network. In Chinese Computational Linguistics and Natural Language
+Processing Based on Naturally Annotated Big Data, pages 135–146. Springer, 2017.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional
+transformers for language understanding. arXiv preprint arXiv:1810.04805, 2018.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke Zettlemoyer,
+and Veselin Stoyanov. Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692,
+2019b.
+Zhilin Yang, Zihang Dai, Yiming Yang, Jaime Carbonell, Russ R Salakhutdinov, and Quoc V Le. Xlnet: Generalized
+autoregressive pretraining for language understanding. Advances in neural information processing systems, 32, 2019.
+Xiangrong Zeng, Daojian Zeng, Shizhu He, Kang Liu, and Jun Zhao. Extracting relational facts by an end-to-end neural
+model with copy mechanism. In Proceedings of the 56th Annual Meeting of the Association for Computational
+Linguistics (Volume 1: Long Papers), pages 506–514, 2018.
+Tsu-Jui Fu, Peng-Hsuan Li, and Wei-Yun Ma. GraphRel: Modeling text as relational graphs for joint entity and relation
+extraction. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages
+1409–1418, Florence, Italy, July 2019. Association for Computational Linguistics. doi:10.18653/v1/P19-1136. URL
+https://aclanthology.org/P19-1136.
+Xiangrong Zeng, Shizhu He, Daojian Zeng, Kang Liu, Shengping Liu, and Jun Zhao. Learning the extraction order
+of multiple relational facts in a sentence with reinforcement learning. In Proceedings of the 2019 Conference on
+Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language
+Processing (EMNLP-IJCNLP), pages 367–377, Hong Kong, China, November 2019. Association for Computational
+Linguistics. doi:10.18653/v1/D19-1035. URL https://aclanthology.org/D19-1035.
+Zhepei Wei, Jianlin Su, Yue Wang, Yuan Tian, and Yi Chang. A novel cascade binary tagging framework for relational
+triple extraction. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages
+1476–1488, Online, July 2020. Association for Computational Linguistics. doi:10.18653/v1/2020.acl-main.136.
+URL https://aclanthology.org/2020.acl-main.136.
+Jue Wang and Wei Lu. Two are better than one: Joint entity and relation extraction with table-sequence encoders. arXiv
+preprint arXiv:2010.03851, 2020.
+Zhiheng Yan, Chong Zhang, Jinlan Fu, Qi Zhang, and Zhongyu Wei. A partition ﬁlter network for joint entity and
+relation extraction. pages 185–197, Online and Punta Cana, Dominican Republic.
+Liang Xu, Qianqian Dong, Yixuan Liao, Cong Yu, Yin Tian, Weitang Liu, Lu Li, Caiquan Liu, Xuanwei Zhang,
+et al. Cluener2020: ﬁne-grained named entity recognition dataset and benchmark for chinese. arXiv preprint
+arXiv:2001.04351, 2020.
+11
+Global Pointer
+Zan Hongying, Li Wenxin, Zhang Kunli, Ye Yajuan, Chang Baobao, and Sui Zhifang. Building a pediatric medical
+corpus: Word segmentation and named entity annotation. In Workshop on Chinese Lexical Semantics, pages 652–664.
+Springer, 2020.
+Dan Roth and Wen-tau Yih. A linear programming formulation for global inference in natural language tasks. Technical
+report, Illinois Univ at Urbana-Champaign Dept of Computer Science, 2004.
+Tomoko Ohta, Yuka Tateisi, Jin-Dong Kim, Hideki Mima, and Junichi Tsujii. The genia corpus: An annotated research
+abstract corpus in molecular biology domain. In Proceedings of the human language technology conference, pages
+73–77. Citeseer, 2002.
+Sebastian Riedel, Limin Yao, and Andrew McCallum. Modeling relations and their mentions without labeled text. In
+Joint European Conference on Machine Learning and Knowledge Discovery in Databases, pages 148–163. Springer,
+2010.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin Hofmann-Apitius, and Luca Toldo.
+Development of a benchmark corpus to support the automatic extraction of drug-related adverse effects from medical
+case reports. Journal of biomedical informatics, 45(5):885–892, 2012.
+John Lafferty, Andrew McCallum, and Fernando CN Pereira. Conditional random ﬁelds: Probabilistic models for
+segmenting and labeling sequence data. 2001.
+Giannis Bekoulis, Johannes Deleu, Thomas Demeester, and Chris Develder. Adversarial training for multi-context
+joint entity and relation extraction. In Proceedings of the 2018 Conference on Empirical Methods in Natural Lan-
+guage Processing, pages 2830–2836, Brussels, Belgium, October-November 2018a. Association for Computational
+Linguistics. doi:10.18653/v1/D18-1307. URL https://aclanthology.org/D18-1307.
+Giannis Bekoulis, Johannes Deleu, Thomas Demeester, and Chris Develder. Joint entity recognition and relation
+extraction as a multi-head selection problem. Expert Systems with Applications, 114:34–45, 2018b.
+Tung Tran and Ramakanth Kavuluru. Neural metric learning for fast end-to-end relation extraction. arXiv preprint
+arXiv:1905.07458, 2019.
+Markus Eberts and Adrian Ulges. Span-based joint entity and relation extraction with transformer pre-training. arXiv
+preprint arXiv:1909.07755, 2019.
+Zhenzhong Lan, Mingda Chen, Sebastian Goodman, Kevin Gimpel, Piyush Sharma, and Radu Soricut. Albert: A lite
+bert for self-supervised learning of language representations. arXiv preprint arXiv:1909.11942, 2019.
+Iz Beltagy, Kyle Lo, and Arman Cohan. SciBERT: A pretrained language model for scientiﬁc text. In Proceedings
+of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint
+Conference on Natural Language Processing (EMNLP-IJCNLP), pages 3615–3620, Hong Kong, China, November
+2019. Association for Computational Linguistics. doi:10.18653/v1/D19-1371. URL https://aclanthology.
+org/D19-1371.
+12

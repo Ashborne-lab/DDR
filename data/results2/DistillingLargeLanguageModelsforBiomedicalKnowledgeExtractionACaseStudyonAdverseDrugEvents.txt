@@ -1,0 +1,711 @@
+work in progress 1–15, 2023
+Distilling Large Language Models for Biomedical Knowledge
+Extraction: A Case Study on Adverse Drug Events
+Yu Gu, Sheng Zhang, Naoto Usuyama, Yonas Woldesenbet, Cliff Wong, Pra-
+neeth Sanapathi, Mu Wei, Naveen Valluri, Erika Strandberg, Tristan Naumann,
+Hoifung Poon
+Microsoft Research
+Abstract
+Large language models (LLMs), such as GPT-4, have demonstrated remarkable capabilities
+across a wide range of tasks, including health applications. In this paper, we study how
+LLMs can be used to scale biomedical knowledge curation. We find that while LLMs al-
+ready possess decent competency in structuring biomedical text, by distillation into a task-
+specific student model through self-supervised learning, substantial gains can be attained
+over out-of-box LLMs, with additional advantages such as cost, efficiency, and white-box
+model access. We conduct a case study on adverse drug event (ADE) extraction, which is
+an important area for improving care. On standard ADE extraction evaluation, a GPT-3.5
+distilled PubMedBERT model attained comparable accuracy as supervised state-of-the-
+art models without using any labeled data. Despite being over 1,000 times smaller, the
+distilled model outperformed its teacher GPT-3.5 by over 6 absolute points in F1 and
+GPT-4 by over 5 absolute points. Ablation studies on distillation model choice (e.g., Pub-
+MedBERT vs BioGPT) and ADE extraction architecture shed light on best practice for
+biomedical knowledge extraction. Similar gains were attained by distillation for other stan-
+dard biomedical knowledge extraction tasks such as gene-disease associations and protected
+health information, further illustrating the promise of this approach.
+1. Introduction
+Adverse drug events (ADEs) pose a significant public health challenge because they repre-
+sent injuries resulting from medical interventions related to drug use, including medication
+errors, adverse drug reactions, allergic reactions, and overdoses (Donaldson et al., 2000). In
+the United States, ADEs are prevalent and are considered to be among the leading causes of
+increased mortality, extended hospital stays, and elevated healthcare costs (Classen et al.,
+1997). Curating ADEs from biomedical text is thus essential to ensuring and improving
+patient safety, but remains expensive and time consuming because it is predominantly done
+manually. (Chen et al., 2020).
+Automated systems for evidence-based pharmacovigilance can help address the chal-
+lenges of manual ADE identification, particularly for pharmaceutical and healthcare com-
+panies (Gurulingappa et al., 2012). However, constructing a gold standard corpus for ADE
+identification remains challenging due to the need for multiple specialized annotators with
+extensive biomedical backgrounds.
+Large language models (LLMs), such as GPT-4, have demonstrated impressive zero-
+shot and few-shot capabilities in both general domains (OpenAI, 2023; Bubeck et al., 2023)
+© 2023 Y. Gu et al.
+arXiv:2307.06439v1  [cs.CL]  12 Jul 2023
+Distilling LLMs for Biomedical Knowledge Extraction
+and health applications (Lee et al., 2023).
+In this paper, we study how LLMs can be
+leveraged to scale biomedical knowledge extraction, using ADEs curation as a case study.
+Our study revealed that state-of-the-art LLMs, such as GPT-3.5 or GPT-4, already perform
+competitively in ADE extraction in zero-shot or few-shot settings, but still trail state-of-
+the-art supervised systems by a large margin. Interestingly, by leveraging LLMs as a noisy
+teacher to annotate large unlabeled data, we can distill its capabilities into a task-specific
+student model that is not only more efficient, but also substantially outperforms the teacher
+model in end applications. On standard ADE extraction evaluation, PubMedBERT (Gu
+et al., 2021) distilled from GPT-3.5 attained comparable accuracy as supervised state-of-
+the-art models without using any labeled examples. Despite being over 1,000 times smaller,
+the distilled model outperformed its noisy teacher GPT-3.5 by over six (6) absolute points in
+F1 and GPT-4 by over five (5) absolute points. Unlike GPT-3.5 or GPT-4, such a distilled
+model offers white-box access and can be further fine-tuned or customized for specialized
+uses.
+We found similar gains from LLM distillation for other standard biomedical knowledge
+extraction tasks such as gene-disease associations and protected health information (PHI),
+further illustrating the promise of this approach. We also conduct ablation studies on key
+distillation design such as neural architecture and model choice, which help establish best
+practice for biomedical knowledge extraction. To facilitate future research in this direction,
+we will release our distilled models.
+Generalizable Insights about Machine Learning in the Context of Healthcare
+• Knowledge distillation from LLMs and self-supervision techniques boost the perfor-
+mance of information extraction tasks in the biomedical domain, which provides a
+general and reliable solution to various healthcare applications.
+• The proposed end-to-end architecture for ADE extraction underscores the importance
+of adapting machine learning models to the unique challenges and requirements of
+healthcare-related problems, increasing their relevance and impact in clinical settings.
+• The successful application of our approach to ADE extraction emphasizes the potential
+for transferring knowledge from LLMs to other natural language processing tasks in
+healthcare, contributing to a broader understanding of machine learning techniques
+in this domain.
+2. Related Work
+There are two key areas of related work: end-to-end ADE extraction and knowledge distil-
+lation.
+2.1. End-to-end ADE Extraction
+A variety of approaches have been proposed for ADE extraction. Among these, SpERT (Eberts
+and Ulges, 2019) utilizes lightweight reasoning on BERT embeddings for joint entity and
+relation extraction, demonstrating the potential for combining these tasks. REBEL (Cabot
+2
+Distilling LLMs for Biomedical Knowledge Extraction
+and Navigli, 2021), an autoregressive seq2seq model based on BART, simplifies relation ex-
+traction by representing triplets as text sequences and achieves state-of-the-art performance
+on multiple benchmarks. The table-sequence encoder model (Wang and Lu, 2020) employs
+two distinct encoders to capture different information types during the learning process,
+showcasing significant improvements over existing single-encoder approaches.
+2.2. Knowledge Distillation
+Earlier LLMs, such as GPT-3 (Ouyang et al., 2022; Agrawal et al., 2022), demonstrated
+great potential but fell short of competitive results on biomedical natural language pro-
+cessing (NLP) tasks (Guti´errez et al., 2022; Moradi et al., 2022). However, the creation of
+GPT-3.5 and GPT-4 (OpenAI, 2023), the latest generation of domain-agnostic LLMs, has
+generated new opportunities for advancing medicine, health, and public understanding of
+the capabilities and limitations of these models (Lee et al., 2023).
+In this work, we concentrate on knowledge distillation of LLMs using self-supervision
+techniques (Agrawal et al., 2022; Smith et al., 2022). In other words, we use these LLMs as
+labelers in the biomedical domain, capitalizing on their powerful language understanding
+capabilities to generate high-quality labels for various tasks. Our experiments highlight
+the advantages of this approach for enhancing performance on challenging biomedical NLP
+tasks, especially ADE extraction, illustrating the potential of self-supervised distillation for
+harnessing the power of state-of-the-art LLMs in specialized domains.
+3. Methods
+3.1. Task Definition
+In this study, we focus on end-to-end ADE extraction, which involves two separate NLP sub-
+tasks: (1) identifying adverse event (AE) mentions using named entity recognition (NER),
+where a drug causation is not yet assigned, and (2) assigning causation to drugs through
+relation extraction (RE), which aims to find the relations between AEs and corresponding
+drugs.
+The first sub-task, AE entity extraction, focuses on locating and identifying mentions of
+adverse events within the given text. This step is crucial for gathering information about
+potential negative effects associated with drugs, without considering causation at this stage.
+The second sub-task, ADE relation extraction, aims to establish causal links between
+the extracted AE entities and drugs in the context. This step is essential for understanding
+the relationships between drugs and their adverse effects, enabling more informed decisions
+regarding drug safety and usage.
+To validate our proposed method, we utilize the ADE corpus (Gurulingappa et al., 2012),
+a dataset systematically annotated for supporting the automatic extraction of drug-related
+adverse effects from medical reports. This dataset allows us to evaluate the performance
+of our approach on both subtasks, providing a comprehensive assessment of the end-to-end
+ADE extraction process.
+3
+Distilling LLMs for Biomedical Knowledge Extraction
+Reduction
+of
+methylprednisolone
+dosage
+rather
+than
+insulin
+therapy
+resulted
+better
+control
+of
+glyc
+##emia
+PubMedBERT
+in
+DRUG_1
+DRUG_2
+AE_1
+O
+Tokenization
+Final Layer 
+Embeddings
+Drug-Aware
+Embeddings
+AE Entity 
+Extraction
+ADE Relation 
+Extraction
+Reduction of methylprednisolone dosage rather than insulin therapy resulted in better control of glycemia
+Input Text
+Drug Extraction
+Concatenation
+[CLS]
+[SEP]
+Pooling 
+Pooling 
+Fully Connected 
+…
+Fully Connected 
+O
+O
+O
+O
+…
+O
+…
+AE_1 related to DRUG_1
+O
+O
+O
+O
+O
+O
+…
+O
+None related to DRUG_2
+Figure 1: Our unified neural architecture for extracting adverse-event arguments and
+assigning causation relations for each drug entity in question (DRUG 1 and
+DRUG 2 in this case). The input sequence is first passed through an encoder
+(PubMedBERT) and then augmented by concatenation with the drug represen-
+tation, which is generated by mean-pooling the encoding of all mention tokens. A
+linear fully connected layer is then applied for token classification using softmax,
+predicting adverse event tokens pertaining to the designated drug entity. This
+architecture significantly reduces computational complexity from enumerating all
+pairwise combinations of adverse events and drugs to only enumerating drug en-
+tities, facilitating efficient and accurate adverse drug event extraction.
+3.2. A Unified Neural Architecture for ADE Extraction
+Traditional methods for ADE extraction typically treat the two subtasks, AE identification
+(NER) and ADE relation extraction (RE), as separate processes. However, in situations
+where multiple AEs (N mentions) and drugs (M mentions) coexist in the same context, this
+approach necessitates O(NM) inferences, leading to a bottleneck for large-scale processing.
+Recent studies attempt to tackle this challenge by jointly extracting drug and ADE
+entities, even though drug extraction has been largely addressed in prior work(Santosh et al.,
+2021; Cabot and Navigli, 2021). In this paper, we propose a novel unified architecture that
+concentrates on efficient and precise extraction of ADE entities and causation assignment.
+Our model introduces a drug-centric structure, designed to simultaneously handle ADE
+NER and relation extraction in one pass.
+As illustrated in Figure 1, the input sequence undergoes processing to obtain the fi-
+nal layer hidden state output for each drug entity.
+Denote the input sequence as x =
+4
+Distilling LLMs for Biomedical Knowledge Extraction
+x1, x2, . . . , xT , where xi is the i-th token, and T is the sequence length. The output of
+the final layer hidden state is represented as H = h1, h2, . . . , hT , where hi ∈Rd is the
+d-dimensional hidden state corresponding to the i-th token.
+We then create a new input sequence for each drug entity. Given a set of drug entities
+D = d1, d2, . . . , dM, where dj is the j-th drug entity, for each drug, hidden states of drug
+entity are mean-pooled. The resulting pooled token ¯dj is concatenated to every hidden
+state output token of the input sequence, effectively integrating drug information into each
+token:
+˜hj,i = concat(hi, ¯dj)
+(1)
+where ˜hj,i ∈R2d is the concatenated hidden state for the i-th token in the new input
+sequence created for the j-th drug entity.
+Subsequently, a linear layer is applied on top of the concatenated tokens for binary token
+classification using sigmoid. This process transforms the task into predicting ADE tokens
+while considering the causation drugs. The linear layer and sigmoid are defined as:
+zj,i = W˜hj,i + b
+(2)
+pj,i = σ(zj,i) =
+1
+1 + exp(−zj,i)
+(3)
+where W ∈Rd′ and b ∈R are learnable parameters of the linear layer, with d′ = 2d
+being the dimensionality of the concatenated hidden states, and pj,i represents the predicted
+probability of the i-th token in the new input sequence created for the j-th drug entity being
+an ADE mention.
+The proposed architecture substantially simplifies the problem, converting the original
+two tasks (NER and RE) into a single, unified task. As a result, the computational require-
+ment is dramatically reduced from O(NM) (all pairwise combinations of adverse events
+and drugs) to O(M) (all drug entities), enabling our end-to-end model to perform more
+efficiently and accurately in large-scale ADE extraction.
+3.3. Knowledge Distillation from LLMs
+We employ knowledge distillation (see Figure 2) using GPT-3.5 as the teacher model.
+3.3.1. Data Curation and Preprocessing
+We adapt the methodology from Gurulingappa et al. (2012) to curate a corpus focused
+on drug-related adverse events. First, we perform a PubMed search with “drug therapy”
+and “adverse effects” as MeSH terms, limiting the language to English. This search yields
+approximately 50,000 PubMed abstracts related to drug-related adverse events. The query
+is as follows:
+“adverse effects”[sh] AND (hasabstract[text] AND Case Reports[ptyp]) AND
+“drug therapy”[sh] AND English[lang] AND (Case Reports[ptyp])
+5
+Distilling LLMs for Biomedical Knowledge Extraction
+PRE 
+PROCESSING
+Task-Related 
+Unlabeled Corpus
+TEACHER  
+LLM
+SELF 
+SUPERVISION 
+LABELS
+STUDENT 
+MODEL
+STUDENT 
+TRAINING
+- MeSH filtering
+- drug entity extractoin
+- 50k ADE & drug related 
+PubMed abstracts
+- GPT-3.5
+- GPT-4
+- PubMedBERT
+- BioGPT
+KNOWLEDGE DISTILLATION
+Figure 2: Our knowledge distillation framework for self-supervising ADE extraction using
+LLMs. We first filter PubMed abstracts and select drug-related ones as the unla-
+beled corpus for ADE self-supervision. We then call upon the teacher LLM (e.g.,
+GPT-3.5) to generate ADE annotations and train a student model.
+To efficiently recognize and normalize drug names in the abstracts, we compile a list of
+oncology drug names, synonyms, and abbreviations from the NCI Thesaurus. We construct
+a trie from this list for rapid search and identification within plain text. Next, we split each
+abstract into sentences, retaining only those containing identified drug names. This process
+results in a refined ADE related dataset suitable for knowledge distillation.
+3.3.2. Teacher and Student Models in Knowledge Distillation
+Our knowledge distillation process involves two models: the teacher model, which serves
+as the source of self-supervision, and the student model, which learns from self-supervised
+labels produced by the teacher model.
+Teacher LLM We employ GPT-3.5 (Ouyang et al., 2022) as our teacher model. This
+advanced language model has demonstrated remarkable performance across various NLP
+tasks, showcasing its strong understanding and reasoning capabilities. To access GPT-3.5,
+we utilize Azure OpenAI Service, which allows us to interact with the model efficiently and
+securely. Through the API, we can submit input prompts and receive generated responses,
+from which we will generate self-supervised data to train our student model.
+Student Models We consider the following state-of-the-art pretrained models for biomed-
+ical NLP: 1) PubMedBERT (Gu et al., 2021) and PubMedBERT-Large (Tinn et al., 2021)
+are domain-specific language models pretrained on PubMed text; 2) BioGPT (Luo et al.,
+2022) is a domain-specific generative pretrained transformer model pretrained on PubMed
+text.
+6
+Distilling LLMs for Biomedical Knowledge Extraction
+3.3.3. Knowledge Distillation Process
+We outline the knowledge distillation process, which includes generating input-output pairs,
+training the student models, and evaluating their performance.
+Generating Input-Output Pairs We split our ADE-related unlabeled corpus into sen-
+tences and input them to GPT-3.5. We then filter the responses to include only sentences
+with positive ADE relations, and subsample 40,000 sentences for student model training.
+Training the Student Models We fine-tune the student models using the generated
+input-output pairs as labeled examples. For PubMedBERT, we fine-tune the entire model
+using our proposed architecture. For BioGPT, we employ prefix soft tuning (Li and Liang,
+2021) as standard for GPT models.
+Prompt Design We experiment with zero-shot and few-shot settings, utilizing in-context
+learning or prompt-based learning. For the zero-shot setting, we provide a task descrip-
+tion in the prompt and instruct the model to return “none” if no ADE is found, which
+helps reduce hallucination. For the few-shot setting, we use the same prompt and add five
+randomly sampled examples (Figure 3).
+Post-Processing In pratice, we found that GPT-3.5 and GPT-4 may fail to identifying
+the exact span of adverse events and often hallucinate non-existing spans. Therefore, we
+adapt the prompt to ask for the strings only and identify the mentions by string matching.
+Evaluation We employ the same evaluation metric for both supervised learning and the
+model-distilled self-supervision approaches, ensuring a fair comparison between the two
+methods. This metric accounts for the precision, recall, and F1-score, providing a compre-
+hensive assessment of the models’ performance in the ADE extraction task.
+4. Experiments
+4.1. Evaluation Approach and Study Design
+To assess the efficacy of our proposed method, we first provide details on the evaluation
+approach and study design. The ADE dataset (Gurulingappa et al., 2012) comprises 6,821
+ADE relations in 4,272 sentences. As no official train/dev/test split is provided, we divide
+the dataset into 8:1:1 for train/dev/test split in our study.
+We conduct an end-to-end evaluation wherein the correctness of an ADE is determined
+only when both entity extraction and its corresponding drug relation are accurate. We
+report results in terms of lenient F1 score as the primary metric in this study. Lenient
+F1 score is calculated by considering a true positive when the extracted entity is partially
+or completely correct, allowing for some flexibility in the boundaries of the extracted en-
+tities, while maintaining strict accuracy requirements for the relations between entities.
+This choice is motivated by the low inter-annotator agreement ratio pertaining to the exact
+boundaries of ADE entities (Henry et al., 2020; Gurulingappa et al., 2012), and our obser-
+vation of inconsistent mention boundaries of adverse events in the dataset, as detailed in
+Appendix A.
+4.2. ADE Extraction Results
+Table 1 compares how various methods perform on ADE extraction: LLM (out-of-box),
+distillation, supervised.
+Impressively, out of box, GPT-3.5 and GPT-4 already perform
+7
+Distilling LLMs for Biomedical Knowledge Extraction
+Prompt: Extract the adverse events each drug causes in the Message. If no ADE
+is found, return None.
+Example 1:
+Message: We postulate that the bolus of sulprostone resulted in possible coronary
+spasm that resulted in cardiac arrest.
+Annotations: sulprostone: cardiac arrest|coronary spasm
+Example 2:
+Message: In each of the three reported patients, alteration of eyelid appearance
+with deepening of the lid sulcus was evident as the result of topical bimatoprost
+therapy.
+Annotations: bimatoprost: alteration of eyelid appearance|deepening of the lid
+sulcus
+Example 3:
+Message: Immobilization, while Paget’s bone disease was present, and perhaps
+enhanced activation of dihydrotachysterol by rifampicin, could have led to
+increased calcium - release into the circulation.
+Annotations: dihydrotachysterol: increased calcium - release
+Example 4:
+Message: In two patients clozapine was reinstated after risperidone was discontin-
+ued; serum triglyceride levels increased.
+Annotations: clozapine: serum triglyceride levels increased
+Example 5:
+Message: The cause of these previously unreported side effects of niacin therapy is
+uncertain but may be related to prostaglandin - mediated vasodilatation, hyper-
+algesia of sensory nerve receptors, and potentiation of inflammation in the gingiva
+with referral of pain to the teeth.
+Annotations:
+niacin:
+hyperalgesia of sensory nerve receptors|pain to the
+teeth|potentiation of inflammation in the gingiva|prostaglandin - mediated vasodi-
+latation
+Figure 3: Our GPT five-shot prompt for ADE extraction and distillation. The examples are
+chosen randomly. Our zero-shot prompt is similar, except without the examples.
+competitively, especially with in-context learning (five-shot). However, they still trail su-
+pervised models by a large margin. Interesting, through LLM distillation, a PubMedBERT
+model already attains comparable accuracy as the supervised state of the art, while using
+zero labeled example. Although being over three orders of magnitude smaller, this PubMed-
+BERT model outperforms its teacher GPT-3.5 by over six absolute points and outperforms
+GPT-4 by over five absolute points. Compared with PubMedBERT, the distilled BioGPT
+performs less well. This is not surprising as it’s broadly in line with the observations by Luo
+8
+Distilling LLMs for Biomedical Knowledge Extraction
+Table 1: Comparison of LLMs (out-of-box), distillation, and supervised methods on the
+standard adverse drug event extraction evaluation (Gurulingappa et al., 2012).
+Despite of being over 1,000 times smaller, the distilled PubMedBERT model sub-
+stantially outperforms its teacher LLM (five-shot GPT-3.5) and attains test F1
+(lenient) comparable to supervised state of the art.
+Method
+Teacher LLM
+Model
+Training
+Instances
+Test F1
+LLM out-of-box
+-
+zero-shot GPT-3.5
+-
+78.22
+LLM out-of-box
+-
+zero-shot GPT-4
+-
+84.92
+LLM out-of-box
+-
+5-shot GPT-3.5
+-
+85.21
+LLM out-of-box
+-
+5-shot GPT-4
+-
+86.45
+Distillation
+5-shot GPT-3.5
+BioGPT
+40,000
+84.21
+Distillation
+5-shot GPT-3.5
+PubMedBERT
+40,000
+91.99
+Supervised Learning
+-
+BioGPT
+3,417
+88.08
+Supervised Learning
+-
+PubMedBERT
+3,417
+93.36
+et al. (2022): GPT models are superior for generation tasks such as question answering and
+summarization, but face more challenges in structuring tasks such as knowledge extraction.
+We leave more in-depth exploration between GPT and BERT models to future work.
+Figure 4 shows the supervised learning curve for PubMedBERT on ADE extraction,
+and how the few-shot LLMs and distillation (also with PubMedBERT) compare. Out of
+box, LLMs still trail supervised methods by some distance. However, with distillation and
+without required any labeled data, this gap can be substantially reduced, which bodes well
+for general applications where we can’t afford extensive annotation but still want to attain
+higher accuracy than the original LLMs. There are also additional benefits, such as cost,
+efficiency, white-box model access.
+4.3. Comparison on ADE Extraction Models
+To compare our propose neural architecture 1 with prior approaches, we follow prior work
+to perform 10-fold cross-validation on the ADE corpus and report ”strict” F1 scores, where
+an adverse event entity is deemed correct only when the mention span matches the gold
+exactly. As shown in Table 2, our models outperform all prior state of the art, indicating
+that the proposed neural architecture is advantageous for ADE extraction.
+4.4. LLM Distillation for other Biomedical NLP Tasks
+we evaluate the impact of LLM distillation on other biomedical NLP tasks, as shown in
+Table 3. Below is the task description:
+• GAD - The Gene-Disease Association (GAD) (Becker et al., 2004) task focuses on
+identifying associations between genes and diseases from biomedical literature. This
+task requires the extraction of gene and disease entities from text, as well as the
+9
+Distilling LLMs for Biomedical Knowledge Extraction
+Figure 4: Comparison of distillation and low-resource supervised methods on the basis of
+Lenient F1 scores across various training sizes. As the training size decreases,
+the performance of the supervised model gradually degrades, with knowledge
+distillation offering a competitive alternative.
+Table 2: Comparison of our proposed neural architecture with prior state-of-the-art meth-
+ods in the supervised setting on the standard adverse drug event extraction evalua-
+tion. To enable head-to-head comparison, we follow prior methods to report strict
+F1 with 10-fold cross validation. So the numbers are not directly comparable with
+our other reported results.
+Model
+Test F1 (Strict with 10-fold CV)
+SpERT (Eberts and Ulges, 2019)
+79.24
+Table-Sequence (Wang and Lu, 2020)
+80.01
+SpERT.PL (Santosh et al., 2021)
+82.03
+REBEL (Cabot and Navigli, 2021)
+82.20
+Ours (PubMedBERT)
+84.27
+Ours (PubMedBERT-Large)
+84.53
+determination of their relationships. The performance of models on this task is crucial
+for understanding genetic influences on diseases and advancing precision medicine.
+• PHI (i2b2 2014) - The Protected Health Information (PHI) task, specifically the
+i2b2 2014 shared task (Uzuner et al., 2014), aims at identifying and redacting personal
+identifiers in clinical text. The goal is to remove any information that could be used
+to trace back to individual patients, ensuring privacy and compliance with regulations
+such as the Health Insurance Portability and Accountability Act (HIPAA).
+10
+Distilling LLMs for Biomedical Knowledge Extraction
+Table 3: Comparison of applying GPT-3.5 out-of-box vs. distilling into a PubMedBERT
+student model on additional biomedical NLP tasks. GAD and PHI are standard
+biomedical knowledge extraction tasks, whereas MedNLI is a text-entailment task.
+For simplicity, during distillation, we only use the unlabeled text in the training
+data of each task (with labels excluded) for LLM-powered self-supervision. Adding
+more unlabeled text (e.g., from PubMed) may further improve the performance.
+Task
+Method
+Model
+Test F1
+GAD
+LLM
+GPT-3.5 (few-shot)
+49.25
+Distillation
+PubMedBERT
+56.42
+PHI(i2b2 2014)
+LLM
+GPT-3.5 (few-shot)
+64.20
+Distillation
+PubMedBERT
+73.89
+MedNLI
+LLM
+GPT-3.5 (few-shot)
+82.21
+Distillation
+PubMedBERT
+80.24
+• MedNLI - The Medical Natural Language Inference (MedNLI) (Romanov and Shiv-
+ade, 2018) task is based on the NLI task, which involves determining the relationship
+between a pair of sentences (entailment, contradiction, or neutral). In the context of
+MedNLI, the sentences are derived from clinical text, making this task valuable for
+understanding complex relationships in medical documents.
+As Table 3 shows, LLM distillation attains similar gains for GAD and PHI, which are
+both information extraction tasks not unlike ADE extraction. For MedNLI, however, GPT-
+3.5 slightly outperforms its distilled student model.
+This is not surprising, as MedNLI
+is a textual-entailment task, which is particularly suited for generative models like GPT.
+Moreover, for simplicity, we only use the unlabeled text from the training data (with labels
+removed) for distillation in these experiments. Better distilled models may be attained if
+we apply LLM self-supervision to a larger unlabeled dataset, as in ADE extraction.
+5. Discussion
+In this study, we investigated the potential of using LLMs for scaling biomedical knowledge
+curation. We found that LLMs, such as GPT-4, already possess a reasonable capability
+in structuring biomedical text and substantial gains can be attained by distilling LLMs
+into task-specific student models through self-supervised learning. This approach provides
+additional advantages, such as efficiency, and white-box model access.
+We conducted a case study on adverse drug event (ADE) extraction, a key health area
+in its own right. Our GPT-3.5 distilled PubMedBERT model achieved comparable accu-
+racy to supervised state-of-the-art methods without using any labeled data. Despite being
+over 1,000 times smaller, the distilled model outperformed its teacher GPT-3.5 by over six
+absolute points in F1 and GPT-4 by over five absolute points.
+Ablation studies on distillation model choice (e.g., PubMedBERT vs. BioGPT) and
+ADE extraction architecture shed light on best practices for biomedical knowledge extrac-
+tion. Similar gains were attained by distillation for other standard biomedical knowledge
+11
+Distilling LLMs for Biomedical Knowledge Extraction
+extraction tasks, such as gene-disease associations and protected health information, further
+illustrating the promise of this approach.
+These findings suggest that LLM distillation and domain-specific models, like PubMed-
+BERT, can significantly contribute to the advancement of machine learning in healthcare.
+By harnessing the knowledge and capabilities of large language models, we can develop
+more efficient, cost-effective, and powerful solutions for various healthcare applications.
+Limitations
+Despite the promising results, our study has several limitations:
+Firstly, at the time of this work, the GPT-4 model has just been released. Due to time
+constraints, we did not conduct the distillation process using GPT-4 as the teacher model.
+In our few-shot setting, GPT-4 exhibited marginally better performance compared to GPT-
+3.5. Although we suspect that GPT-4 might be a better teacher, the expected gains are
+likely to be marginal.
+Secondly, during the evaluation process, we assumed the presence of gold drug entities.
+This assumption is not held by several prior works that we compared our approach against.
+This difference in methodology might lead to a slight advantage in our setting, as our
+method relies on accurate drug entity identification to perform effectively.
+Lastly, for knowledge distillation on other clinical tasks, we used the training corpus as
+input for the teacher model. However, given the relatively small size of these corpora, we
+have not been able to fully explore the true potential of distillation on these tasks. The
+limited data might restrict the effectiveness of the distillation process, and we acknowledge
+that there might be room for improvement with more extensive data and experimentation.
+In summary, the limitations of our study include the use of GPT-3.5 instead of GPT-
+4 as the teacher model, the assumption of gold drug entities during evaluation, and the
+unexplored potential of distillation on other clinical tasks due to small training corpora.
+Future work could address these limitations by incorporating the latest language models,
+refining the evaluation process, and exploring the impact of larger training sets on knowledge
+distillation performance.
+Future Work
+To address the limitations and further enhance the performance of ADE
+extraction and other clinical tasks, several avenues for future research can be explored:
+• Incorporating additional domain-specific knowledge sources: Leveraging external domain-
+specific knowledge, such as ontologies and databases, could help improve model per-
+formance and address the issue of inconsistent annotations in the ADE dataset.
+• Expanding training corpus for other clinical tasks: Increasing the training corpus for
+other clinical tasks using LLMs on unlabeled data could lead to improved performance
+in those tasks.
+• Evaluating on a broader range of clinical tasks and datasets: Exploring the application
+of our proposed method on additional clinical tasks and datasets can provide further
+insights into the generalizability and adaptability of our approach in various healthcare
+contexts.
+• Investigating the use of GPT-4 in knowledge distillation: Evaluating the potential
+benefits of incorporating GPT-4 in the knowledge distillation process could lead to
+further improvements in model performance across different clinical tasks.
+12
+Distilling LLMs for Biomedical Knowledge Extraction
+References
+Monica Agrawal, Stefan Hegselmann, Hunter Lang, Yoon Kim, and David Sontag. Large
+language models are few-shot clinical information extractors. In Proceedings of the 2022
+Conference on Empirical Methods in Natural Language Processing, pages 1998–2022,
+2022.
+Kevin G Becker, Kathleen C Barnes, Tami J Bright, S Hong Wang, and The Genetic
+Association Information Network. The genetic association database. Nature genetics, 36
+(5):431–432, 2004.
+S´ebastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz,
+Ece Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, Harsha Nori, Hamid
+Palangi, Marco Tulio Ribeiro, and Yi Zhang. Sparks of artificial general intelligence:
+Early experiments with gpt-4, 2023.
+Pere-Llu´ıs Huguet Cabot and Roberto Navigli.
+Rebel: Relation extraction by end-to-
+end language generation. In Findings of the Association for Computational Linguistics:
+EMNLP 2021, pages 2370–2381, 2021.
+Long Chen, Yu Gu, Xin Ji, Zhiyong Sun, Haodan Li, Yuan Gao, and Yang Huang. Extract-
+ing medications and associated adverse drug events using a natural language processing
+system combining knowledge base and deep learning. Journal of the American Medical
+Informatics Association, 27(1):56–64, 2020.
+David C Classen, Stanley L Pestotnik, R Scott Evans, James F Lloyd, and John P Burke.
+Adverse drug events in hospitalized patients: excess length of stay, extra costs, and
+attributable mortality. Jama, 277(4):301–306, 1997.
+Molla S Donaldson, Janet M Corrigan, Linda T Kohn, et al. To err is human: building a
+safer health system. 2000.
+Markus Eberts and Adrian Ulges.
+Span-based joint entity and relation extraction with
+transformer pre-training. arXiv preprint arXiv:1909.07755, 2019.
+Yu Gu, Robert Tinn, Hao Cheng, Michael Lucas, Naoto Usuyama, Xiaodong Liu, Tristan
+Naumann, Jianfeng Gao, and Hoifung Poon. Domain-specific language model pretrain-
+ing for biomedical natural language processing. ACM Transactions on Computing for
+Healthcare (HEALTH), 3(1):1–23, 2021.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin
+Hofmann-Apitius, and Luca Toldo. Development of a benchmark corpus to support the
+automatic extraction of drug-related adverse effects from medical case reports. Journal
+of biomedical informatics, 45(5):885–892, 2012.
+Bernal Jim´enez Guti´errez, Nikolas McNeal, Clay Washington, You Chen, Lang Li, Huan
+Sun, and Yu Su. Thinking about gpt-3 in-context learning for biomedical ie? think again.
+arXiv preprint arXiv:2203.08410, 2022.
+13
+Distilling LLMs for Biomedical Knowledge Extraction
+Sam Henry, Kevin Buchan, Michele Filannino, Amber Stubbs, and Ozlem Uzuner. 2018
+n2c2 shared task on adverse drug events and medication extraction in electronic health
+records. Journal of the American Medical Informatics Association, 27(1):3–12, 2020.
+Peter Lee, Carey Goldberg, and Isaac Kohane. The AI Revolution in Medicine: GPT-4 and
+Beyond. Pearson, 2023.
+Xiang Lisa Li and Percy Liang. Prefix-tuning: Optimizing continuous prompts for gen-
+eration.
+In Proceedings of the 59th Annual Meeting of the Association for Compu-
+tational Linguistics and the 11th International Joint Conference on Natural Language
+Processing (Volume 1: Long Papers), pages 4582–4597, Online, August 2021. Associa-
+tion for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.353. URL https:
+//aclanthology.org/2021.acl-long.353.
+Renqian Luo, Liai Sun, Yingce Xia, Tao Qin, Sheng Zhang, Hoifung Poon, and Tie-Yan Liu.
+Biogpt: generative pre-trained transformer for biomedical text generation and mining.
+Briefings in Bioinformatics, 23(6), 2022.
+Milad Moradi, Kathrin Blagec, Florian Haberl, and Matthias Samwald. Gpt-3 models are
+poor few-shot learners in the biomedical domain, 2022.
+OpenAI. Gpt-4 technical report, 2023.
+Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin,
+Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language
+models to follow instructions with human feedback.
+Advances in Neural Information
+Processing Systems, 35:27730–27744, 2022.
+Alexey Romanov and Chaitanya Shivade. Lessons from natural language inference in the
+clinical domain. In Proceedings of the 2018 Conference on Empirical Methods in Natural
+Language Processing, pages 875–886, 2018.
+TYSS Santosh, Prantika Chakraborty, Sudakshina Dutta, Debarshi Kumar Sanyal, and
+Partha Pratim Das. Joint entity and relation extraction from scientific documents: role
+of linguistic information and entity types. EEKE@ JCDL, 21, 2021.
+Ryan Smith, Jason A. Fries, Braden Hancock, and Stephen H. Bach. Language models in
+the loop: Incorporating prompting into weak supervision, 2022.
+Robert Tinn, Hao Cheng, Yu Gu, Naoto Usuyama, Xiaodong Liu, Tristan Naumann, Jian-
+feng Gao, and Hoifung Poon. Fine-tuning large neural language models for biomedical
+natural language processing, 2021.
+¨Ozlem Uzuner, Brett R South, Shuying Shen, and Scott L DuVall. 2014 i2b2/uthealth
+shared task on diagnosis and procedure coding for clinical text. In Proceedings of the third
+workshop on building and evaluating resources for biomedical text mining (BioTxtM2014),
+pages 56–62, 2014.
+Jue Wang and Wei Lu. Two are better than one: Joint entity and relation extraction with
+table-sequence encoders. arXiv preprint arXiv:2010.03851, 2020.
+14
+Distilling LLMs for Biomedical Knowledge Extraction
+Appendix A. Annotation Inconsistencies
+In this appendix section, we address the presence of annotation inconsistencies in the ADE
+corpus.
+Table 4 showcases examples of these inconsistencies, particularly in ambiguous
+boundaries, which can potentially impact the performance of machine learning models
+trained on this dataset.
+Researchers and practitioners should be cognizant of these in-
+consistencies when working with the ADE corpus to develop or assess their models.
+Table 4: Examples demonstrating inconsistencies in annotation criteria within the ADE
+corpus. ADE mention annotations are underlined, while discrepancies in the in-
+clusion of similar words are shown in bold.
+Examples
+• CONCLUSIONS: Peripheral administration of low-dose vasopressin for septic shock
+should be discouraged because of the risk of ischemic skin complications.
+• Warfarin-associated bleeding complication saved life
+• Acute pulmonary reactions to nitrofurantoin are an uncommon side effect of therapy
+and can cause minor or life-threatening pulmonary dysfunction.
+• Several hypersensitivity reactions to cloxacillin have been reported
+• We stress the potential of benzarone to cause hepatotoxicity, which usually resembles
+severe chronic active hepatitis.
+• Epoprostenol may be associated rarely with severe erythroderma.
+• In one patient the vasculitis resolved after termination of the ciprofloxacin therapy; in
+the other patient the ciprofloxacin-induced hemorrhagic vasculitis was superimposed
+on a severe forefoot infection, leading to progressive gangrene and a below-knee
+amputation.
+• The potential for progressive brain injury and subsequent disability related to in-
+traventricular IL-2 therapy is discussed.
+• Lethal anuria complicating high dose ifosfamide chemotherapy in a breast cancer
+patient with an impaired renal function.
+• Late lethal hepatitis B virus reactivation after rituximab treatment of low-grade cu-
+taneous B-cell lymphoma.
+15

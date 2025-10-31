@@ -1,0 +1,2041 @@
+A Topological Approach for Semi-Supervised Learning
+A. In´es1∗, C. Dom´ınguez1, J. Heras1, G. Mata1 and J. Rubio1
+1University of La Rioja, Department of Mathematics and Computer Science, Spain
+Abstract
+Nowadays, Machine Learning and Deep Learning methods have become the state-of-
+the-art approach to solve data classiﬁcation tasks. In order to use those methods, it
+is necessary to acquire and label a considerable amount of data; however, this is not
+straightforward in some ﬁelds, since data annotation is time consuming and might re-
+quire expert knowledge. This challenge can be tackled by means of semi-supervised
+learning methods that take advantage of both labelled and unlabelled data. In this
+work, we present new semi-supervised learning methods based on techniques from
+Topological Data Analysis (TDA), a ﬁeld that is gaining importance for analysing
+large amounts of data with high variety and dimensionality. In particular, we have
+created two semi-supervised learning methods following two different topological ap-
+proaches. In the former, we have used a homological approach that consists in studying
+the persistence diagrams associated with the data using the Bottleneck and Wasserstein
+distances. In the latter, we have taken into account the connectivity of the data. In
+addition, we have carried out a thorough analysis of the developed methods using 3
+synthetic datasets, 5 structured datasets, and 2 datasets of images. The results show
+that the semi-supervised methods developed in this work outperform both the results
+obtained with models trained with only manually labelled data, and those obtained with
+classical semi-supervised learning methods, reaching improvements of up to a 16%.
+Keywords: Topological Data Analysis, Semi-supervised learning, Bottleneck
+distance, Wasserstein distance, Data connectivity.
+1. Introduction
+Machine Learning and Deep Learning techniques have become the state-of-the-art
+approach to solve classiﬁcation problems in a wide variety of ﬁelds such as biology [1],
+security [2], or medicine [3]. One of the main problems of these techniques is the great
+amount of data that they need to work properly [28]. This may not seem a problem
+due to the large amount of data that is being generated in a daily basis. However, data
+acquisition is not easy in some ﬁelds due to, for example, a limited budget to obtain
+∗Corresponding author
+Email address: adrian.ines@unirioja.es (A. In´es1)
+arXiv:2205.09617v1  [cs.CV]  19 May 2022
+samples, the need to perform an invasive medical procedure or destructive processes.
+In addition, in supervised learning, one of the main approaches in machine learning,
+the data has to be annotated, and it is well-known that this might be a problem because
+it is a very time-consuming task that might require expert knowledge [14].
+Semi-supervised learning methods [4, 16] have received growing attention in recent
+years to tackle this challenge. These methods provide a mean of using unlabelled data
+to improve models’ performance when we have access to a large corpus of data that
+is difﬁcult to annotate. Traditional semi-supervised learning algorithms, such as Label
+Spreading [34] or Label Propagation [35], focus on the distance between the data points
+to annotate unlabelled data points; that is, on the metric and density characteristics of
+the data in a dataset. However, topological characteristics of the data are not used, and
+this is the approach proposed in this paper.
+Topological Data Analysis (from now on, TDA) has arisen as a ﬁeld to extract
+topological and geometrical information from data, to reveal dynamical organisation of
+the brain [22], to recognising atmospheric river patterns in large climate datasets [20],
+or to examine spreading processes on networks [30]. An important result of TDA is
+the Manifold Hypothesis [12], that states that high dimensional data tends to lie in
+low dimensional manifolds, and that has inspired our deﬁnition of semi-supervised
+learning methods for binary classiﬁcation tasks. Intuitively, our methods are based on
+the following idea. Given two sets of data points A and B, we can deﬁne two manifolds
+associated with each set, MA and MB respectively. Now, given an unlabelled data point
+x that belongs to either A or B; if x belongs to A, analogously for B, then the manifold
+associated with A ∪{x} will be more similar MA than if we compare the manifold
+associated with B ∪{x} and MB. The rest of the paper is devoted to introduce this idea
+formally; namely, the contributions of this work are the following:
+• We present several semi-supervised methods based on TDA notions.
+• We conduct a thorough analysis for our methods and compare their performance
+with classical semi-supervised learning methods. To this aim, we have employed
+a benchmark composed of 10 different datasets (3 synthetic datasets, 5 structured
+datasets, and 2 datasets of images).
+• We introduce a library that allows users to employ our methods.
+The rest of this paper is organised as follows. In the next section, we provide
+the necessary background to understand the rest of the paper. Subsequently, we present
+our semi-supervised learning methods in Section 3, the datasets used for evaluating our
+methods in Section 4, and the results of our experiments in Section 5. The paper ends
+with a section of conclusions and further work. This work has an associated project
+webpage where the interested reader can consult all the code and examples presented
+in this paper: https://github.com/adines/TTASSL.
+2. Background
+This work can be framed in the context of both Topological Data Analysis and semi-
+supervised learning. In this section, we introduce the necessary notions of these ﬁelds
+2
+to understand the methods proposed in this work. For a more detailed introduction to
+TDA see [37], and for semi-supervised learning see [36].
+2.1. Topological Data Analysis
+Topological Data Analysis is a ﬁeld that aims to extract information about data
+based on its topology. The most widely used tool in TDA is persistent homology [9,
+10, 38], which allows us to measure certain features of a space, such as its connectivity,
+holes or voids. All these features are based on the concept of simplicial complex.
+Deﬁnition 1 (Simplicial complex). Let V be a ﬁnite nonempty set whose elements are
+called vertices. A simplicial complex on V is a collection K of nonempty subsets of V
+subject to two requirements:
+• for each vertex v in V, the singleton {v} is in K, and
+• if τ is in K and σ ⊂τ then σ must also be in K.
+Given two simplicial complexes K1 and K2, if K1 ⊂K2 then K1 is called subcomplex of
+K2.
+Example 1. Let us consider the set V = {1, 2, 3, 4}, the simplicial complex represented
+in Figure 1 is K = {1, 2, 3, 4, 12, 13, 23, 14, 24, 123}. A subcomplex of K is, for instance,
+K = {1, 2, 3, 12, 13, 23, 123}
+Figure 1: Example of a simplicial complex.
+In this work, we want to study the topological properties of a dataset; so, we have
+to build a simplicial complex from a dataset. To this aim, each point of the dataset is
+represented as a point in an n-dimensional space, where n is the number of features of
+the point. Then, we can construct the Vietoris-Rips complex as follows.
+Deﬁnition 2 (Vietoris-Rips complex). Let (M, d) be a ﬁnite metric space. For every
+ϵ > 0, the Vietoris-Rips complex VRϵ is deﬁned as follows:
+VRϵ(M) = {σ ⊆M | ∀u, v ∈σ : d(u, v) ≤ϵ}
+3
+We can notice that in the previous deﬁnition we do not have a single simplicial
+complex, but rather we have a set of simplicial complexes that depend on ϵ, a value
+called the radius. Such a sequence of simplicial complexes is a called a ﬁltration.
+Deﬁnition 3 (Filtration). Let K be a simplicial complex. A ﬁltration of K (of length
+n) is a nested sequence of subcomplexes of the form
+K1 ⊂K2 ⊂· · · ⊂Kn−1 ⊂Kn = K
+Example 2. Let us consider the points x1 = (0, 0), x2 = (3, 0) and x3 = (2, 2) in the
+Euclidian space. The Vietoris-Rips complex for three different values of ϵ (ϵ = 0.5,
+ϵ = 2.5, and ϵ = 2.9) can be seen in Figure 2.
+Figure 2: From left to right, Vietoris-Rips complex associated with the three points x1 = (0, 0),
+x2 = (3, 0) and x3 = (2, 2) for ϵ = 0.5, ϵ = 2.5, and ϵ = 2.9 respectively.
+In our case, we work with Vietoris-Rips ﬁltrations that are determined by the value
+of ϵ. It is easy to see that VRϵ(M) is a subcomples of VRϵ′(M) for all ϵ′ such that
+0 ≤ϵ ≤ϵ′. In addition, since we work with a ﬁnite set M, there are only ﬁnitely many
+pairwise distances d(x, y) among the elements of M, so there are only ﬁnitely many
+ϵ values where new simplices are added to VRϵ(M). Thus, as the radius ϵ increases,
+the Vietoris-Rips ﬁltration of our dataset is built. This ﬁltration allows us to study the
+topological features of a given dataset for different dimensions. These features, such
+as connected components, holes or voids, will be created and destroyed as the radius
+ϵ increases. By identifying the radius ϵ in the sequence when the topological features
+appear and disappear, we obtain a collection of birth and death pairs for each feature
+of each dimension. These pairs deﬁne the persistence diagram of a space.
+Deﬁnition 4 (Persistence diagram). Let (M, d) be a ﬁnite metric space, {ϵ0, ϵ1, . . . ϵn}
+be real numbers that verify 0 ≤ϵ0 < ϵ1 < . . . ϵn < ∞and
+VRϵ0 ⊂VRϵ1 ⊂· · · ⊂VRϵn−1 ⊂VRϵn
+be the Vietoris-Rips ﬁltration of M. Then we deﬁne the persistence diagram of M as
+X = {a1, . . . , am}
+where ai = (ϵr, ϵs) is the pair birth and death of a feature.
+4
+Figure 3: Persistence diagram of the points x1 = (0, 0), x2 = (3, 0) and x3 = (2, 2).
+Example 3. Let us consider the points x1 = (0, 0), x2 = (3, 0) and x3 = (2, 2) in
+the Euclidean space, and VRϵ the Vietoris-Rips ﬁltration of these points. Then, the
+associated persistence diagram can be seen in Figure 3.
+Persistence diagram allows us to know the topological features of a space, and also
+allows us to compare two topological spaces. If two persistence diagrams are similar,
+we can conclude that their associated topological spaces are also similar. In order to
+conduct such a comparison, we need a metric that allows us to compare two persistence
+diagrams. Thus, the concept of distance between persistence diagrams arises. As we
+have seen, persistence diagrams are sets of points that determine the topological space;
+so, before talking about distance, we must deﬁne how we can establish a matching
+between two sets of points.
+Deﬁnition 5 (Matching). Let P and Q be multisets in R2. We deﬁne a matching be-
+tween P and Q to be a collection of pairs X = {(p, q) ∈P × Q}, where p and q can
+occur in at most one pair. If (p, q) ∈X then we say that p is matched to q, otherwise if
+a given p ∈P does not belong to any pair in X, we say that p is unmatched.
+Once we have deﬁned a matching between two sets in R2, we can deﬁne a cost
+function that allows us to know how good is such a matching.
+Deﬁnition 6 (Cost). Let P and Q be multisets in R with a matching X. Then we deﬁne
+a function c : X →R2, called the cost, which maps a pair (p, q) = ((p1, p2), (q1, q2)) to
+((p1, p2), (q1, q2)) →max(| q1 −p1 |, | q2 −p2 |)
+5
+We deﬁne the cost of a point p = (p1, p2) to be
+c(p) = | p2 −p1 |
+2
+Furthermore, we deﬁne the cost of the matching X as
+c(X) = max(sup(p,q)∈Xc(p, q), supp∈P∪Q,unmatchedc(p))
+Finally, from these two concepts, we can introduce the notion of distance between
+persistence diagramas. In particular, we are going to use two different distances, the
+Bottleneck distance [11] and the Wasserstein distance [15].
+Deﬁnition 7 (Bottleneck distance). Let P and Q be multisets in R2. The Bottleneck
+distance between P and Q is deﬁned as
+dB(P, Q) = inf{c(X) | X is a matching between P and Q}
+Deﬁnition 8 (Wasserstein distance). Let P and Q be multisets in R2. The r-Wasserstein
+distance between P and Q is deﬁned as
+Wr(P, Q) = inf(
+X
+(x,y)∈X
+∥q −p∥r
+∞+
+X
+x∈Xc
+| p2 −p1 |r)
+1
+r
+where X is a matching and Xc is the set of unmatching points.
+After introducing these concepts, we provide a brief overview to the other area
+where this work can be framed: semi-supervised learning.
+2.2. Semi-supervised learning
+Semi-supervised methods take advantage of both labelled and unlabelled data [16,
+4]. These methods can be grouped into three main types: self-training, consistency
+regularisation and hybrid methods. In Self-Training methods a model is trained on
+labelled data and used to predict pseudo-labels for the unlabelled data. The model
+is then trained on both ground truth labels and pseudo-labels simultaneously. Some
+examples of these methods are pseudo label [17] and noisy student [32]. Consistency
+regularisation methods, such as virtual adversarial training [19], mean teacher [29]
+or π-models [23]; use the idea that model predictions on an unlabelled image should
+remain the same even after adding some noise. Finally, hybrid methods combines ideas
+from self-training and consistency regularisation along with additional components for
+performance improvement. These methods include FixMatch [27] and MixMatch [5].
+Two of the most widely employed semi-supervised learning methods are Label
+Spreading [34] and Label Propagation [35]. Both methods are based on label inference
+on unlabelled data using a graph-based approach. Label propagation computes a simi-
+larity matrix between samples and uses a KNN-based approach to propagate samples;
+whereas label spreading takes a similar approach but adds a regularisation step to be
+more robust to noise.
+6
+3. Methods
+In this section, we describe the semi-supervised learning algorithms that we have
+designed to tackle binary classiﬁcation tasks. In particular, we have studied two differ-
+ent approaches: a homological approach and a connectivity approach. In both of them,
+we start with a set X1 of points from class 1, a set X2 of points from class 2; and a set
+X of unlabelled points. The objective of our algorithms is to annotate the elements of
+X by using topological properties of X1, and X2.
+3.1. Homological method
+The ﬁrst approach consists in studying the topological properties of the sets X1 and
+X2, and how those properties change when a new point x ∈X is added to each one of
+those sets.
+The hypothesis is that if a point belongs to a set, the topological variation that such
+a set will suffer when adding the point will be minimal; whereas if we add a point that
+does not belong to the set, the variation will be greater. In particular, we are going to
+calculate the persistence diagrams of each set and see how those diagrams vary when
+adding a new point.
+In particular, our semi-supervised learning algorithm takes as input the sets X1 and
+X2, a point x ∈X, a threshold value t, and a ﬂag that indicates whether the bottleneck
+or the Wasserstein distance should be used, we denote the chosen distance as d. The
+output produced by our algorithm is whether the point x belongs to X1, X2 or none
+of them. In order to decide the output of the algorithm, our hypothesis is that if a
+point belongs to X1, analogously for X2, the topological variation that X1 will suffer
+when adding the point will be minimal; whereas if the point does not belong to X1, the
+variation will be greater. In particular, we proceed as follows:
+1. Construct the Vietoris-Rips ﬁltrations VX1, VX2, VX1∪{x} and VX2∪{x};
+2. Construct the persistence diagrams P(VX1), P(VX2), P(VX1∪{x}) and P(VX2∪{x});
+3. Compute the distances d(P(VX1), P(VX1∪{x})) and d(P(VX2), P(VX2∪{x})), from now
+on d1 and d2 respectively;
+4. If both d1 and d2 are greater than the threshold t, return none; otherwise, return
+the set associated with the minimum of the distances d1 and d2.
+The above algorithm is diagrammatically described in example 4, and it is applied
+for all the points of the set of unlabelled points X. Note that if we use a threshold value
+of 0, the algorithm will annotate all the points of X; however, this might introduce some
+noise as we will see in Section 5.
+Example 4. We take 9 points of the class 0, 10 points of the class 2, and 1 unlabelled
+points, as presented in Figure 4, and we apply our homological method.
+The complete process can be seen on the project webpage.
+7
+distance 0.1285
+distance 0.4958
+Figure 4: Example of the application of our homological method using the bottleneck distance,
+and using 0.6 as threshold value.
+3.2. Connectivity method
+In the second method, we look at the connectivity of the data. In particular, we
+focus on the minimum radius that the Vietoris-Rips complex associated with a set has to
+take to be connected.As in the previous case, we start with a set X1 of points from class
+1, a set X2 of points from class 2, and a set X of unlabelled points. The objective of our
+algorithms is to annotate the elements of X by using topological properties of X1 and
+X2. In particular, our semi-supervised learning algorithm takes as input the sets X1 and
+X2, a point x ∈X. The output produced by our algorithm is whether the point x belongs
+to X1, X2 or none of them. In order to decide the output of the algorithm, our hypothesis
+is that if a point belongs to X1, analogously for X2, the minimum connectivity radius of
+the associated Vietoris-Rips complex does not change considerably; on the contrary, if
+the point does not belong to the set X1, analogously for X2, the radius will increase. In
+particular, we proceed as follows:
+1. Construct the Vietoris-Rips complex VX1, VX2, VX1∪{x} and VX2∪{x};
+2. Compute the minimum connectivity radius r(VX1), r(VX2), r(VX1∪{x}) and r(VX2∪{x}),
+from now on r1, r2, r′
+1 and r′
+2 respectively;
+8
+3. Compute the radius variation |r1 −r′
+1| and |r2 −r′
+2| from now on d1 and d2 respec-
+tively;
+4. If both d1 and d2 are zero, return none; otherwise, return the set associated with
+the minimum of the differences d1 and d2.
+In particular, to label the point with this method we have two variants. In the ﬁrst
+case, we will say that a point belongs to a class if its radius has not been modiﬁed when
+adding it to that set; that is, if di = 0, otherwise we will add it to the other set (dj , 0).
+In the second case, we look at which radio has undergone the least variation (di < dj)
+and we add it to that class; if the two variations are equal, we leave it unlabelled.
+The above algorithm is diagrammatically described in example 5, and it is applied
+for all the points of the set of unlabelled points X.
+Example 5. We take 9 points of the class 1, 10 points of the class 1, and 1 unlabelled
+points, as presented in Figure 5.
+radius 1.9021
+radius 1.9439
+diff 0.0418
+radius 2.0611
+radius 2.9915
+diff 0.9304
+Figure 5: Example of the application of our connectivity method.
+The complete process can be seen on the project webpage.
+9
+3.3. API
+In order to facilitate the reproducibility of our methods, and also to simplify the
+application of the aforementioned semi-supervised learning algorithms to binary clas-
+siﬁcation problems to other researchers, we have designed a Python library, available
+at the project webpage, that implements them. The library provides an API that is sum-
+marised in Figure 6. Several settings can be conﬁgured for the methods of the API, and
+we explain those options in the documentation of the project webpage. In order to em-
+ploy, for instance, the homological method, the user must provide the annotated data,
+that is, a numpy array with all the annotated data, and a numpy array with the label of
+each data point; the unlabelled data in a numpy array format, the name of the distance
+to be used (Bottleneck or Wasserstein), the conﬁdence threshold and if dimensional-
+ity reduction has to be applied. From that information, the library will automatically
+annotate the unlabelled data.
+We have used the scikit-tda library [24] to implement the homological distance
+method, whereas the Gudhi library [31] has been used for implementing the connec-
+tivity method. All the methods have been implemented and tested with the Python
+programming language and using the Google Collaboratory environment [6].
+homologicalAnnotation(data, target, unlabelled_data,
+distance, confidence, reduction)
+connectivityAnnotation(data, target, unlabelled_data,
+type, reduction)
+Figure 6: API of the annotation methods provided in our library. The data is the labelled
+data in numpy array format. target are the labels of the data in numpy array format. The
+unlabelled data is the unlabelled data in numpy array format. The distance parameter
+refers to the name of the distance to use (bottleneck or Wasserstein). The type parameter is the
+type of condition to label a point in connectivity methods (0 or 1). The Confidence param-
+eter refers to the conﬁdence threshold. The reduction parameter denotes if dimensionality
+reduction is to be applied using the UMAP algorithm.
+4. Evaluation protocol
+In this section, we present the datasets, the procedures and tools used for training
+and evaluating the methods explained in the previous section. We start by introducing
+the datasets that have been used for our experiments.
+4.1. Datasets
+In this work, we have used 10 different datasets that are summarised in Table 1.
+We have chosen datasets with different types of data; in particular, we have selected 3
+synthetic datasets, 5 datasets of structured data, and 2 datasets of images. All datasets
+come from binary classiﬁcation problems. We brieﬂy describe each of the datasets
+below.
+10
+Dataset
+# Examples
+# Unlabelled examples
+# Features
+Type
+Blobs
+300
+250
+2
+Synthetic
+Circles
+300
+250
+2
+Synthetic
+Moons
+300
+250
+2
+Synthetic
+Banknote
+1372
+1322
+4
+Structured
+Breast Cancer
+569
+519
+30
+Structured
+Ionosphere
+351
+301
+34
+Structured
+Pima Indian Diabetes
+768
+718
+8
+Structured
+Sonar
+208
+158
+60
+Structured
+LiverGenderAL
+265
+215
+146688
+Images
+LiverGenderCR
+303
+253
+146688
+Images
+Table 1: Description of the datasets employed in our experiments.
+The three synthetic datasets are generated using the scikit-learn library [21] and
+contain 2D points. These datasets are the Blobs dataset, that consists of a normally-
+distributed cluster of points; the Circles dataset, that consists of two concentric circles
+one inside the other; and, the Moons dataset, whose points are distributed forming two
+interleaving half circles, see Figure 7. The structured datasets were taken from the
+UCI Machine Learning Repository [8]. The Banknote [8] dataset contains a number
+of measures taken from a photograph to predict whether a given banknote is authentic.
+The Breast Cancer [8] dataset is a structured dataset with 30 features that describe
+characteristics of the cell nuclei present in a digitized image of a Fine Needle Aspirate
+(FNA) of a breast mass. The Ionosphere [8] dataset is designed to predict the structure
+in the atmosphere given radar returns targeting free electrons in the ionosphere. The
+Pima Indians Diabetes [26] dataset involves predicting the onset of diabetes within
+5 years in Pima Indians given medical details. The Sonar [8] dataset involves the
+prediction of whether or not an object is a mine or a rock given the strength of sonar
+returns at different angles. Finally, for the image datasets, we have used the two Liver
+Gender datasets [25] which feature microscopy images of tissue, from both men and
+women.
+For our study, we have split each of the datasets of the benchmark into two different
+sets: a training set with the 80% of the data, and a testing set with the 20% of the data,
+except for LiverGenderAL and LiverGenderCR datasets that we use the existing split
+provided by the dataset. In addition, for each training dataset, we have selected 25
+samples per class using them as labelled data, and removing the annotation of the rest
+of the training data to test the semi-supervised learning methods.
+4.2. Training and evaluation procedure
+To check the correct performance of our methods we have trained two classic ma-
+chine learning algorithms that are SVM [7] and Random Forest [13] using the scikit-
+learn functionality [21]. In particular, we have trained these models with the initial
+annotated data obtaining a base result. Subsequently we have used the developed meth-
+ods, and three classical semi-supervised learning methods (Label Propagation, Label
+11
+Figure 7: Examples of the different datasets used. Top left Blobs dataset. Top right Circles
+dataset. Bottom Moons dataset.
+Spreading [34], and self-training [33]) to annotate the unlabelled data. Finally, we have
+retrained the two ML models with all the annotated data, to see the variation in per-
+formance of the models. Such a performance of the models has been evaluated using
+the accuracy. In addition, in order to evaluate the behaviour of the annotation methods
+we have taken into account the percentage of the data points correctly labelled and the
+percentage of data labelled with respect to the total available data.
+For testing our methods, we have used 20 variations of the homogical method and
+4 variations of the connectivity method. For the homological variants, half of them use
+the Bottleneck distance, and the other half use the Wasserstein distance. In addition,
+for both distances we have established 5 different threshold levels (0.8, 0.6, 0.4, 0.2
+and 0.0), except for the syntethic datasets that we have established only two threshold
+levels (0 and 0.8). Furthermore, for each of these variants, we have made two different
+versions, the former works with the original data points; whereas, in the latter we
+have reduced the dimensionality of the data to two dimension by using the UMAP
+reduction algorithm [18]. In the case of the connectivity alternatives, we have used the
+two variants explained in Section 3.2, we will called these methods connectivity1 and
+connectivity2. In addition, as in the case of homological methods, we have considered
+a version with the original data and another where we have reduced the dimensionality
+of the data to two dimensions using UMAP.
+12
+5. Results and discussion
+In this section, we present a thorough analysis for the results obtained by the devel-
+oped semi-supervised methods and the 3 traditional semi-supervised methods. Due to
+the nature of the data in each of the datasets, we have decided to separate our study into
+three different groups. First, we have studied the performance of the semi-supervised
+learning methods when applied to synthetic datasets; then, when applied to the struc-
+tured datasets; and ﬁnally, to the image datasets.
+Table A.4 includes the behaviour of the semi-supervised learning methods when
+applied to the three synthetic datasets (Blobs, Circles, and Moons). The results show
+that there are no major differences between the semi-supervised learning methods, al-
+though we can observe that the homological method with the Wasserstein distance as
+well as the connectivity methods offer slightly worse results than the rest.
+The performance of our methods on structured datasets is included in Table 2. From
+these results we can withdraw some conclusions. In general, connectivity methods do
+not offer good results; in fact, despite having a good annotation accuracy in many
+cases, the number of annotations they obtain is quite low. In addition, they obtain
+worse results that the base classiﬁers (see Appendix Appendix A). On the contrary,
+homological methods offer good results, improving the base results in most cases, see
+Table 2. These methods work better when a conﬁdence threshold is set. Namely, we
+have established threshold values of 0.8, 0.6, 0.4, and 0.2; and we have observed that
+from a threshold value higher than 0.4, all the unlabelled data points are labelled. Fur-
+thermore, the best results are obtained when we obtain a balance between the amount
+of annotated data and the correctness of this labelled data. In particular, the best results
+are obtained with a threshold of 0.8. Regarding the distance to be used, there are not
+signiﬁcant differences between the Bottleneck and the Wasserstein distance.
+We have also studied what happens when we reduce the dimensionality of the data
+by using UMAP. In view of the results, we can see that although there are no great
+differences, in general the results of the SVM and RF classiﬁers decrease slightly.
+This may be because despite the amount of annotated data increases, the correctness
+of this labelled data decreases. Therefore, we can conclude that the best results are
+obtained with the homological method using the Wasserstein distance, although there
+are no major differences with using the bottleneck distance, applying a threshold of 0.8
+and without using the reduction of dimension. This method, in general, improves the
+results obtained in the base case and even improves the results obtained by the 3 classic
+annotation methods.
+Finally, we have studied the case of image datasets, see Table 3. In this case, the
+connectivity methods again perform poorly, worsening even the base results. It is re-
+markable the case of the LiverGenderAL dataset in which the annotation accuracy is
+quite high (around 95%), while the annotation percentage is around 40% and however
+the results of the classiﬁers are worse than in the base case. Homological methods
+offer good results in general, improving the baseline results. In this case, we can see a
+difference in performance when select a distance, since the results obtained using the
+Wasserstein distance exceed those obtained with the Bottleneck distance. When apply-
+ing dimension reduction on these datasets, there is a big difference depending on the
+distance used. In the case of the Bottleneck distance, the performance improvement
+13
+Banknote
+Breast Cancer
+Ionosphere
+Prima Indian
+Sonar
+Mean(STD)
+Method
+SVM
+RF
+SVM
+RF
+SVM
+RF
+SVM
+RF
+SVM
+RF
+SVM
+RF
+Base
+97.0
+88.6
+89.3
+96.1
+80.0
+93.3
+65.7
+60.8
+61.3
+64.5
+78.7(15.2)
+80.7(16.7)
+Label Propagation
+97.4
+93.2
+90.3
+89.3
+86.7
+86.7
+64.3
+68.5
+58.1
+54.8
+79.3(17.1)
+78.5(16.3)
+Label Spreading
+97.4
+93.2
+90.3
+89.3
+86.7
+86.7
+64.3
+68.5
+58.1
+54.8
+79.3(17.1)
+78.5(16.3)
+Self Training classiﬁer
+95.1
+93.6
+35.9
+35.9
+85.0
+86.7
+66.4
+66.4
+58.1
+67.7
+68.1(23.2)
+70.1(22.4)
+Bottleneck
+97.4
+90.5
+87.4
+85.4
+78.3
+86.7
+63.6
+62.9
+45.2
+45.2
+77.1(22.6)
+74.1(19.5)
+Bottleneck threshold 0.8
+99.2
+92.4
+93.2
+91.3
+78.3
+95.0
+63.6
+64.3
+61.3
+64.5
+79.1(17.0)
+81.5(15.6)
+Bottleneck threshold 0.6
+99.2
+91.3
+89.3
+90.3
+75.0
+88.3
+59.4
+63.6
+48.4
+45.2
+74.3(20.9)
+75.7(20.6)
+Bottleneck threshold 0.4
+97.4
+90.5
+87.4
+85.4
+78.3
+86.7
+63.6
+62.9
+45.2
+45.2
+74.4(20.5)
+74.1(19.5)
+Bottleneck threshold 0.2
+97.4
+90.5
+87.4
+85.4
+78.3
+86.7
+63.6
+62.9
+45.2
+45.2
+74.4(20.5)
+74.1(19.5)
+Bottleneck UMAP
+97.4
+96.2
+92.2
+92.2
+85.0
+88.3
+58.7
+53.2
+67.7
+64.5
+80.2(16.4)
+78.9(18.9)
+Bottleneck UMAP threshold 0.8
+97.4
+94.3
+91.3
+88.4
+86.7
+93.3
+56.6
+59.4
+64.5
+61.3
+79.3(17.7)
+79.3(17.5)
+Bottleneck UMAP threshold 0.6
+97.4
+94.6
+91.3
+90.3
+86.7
+90.0
+57.3
+57.3
+67.7
+71.0
+80.1(16.9)
+80.6(15.9)
+Bottleneck UMAP threshold 0.4
+97.4
+96.2
+92.2
+92.2
+85.0
+88.3
+58.7
+53.2
+67.7
+64.5
+80.2(16.4)
+78.9(18.9)
+Bottleneck UMAP threshold 0.2
+97.4
+96.2
+92.2
+92.2
+85.0
+88.3
+58.7
+53.2
+67.7
+64.5
+80.2(16.4)
+78.9(18.9)
+Wasserstein
+97.0
+96.2
+87.4
+87.4
+76.7
+81.7
+60.8
+62.9
+71.0
+71.0
+78.6(14.1)
+79.8(13.2)
+Wasserstein threshold 0.8
+97.4
+89.8
+92.2
+88.4
+80.0
+95.0
+68.5
+67.8
+61.3
+64.5
+79.9(15.3)
+81.1(13.9)
+Wasserstein threshold 0.6
+99.2
+93.6
+89.3
+87.4
+70.0
+91.7
+61.5
+61.5
+74.2
+61.3
+78.9(15.2)
+79.1(16.3)
+Wasserstein threshold 0.4
+97.0
+96.2
+87.4
+87.4
+76.7
+81.7
+60.8
+62.9
+71.0
+71.0
+78.6(14.1)
+79.8(13.2)
+Wasserstein threshold 0.2
+97.0
+96.2
+87.4
+87.4
+76.7
+81.7
+60.8
+62.9
+71.0
+71.0
+78.6(14.1)
+79.8(13.2)
+Wasserstein UMAP
+97.0
+95.8
+92.2
+91.3
+78.3
+91.7
+58.0
+57.3
+71.0
+67.7
+79.3(15.8)
+80.8(17.1)
+Wasserstein UMAP threshold 0.8
+97.4
+95.1
+91.3
+87.4
+85.0
+93.3
+57.3
+63.6
+64.5
+67.7
+79.1(17.3)
+81.4(14.7)
+Wasserstein UMAP threshold 0.6
+97.0
+95.5
+94.2
+91.3
+86.7
+90.0
+58.7
+56.6
+64.5
+67.7
+80.2(17.5)
+80.2(17.0)
+Wasserstein UMAP threshold 0.4
+97.0
+95.8
+92.2
+91.3
+78.3
+91.7
+58.0
+57.3
+71.0
+67.7
+79.3(15.8)
+80.8(17.1)
+Wasserstein UMAP threshold 0.2
+97.0
+95.8
+92.2
+91.3
+78.3
+91.7
+58.0
+57.3
+71.0
+67.7
+79.3(15.8)
+80.8(17.1)
+Connectivity1
+93.6
+87.9
+89.3
+93.2
+76.7
+88.3
+61.5
+62.9
+64.5
+61.3
+77.1(14.3)
+78.7(15.3)
+Connectivity1 UMAP
+80.3
+85.2
+84.5
+89.3
+83.3
+100
+51.1
+53.2
+67.7
+58.1
+73.4(14.1)
+77.2(20.5)
+Connectivity2
+93.6
+87.5
+89.3
+93.2
+71.7
+83.3
+60.1
+58.7
+64.5
+64.5
+75.8(14.9)
+77.5(15.0)
+Connectivity2 UMAP
+53.8
+75.0
+84.5
+89.3
+80.0
+95.0
+51.1
+51.1
+67.7
+58.1
+67.4(15.0)
+73.7(19.1)
+Table 2: Accuracy results for the SVM and RF classiﬁers trained with data annotated by each
+of the annotation methods (classical, homological and connectivity) together with the results
+obtained with the initial data (base) in the 5 structured datasets. Best results for each dataset are
+highlighted in bold face.
+is notable when applying the dimensionality reduction. In particular, it greatly in-
+creases the annotation accuracy and the number of annotated images is maintained or
+increased. In the case of the Wasserstein distance, the performance with the reduction
+of dimensionality is very similar and even in some cases decreases. Another difference
+that we can observe is the results obtained when using different thresholds. In this case,
+the threshold of 0.8 means that no data is labeled when we do not apply dimensionality
+reduction, while the threshold of 0.4 and 0.2 label all the data, that is, they have the
+same performance as not using a threshold. Setting the threshold of 0.6 does not pro-
+duce improvements. Therefore, we can conclude that in general the method that works
+best is the homological method using the Wasserstein distance without threshold. This
+method improves the base results in both datasets, both for the SVM classiﬁer and the
+RF classiﬁer. Also, in the LiverGenderAL dataset it outperforms classic annotation
+methods by more than 16% and it obtains same results in the LiverGenderCR dataset.
+6. Conclusions and further work
+In this work, we have studied the combination of Topological Data Analysis tech-
+niques with semi-supervised learning methods to tackle binary classiﬁcation problems
+with a limited amount of labelled data. The results show that the combination of these
+methods can create classiﬁcation models that achieve better results than those obtained
+14
+Liver Gender AL
+Liver Gender CR
+Mean(STD)
+Method
+SVM
+RF
+SVM
+RF
+SVM
+RF
+Base
+71.6
+70.2
+80.3
+78.9
+76.0(6.1)
+74.5(6.2)
+Label Propagation
+62.7
+62.7
+82.9
+82.9
+72.8(14.3)
+72.8(14.3)
+Label Spreading
+62.7
+62.7
+82.9
+82.9
+72.8(14.3)
+72.8(14.3)
+Self Training classiﬁer
+52.2
+52.2
+52.9
+57.9
+55.7(4.9)
+55.1(4.0)
+Bottleneck
+47.8
+47.8
+53.9
+53.9
+50.9(4.4)
+50.9(4.4)
+Bottleneck threshold 0.8
+70.2
+64.2
+80.3
+78.9
+75.2(7.1)
+71.6(10.4)
+Bottleneck threshold 0.6
+70.2
+64.2
+80.3
+78.9
+75.2(7.1)
+71.6(10.4)
+Bottleneck threshold 0.4
+47.8
+47.8
+54.0
+54.0
+50.9(4.4)
+50.9(4.4)
+Bottleneck threshold 0.2
+47.8
+47.8
+54.0
+54.0
+50.9(4.4)
+50.9(4.4)
+Bottleneck UMAP
+71.6
+68.7
+80.3
+80.3
+76.0(6.1)
+74.5(8.2)
+Bottleneck UMAP threshold 0.8
+70.2
+64.2
+81.6
+80.3
+75.9(8.1)
+72.2(11.4)
+Bottleneck UMAP threshold 0.6
+74.6
+79.1
+81.6
+80.3
+78.1(4.9)
+79.7(0.8)
+Bottleneck UMAP threshold 0.4
+71.6
+68.7
+80.3
+80.3
+76.0(6.1)
+74.5(8.2)
+Bottleneck UMAP threshold 0.2
+71.6
+68.7
+80.3
+80.3
+76.0(6.1)
+74.5(8.2)
+Wasserstein
+73.1
+77.6
+82.9
+82.9
+78.0(6.9)
+80.3(3.7)
+Wasserstein threshold 0.8
+70.2
+64.2
+80.3
+78.9
+75.2(7.1)
+71.6(10.4)
+Wasserstein threshold 0.6
+71.6
+68.7
+82.9
+82.9
+77.3(8.0)
+75.8(10.1)
+Wasserstein threshold 0.4
+73.1
+77.6
+82.9
+82.9
+78.0(6.9)
+80.3(3.7)
+Wasserstein threshold 0.2
+73.1
+77.6
+82.9
+82.9
+78.0(6.9)
+80.3(3.7)
+Wasserstein UMAP
+74.6
+73.1
+65.8
+86.8
+70.2(6.2)
+80.0(9.7)
+Wasserstein UMAP threshold 0.8
+68.7
+59.7
+82.9
+76.3
+75.8(10.1)
+68.0(11.8)
+Wasserstein UMAP threshold 0.6
+73.1
+65.7
+81.6
+79.0
+77.4(6.0)
+72.3(9.4)
+Wasserstein UMAP threshold 0.4
+74.6
+73.1
+65.8
+86.8
+70.2(6.3)
+80.0(9.7)
+Wasserstein UMAP threshold 0.2
+74.6
+73.1
+65.8
+86.8
+70.2(6.3)
+80.0(9.7)
+Connectivity1
+70.2
+61.2
+46.1
+46.1
+58.1(17.0)
+53.6(10.7)
+Connectivity1 UMAP
+71.6
+59.7
+75.0
+73.7
+73.3(2.4)
+66.7(9.9)
+Connectivity2
+70.2
+59.7
+46.1
+46.1
+58.1(17.0)
+52.9(9.7)
+Connectivity2 UMAP
+70.2
+64.2
+76.3
+72.4
+73.2(4.4)
+68.3(5.8)
+Table 3: Accuracy results for the SVM and RF classiﬁers trained with data annotated by each
+of the annotation methods (classical, homological and connectivity) together with the results
+obtained with the initial data (base) in the 2 datasets of images. Best results for each dataset are
+highlighted in bold face.
+when using classical semi-supervised learning methods on different kinds of datasets.
+Speciﬁcally, the homological method developed using the Wasserstein distance with
+a threshold of 0.8 in the case of structured datasets, and without a threshold in image
+datasets, generally obtains the best results by improving, in some cases, more than a
+16% the results obtained by the classical semi-supervised learning methods.
+In the future, we plan to study an iterative version of these methods and the appli-
+cation of ensemble techniques in order to improve the robustness and reliability of our
+methods. Finally, we plan to extend our work to non-binary classiﬁcation problems.
+7. Acknowledgments
+This work was partially supported by Ministerio de Ciencia e Innovaci´on [PID2020-
+115225RB-I00 / AEI / 10.13039/501100011033], and FPU Grant 16/06903 of the
+15
+Spanish MEC.
+References
+[1] Affonso, C., Rossi, A.L.D., Vieira, F.H.A., et al.: Deep learning for biological
+image classiﬁcation. Expert Systems with Applications 85(1), 114–122 (2017)
+[2] Akc¸ay, S., Kundegorski, M.E., Devereux, M., et al.: Transfer learning using con-
+volutional neural networks for object classiﬁcation within x-ray baggage security
+imagery. In: 2016 IEEE International Conference on Image Processing. pp. 1057–
+1061. ICIP’16 (2016)
+[3] Ara´ujo, T., Aresta, G., Castro, E., et al.: Classiﬁcation of breast cancer histology
+images using convolutional neural networks. PLoS ONE 12(6) (2017)
+[4] Berthelot, D., et al.: Mixmatch: A holistic approach to semi-supervised learn-
+ing. In: Advances in Neural Information Processing Systems 32, pp. 5049–5059.
+Curran Associates, Inc. (2019)
+[5] Berthelot, D., et al.: Mixmatch: A holistic approach to semi-supervised learn-
+ing. In: 33rd International Conference on Neural Information Processing Systems
+(NEURIPS’19). pp. 5050–5060. Curran Associates Inc. (2019)
+[6] Bisong,
+E.:
+Google
+Colaboratory,
+pp.
+59–64
+(2019).
+https://doi.org/10.1007/978-1-4842-4470-8 7,
+https://doi.org/10.
+1007/978-1-4842-4470-8_7
+[7] Cortes, C., Vapnik, V.: Support-vector networks. Machine learning 20(3), 273–
+297 (1995)
+[8] Dua, D., Graff, C.:
+UCI machine learning repository (2017), http://
+archive.ics.uci.edu/ml
+[9] Edelsbrunner, H., Harer, J.: Computational topology: an introduction. American
+Mathematical Soc. (2010)
+[10] Edelsbrunner, H., Letscher, D., Zomorodian, A.: Topological persistence and
+simpliﬁcation. In: Proceedings 41st annual symposium on foundations of com-
+puter science. pp. 454–463. IEEE (2000)
+[11] Efrat, A., Itai, A., Katz, M.J.: Geometry helps in bottleneck matching and related
+problems. Algorithmica 31, 1–28 (2001)
+[12] Fefferman, C., Mitter, S., Narayanan, H.: Testing the manifold hypothesis. Jour-
+nal of the American Mathematical Society 29(4), 983–1049 (2016)
+[13] Ho, T.K.: Random decision forests. In: Proceedings of 3rd international confer-
+ence on document analysis and recognition. vol. 1, pp. 278–282. IEEE (1995)
+16
+[14] Irvin, J., Rajpurkar, P., Ko, M., Yu, Y., Ciurea-Ilcus, S., Chute, C., Marklund, H.,
+Haghgoo, B., Ball, R., Shpanskaya, K., et al.: Chexpert: A large chest radiograph
+dataset with uncertainty labels and expert comparison. In: Proceedings of the
+AAAI conference on artiﬁcial intelligence. vol. 33, pp. 590–597 (2019)
+[15] Kantorovich,
+L.V.:
+Mathematical
+methods
+of
+organizing
+and
+planning
+production.
+Management
+Science
+6,
+366–422
+(1960).
+https://doi.org/10.1287/mnsc.6.4.366,
+https://doi.org/10.1287/
+mnsc.6.4.366
+[16] Laine, S., Aila, T.: Temporal Ensembling for Semi-Supervised Learning. In: 5th
+International Conference on Learning Representations. pp. 1–13. ICLR’17 (2017)
+[17] Lee, D.H., et al.: Pseudo-label: The simple and efﬁcient semi-supervised learning
+method for deep neural networks. In: Workshop on challenges in representation
+learning, ICML. vol. 3, p. 896 (2013)
+[18] McInnes, L., Healy, J., Saul, N., Grossberger, L.: Umap: Uniform manifold ap-
+proximation and projection. The Journal of Open Source Software 3(29), 861
+(2018)
+[19] Miyato, T., Maeda, S.i., Koyama, M., Ishii, S.: Virtual adversarial training: a
+regularization method for supervised and semi-supervised learning. IEEE trans-
+actions on pattern analysis and machine intelligence 41(8), 1979–1993 (2018)
+[20] Muszynski, G., Kashinath, K., Kurlin, V., Wehner, M., et al.: Topological data
+analysis and machine learning for recognizing atmospheric river patterns in large
+climate datasets. Geoscientiﬁc Model Development 12(2), 613–628 (2019)
+[21] Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O.,
+Blondel, M., Prettenhofer, P., Weiss, R., Dubourg, V., Vanderplas, J., Passos, A.,
+Cournapeau, D., Brucher, M., Perrot, M., Duchesnay, E.: Scikit-learn: Machine
+learning in Python. Journal of Machine Learning Research 12, 2825–2830 (2011)
+[22] Saggar, M., Sporns, O., Gonzalez-Castillo, J., Bandettini, P.A., Carlsson, G.,
+Glover, G., Reiss, A.L.: Towards a new approach to reveal dynamical organi-
+zation of the brain using topological data analysis. Nature communications 9(1),
+1–14 (2018)
+[23] Samuli, L., Timo, A.: Temporal ensembling for semi-supervised learning. In:
+International Conference on Learning Representations (ICLR). vol. 4, p. 6 (2017)
+[24] Saul, N.,
+Tralie, C.:
+Scikit-tda:
+Topological data analysis for python
+(2019). https://doi.org/10.5281/zenodo.2533369,
+https://doi.org/10.
+5281/zenodo.2533369
+[25] Shamir, L., Orlov, N., Eckley, D.M., et al.: Iicbu 2008: A proposed benchmark
+suite for biological image analysis. Medical & Biological Engineering & Com-
+puting 46(9), 943–947 (2008)
+17
+[26] Smith, J.W., Everhart, J.E., Dickson, W.C., Knowler, W.C., Johannes, R.S.: Us-
+ing the adap learning algorithm to forecast the onset of diabetes mellitus. In: Pro-
+ceedings of the Symposium on Computer Applications and Medical Care. pp.
+261–265. IEEE (1988)
+[27] Sohn, K., et al.: Fixmatch: Simplifying semi-supervised learningwith consis-
+tency and conﬁdence. In: 34th International Conference on Neural Information
+Processing Systems (NEURIPS’20). Curran Associates Inc. (2020)
+[28] Sun, C., Shrivastava, A., Singh, S., Gupta, A.: Revisiting unreasonable effec-
+tiveness of data in deep learning era. In: Proceedings of the IEEE international
+conference on computer vision. pp. 843–852 (2017)
+[29] Tarvainen, A., Valpola, H.: Mean teachers are better role models: Weight-
+averaged consistency targets improve semi-supervised deep learning results.
+arXiv preprint arXiv:1703.01780 (2017)
+[30] Taylor, D., Klimm, F., Harrington, H.A., Kram´ar, M., Mischaikow, K., Porter,
+M.A., Mucha, P.J.: Topological data analysis of contagion maps for examining
+spreading processes on networks. Nature communications 6(1), 1–11 (2015)
+[31] The GUDHI Project: GUDHI User and Reference Manual. GUDHI Editorial
+Board (2015), http://gudhi.gforge.inria.fr/doc/latest/
+[32] Xie, Q., Luong, M.T., Hovy, E., Le, Q.V.: Self-training with noisy student im-
+proves imagenet classiﬁcation. In: Proceedings of the IEEE/CVF Conference on
+Computer Vision and Pattern Recognition. pp. 10687–10698 (2020)
+[33] Yarowsky, D.: Unsupervised word sense disambiguation rivaling supervised
+methods. In: 33rd annual meeting of the association for computational linguis-
+tics. pp. 189–196 (1995)
+[34] Zhou, D., Bousquet, O., Lal, T.N., Weston, J., Sch¨olkopf, B.: Learning with local
+and global consistency. In: Advances in Neural Information Processing Systems
+16. pp. 321–328. MIT Press (2004)
+[35] Zhu, X., Ghahramani, Z.: Learning from labeled and unlabeled data with label
+propagation. Tech. rep. (2002)
+[36] Zhu, X., Goldberg, A.B.: Introduction to semi-supervised learning. Synthesis
+lectures on artiﬁcial intelligence and machine learning 3(1), 1–130 (2009)
+[37] Zomorodian, A.: Topological data analysis. Advances in applied and computa-
+tional topology 70, 1–39 (2012)
+[38] Zomorodian, A., Carlsson, G.: Computing persistent homology. Discrete & Com-
+putational Geometry 33(2), 249–274 (2005)
+Appendix A. Tables
+18
+Blobs
+Circles
+Moons
+Method
+SVM
+RF
+SVM
+RF
+SVM
+RF
+Label Propagation
+100
+100
+60.0
+100
+84.0
+92.0
+Label Spreading
+100
+100
+64.0
+98.0
+94.0
+96.0
+Self Training classiﬁer
+100
+100
+64.0
+100
+88.0
+92.0
+Bottleneck
+100
+100
+60.0
+100
+84.0
+100
+Bottleneck threshold 0.8
+100
+100
+64.0
+96.0
+92.0
+100
+Bottleneck UMAP
+100
+100
+64.0
+98.0
+86.0
+98.0
+Bottleneck UMAP threshold
+100
+100
+62.0
+100
+96.0
+100
+Wasserstein
+100
+100
+62.0
+98.0
+88.0
+100
+Wasserstein threshold 0.8
+100
+100
+74.0
+94.0
+88.0
+100
+Wasserstein UMAP
+100
+100
+60.0
+100
+84.0
+96.0
+Wasserstein UMAP threshold 0.8
+100
+100
+58.0
+100
+86.0
+98.0
+Connectivity1
+100
+100
+50.0
+88.0
+92.0
+96.0
+Connectivity1 UMAP
+100
+100
+62.0
+100
+96.0
+96.0
+Connectivity2
+100
+100
+50.0
+94.0
+90.0
+96.0
+Connectivity2 UMAP
+100
+100
+66.0
+100
+82.0
+96.0
+Table A.4: Accuracy results for the SVM and RF classiﬁers trained with data annotated by each
+of the annotation methods (classical, homological and connectivity) tin the 3 synthetic datasets.
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Label Propagation
+100
+100
+100
+100
+Label Spreading
+100
+100
+100
+100
+Self Training classiﬁer
+100
+100
+100
+100
+Bottleneck
+100
+100
+100
+100
+Bottleneck threshold
+100
+100
+100
+100
+Bottleneck UMAP
+100
+100
+100
+100
+Bottleneck UMAP threshold
+100
+100
+100
+100
+Wasserstein
+100
+100
+100
+100
+Wasserstein threshold
+100
+98.5
+100
+100
+Wasserstein UMAP
+100
+100
+100
+100
+Wasserstein UMAP threshold
+100
+100
+100
+100
+Connectivity1
+100
+91.5
+100
+100
+Connectivity1 UMAP
+100
+86.5
+100
+100
+Connectivity2
+100
+100
+100
+100
+Connectivity2 UMAP
+100
+100
+100
+100
+Table A.5: Results for the Blobs dataset.
+19
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Label Propagation
+98.5
+100
+60.0
+100
+Label Spreading
+97.0
+100
+64.0
+98.0
+Self Training classiﬁer
+100
+100
+64.0
+100
+Bottleneck
+100
+100
+60.0
+100
+Bottleneck threshold
+100
+81.5
+64.0
+96.0
+Bottleneck UMAP
+100
+100
+64.0
+98.0
+Bottleneck UMAP threshold
+100
+100
+62.0
+100
+Wasserstein
+96.5
+100
+62.0
+98.0
+Wasserstein threshold
+100
+68.0
+74.0
+94.0
+Wasserstein UMAP
+100
+100
+60.0
+100
+Wasserstein UMAP threshold
+100
+100
+58.0
+100
+Connectivity1
+91.8
+49.0
+50.0
+88.0
+Connectivity1 UMAP
+100
+96.0
+62.0
+100
+Connectivity2
+97.0
+51.5
+50.0
+94.0
+Connectivity2 UMAP
+100
+100
+66.0
+100
+Table A.6: Results for the Circles dataset.
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Label Propagation
+95.5
+100
+84.0
+92.0
+Label Spreading
+99.0
+100
+94.0
+96.0
+Self Training classiﬁer
+91.5
+100
+88.0
+92.0
+Bottleneck
+100
+100
+84.0
+100
+Bottleneck threshold
+100
+76.5
+92.0
+100
+Bottleneck UMAP
+100
+100
+86.0
+98.0
+Bottleneck UMAP threshold
+100
+100
+96.0
+100
+Wasserstein
+98.5
+100
+88.0
+100
+Wasserstein threshold
+100
+53.5
+88.0
+100
+Wasserstein UMAP
+100
+100
+84.0
+96.0
+Wasserstein UMAP threshold
+100
+99.5
+86.0
+98.0
+Connectivity1
+94.1
+51.0
+92.0
+96.0
+Connectivity1 UMAP
+100
+71.0
+96.0
+96.0
+Connectivity2
+93.4
+60.5
+90.0
+96.0
+Connectivity2 UMAP
+100
+100
+82.0
+96.0
+Table A.7: Results for the Moons dataset.
+20
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Base
+-
+-
+71.6
+70.2
+Label Propagation
+63.5
+100
+62.7
+62.7
+Label Spreading
+63.5
+100
+62.7
+62.7
+Self Training classiﬁer
+64.9
+100
+52.2
+52.2
+Bottleneck
+41.9
+100
+47.8
+47.8
+Bottleneck threshold 0.8
+0
+0
+70.2
+64.2
+Bottleneck threshold 0.6
+0
+0
+70.2
+64.2
+Bottleneck threshold 0.4
+41.9
+100
+47.8
+47.8
+Bottleneck threshold 0.2
+41.9
+100
+47.8
+47.8
+Bottleneck UMAP
+81.8
+100
+71.6
+68.7
+Bottleneck UMAP threshold 0.8
+85.9
+48.0
+70.2
+64.2
+Bottleneck UMAP threshold 0.6
+85.3
+78.4
+74.6
+79.1
+Bottleneck UMAP threshold 0.4
+81.7
+100
+71.6
+68.7
+Bottleneck UMAP threshold 0.2
+81.7
+100
+71.6
+68.7
+Wasserstein
+77.0
+100
+73.1
+77.6
+Wasserstein threshold 0.8
+0
+0
+70.2
+64.2
+Wasserstein threshold 0.6
+100
+6.8
+71.6
+68.7
+Wasserstein threshold 0.4
+77.0
+100
+73.1
+77.6
+Wasserstein threshold 0.2
+77.0
+100
+73.1
+77.6
+Wasserstein UMAP
+81.1
+100
+74.6
+73.1
+Wasserstein UMAP threshold 0.8
+89.4
+44.6
+68.7
+59.7
+Wasserstein UMAP threshold 0.6
+83.6
+82.4
+73.1
+65.7
+Wasserstein UMAP threshold 0.4
+81.1
+100
+74.6
+73.1
+Wasserstein UMAP threshold 0.2
+81.1
+100
+74.6
+73.1
+Connectivity1
+96.4
+37.8
+70.2
+61.2
+Connectivity1 UMAP
+93.7
+42.6
+71.6
+59.7
+Connectivity2
+96.8
+42.6
+70.2
+59.7
+Connectivity2 UMAP
+92.8
+46.6
+70.2
+64.2
+Table A.8: Results for the LiverGenderAL dataset.
+21
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Base
+-
+-
+80.3
+78.9
+Label Propagation
+82.5
+100
+82.9
+Label Spreading
+82.5
+100
+82.9
+Self Training classiﬁer
+69.5
+100
+59.2
+57.9
+Bottleneck
+49.2
+100
+53.9
+53.9
+Bottleneck threshold 0.8
+0
+0
+80.3
+80.3
+Bottleneck threshold 0.6
+0
+0
+80.3
+80.3
+Bottleneck threshold 0.4
+49.2
+100
+54.0
+54.0
+Bottleneck threshold 0.2
+49.2
+100
+54.0
+54.0
+Bottleneck UMAP
+75.7
+100
+80.3
+80.3
+Bottleneck UMAP threshold 0.8
+94.6
+52.5
+81.6
+80.3
+Bottleneck UMAP threshold 0.6
+86.3
+70.1
+81.6
+80.3
+Bottleneck UMAP threshold 0.4
+75.7
+100
+80.3
+80.3
+Bottleneck UMAP threshold 0.2
+75.7
+100
+80.3
+80.3
+Wasserstein
+81.9
+100
+82.9
+82.9
+Wasserstein threshold 0.8
+0
+0
+80.3
+78.9
+Wasserstein threshold 0.6
+100
+45.8
+82.9
+82.9
+Wasserstein threshold 0.4
+81.9
+100
+82.9
+82.9
+Wasserstein threshold 0.2
+81.9
+100
+82.9
+82.9
+Wasserstein UMAP
+72.9
+100
+65.8
+86.8
+Wasserstein UMAP threshold 0.8
+94.4
+50.9
+82.9
+76.3
+Wasserstein UMAP threshold 0.6
+79.9
+75.7
+81.6
+79.0
+Wasserstein UMAP threshold 0.4
+72.9
+100
+65.8
+86.8
+Wasserstein UMAP threshold 0.2
+72.9
+100
+65.8
+86.8
+Connectivity1
+80.2
+57.1
+46.1
+46.1
+Connectivity1 UMAP
+93.7
+35.6
+75.0
+73.7
+Connectivity2
+81.1
+59.9
+46.1
+46.1
+Connectivity2 UMAP
+90.9
+43.5
+76.3
+72.4
+Table A.9: Results for the LiverGenderCR dataset.
+22
+Method
+% Correct Labelled
+% Labelled
+Accuracy SVM
+Accuracy RF
+Base
+-
+-
+97.0
+88.6
+Label Propagation
+93.7
+100
+97.4
+93.2
+Label Spreading
+93.7
+100
+97.4
+93.2
+Self Training classiﬁer
+95.7
+100
+95.1
+93.6
+Bottleneck
+90.3
+100
+97.4
+90.5
+Bottleneck threshold 0.8
+100
+15.1
+99.2
+92.4
+Bottleneck threshold 0.6
+92.7
+84.6
+99.2
+91.3
+Bottleneck threshold 0.4
+90.3
+100
+97.4
+90.5
+Bottleneck threshold 0.2
+90.3
+100
+97.4
+90.5
+Bottleneck UMAP
+98.1
+100
+97.4
+96.2
+Bottleneck UMAP threshold 0.8
+100
+83.1
+97.4
+94.3
+Bottleneck UMAP threshold 0.6
+97.3
+93.3
+97.4
+94.6
+Bottleneck UMAP threshold 0.4
+98.1
+100
+97.4
+96.2
+Bottleneck UMAP threshold 0.2
+98.1
+100
+97.4
+96.2
+Wasserstein
+95.0
+100
+97.0
+96.2
+Wasserstein threshold 0.8
+100
+17.5
+97.4
+89.8
+Wasserstein threshold 0.6
+99.1
+73.5
+99.2
+93.6
+Wasserstein threshold 0.4
+95.0
+100
+97.0
+96.2
+Wasserstein threshold 0.2
+95.0
+100
+97.0
+96.2
+Wasserstein UMAP
+98.0
+100
+97.0
+95.8
+Wasserstein UMAP threshold 0.8
+99.2
+78.8
+97.4
+95.1
+Wasserstein UMAP threshold 0.6
+99.3
+97.7
+97.0
+95.5
+Wasserstein UMAP threshold 0.4
+98.0
+100
+97.0
+95.8
+Wasserstein UMAP threshold 0.2
+98.0
+100
+97.0
+95.8
+Connectivity1
+94.1
+22.4
+93.6
+87.9
+Connectivity1 UMAP
+67.1
+16.4
+80.3
+85.2
+Connectivity2
+94.7
+25.0
+93.6
+87.5
+Connectivity2 UMAP
+34.8
+11.2
+53.8
+75.0
+Table A.10: Results for the Banknote dataset.
+23

@@ -1,0 +1,6563 @@
+Delta Tuning: A Comprehensive Study of Parameter
+Efﬁcient Methods for Pre-trained Language Models
+Ning Ding∗, Yujia Qin∗, Guang Yang, Fuchao Wei, Zonghan Yang, Yusheng Su, Shengding Hu,
+Yulin Chen, Chi-Min Chan, Weize Chen, Jing Yi, Weilin Zhao, Xiaozhi Wang,
+Zhiyuan Liu, Hai-Tao Zheng, Jianfei Chen, Yang Liu, Jie Tang, Juanzi Li, Maosong Sun
+Tsinghua University, BAAI
+{dingn18, qyj20}@mails.tsinghua.edu.cn
+Abstract
+As pre-trained language models (PLMs) have become the fundamental infrastructure for
+various NLP tasks and researchers have readily enjoyed themselves in the pretraining-
+ﬁnetuning paradigm, evidence from emerging research has continuously proven that larger
+models tend to yield better performance. However, despite the welcome outcome, the
+process of ﬁne-tuning large-scale PLMs brings prohibitive adaptation costs. In fact, ﬁne-
+tuning all the parameters of a colossal model and retaining separate instances for different
+tasks are practically infeasible. This necessitates a new branch of research focusing on the
+parameter-efﬁcient adaptation of PLMs. In order to unleash the imagination of the possible
+advantages of such methods, not limited to parameter efﬁciency, we coined a new term
+delta tuning from a morphological point of view to refer to the original “parameter efﬁcient
+tuning”. In contrast with the standard ﬁne-tuning, delta tuning only ﬁne-tunes a small
+portion of the model parameters while keeping the rest untouched, largely reducing both the
+computation and storage costs. Recent studies have demonstrated that a series of delta tuning
+methods with distinct tuned parameter selection could achieve performance on a par with
+full-parameter ﬁne-tuning, suggesting a new promising way of stimulating large-scale PLMs.
+In this paper, we ﬁrst formally describe the problem of delta tuning and then comprehensively
+review recent delta tuning approaches. We also propose a uniﬁed categorization criterion that
+divides existing delta tuning methods into three groups: addition-based, speciﬁcation-based,
+and reparameterization-based methods. Though initially proposed as an efﬁcient method
+to steer large models, we believe that some of the fascinating evidence discovered along
+with delta tuning could help further reveal the mechanisms of PLMs and even deep neural
+networks. To this end, we discuss the theoretical principles underlying the effectiveness
+of delta tuning and propose frameworks to interpret delta tuning from the perspective of
+optimization and optimal control, respectively. Furthermore, we provide a holistic empirical
+study of representative methods, where results on over 100 NLP tasks demonstrate a
+comprehensive performance comparison of different approaches. The experimental results
+also cover the analysis of combinatorial, scaling and transferable properties of delta tuning.
+To facilitate the research of delta tuning, we are also developing an open-source toolkit,
+OpenDelta2, that enables practitioners to efﬁciently and ﬂexibly implement delta tuning on
+PLMs. At last, we discuss a series of real-world applications of delta tuning.
+Keywords— natural language processing, pre-trained models, parameter-efﬁcient, delta tuning
+“The lurking suspicion that something could be simpliﬁed is
+the world’s richest source of rewarding challenges.”
+— Edsger W. Dijkstra
+∗Equal contribution.
+2https://github.com/thunlp/OpenDelta
+The contributions of the authors are listed in § CONTRIBUTIONS
+arXiv:2203.06904v2  [cs.CL]  15 Mar 2022
+CONTENTS
+Contents
+1
+Introduction
+3
+2
+Preliminaries
+5
+2.1
+Transformer . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+5
+2.2
+Pre-trained Language Models . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+7
+3
+Delta Tuning
+8
+3.1
+Addition-based Methods . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+8
+3.2
+Speciﬁcation-based Methods . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+10
+3.3
+Reparameterization-based Methods . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+11
+4
+Theoretical Perspectives of Delta Tuning
+12
+4.1
+Optimization Perspective for Delta Tuning . . . . . . . . . . . . . . . . . . . . . . . . . . .
+12
+4.2
+Optimal Control Perspective for Delta Tuning . . . . . . . . . . . . . . . . . . . . . . . . .
+14
+5
+Comparisons and Experimental Discoveries
+17
+5.1
+Performance, Convergence and Efﬁciency . . . . . . . . . . . . . . . . . . . . . . . . . . .
+17
+5.2
+Combinations of Delta Tuning Methods . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+20
+5.3
+The Power of Scale for Delta Tuning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+26
+5.4
+Task-level Transferability Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+27
+6
+Applications
+28
+7
+Conclusion
+32
+Broader Impacts
+32
+Acknowledgments
+33
+Contributions
+33
+A Implementation Details
+46
+A.1
+Performance and Convergence . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+46
+A.2
+Combinations of Delta Tuning Methods . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+46
+A.3
+The Power of Scale for Delta Tuning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+47
+A.4
+Task-level Transferability Evaluation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+47
+B
+Tasks Evaluated in Experiments
+47
+2
+1
+Introduction
+Language lies at the heart of human intelligence. Its systematic nature allows the denotation of real objects
+or illustration of laws with symbolic expressions and could convey almost inﬁnite information with a ﬁnite
+symbolic set; its arbitrariness shows that there are no necessary connections between the real-world and the
+language space, and indicates the importance of world knowledge and social convention to the effectiveness of
+language in human society; its richness in meaning enables the expression of extremely complex behaviors
+or tasks with clear and simple symbols. Understanding language is the key to understanding intelligence.
+The inquiry into what language is and how we acquire, store and comprehend it has never stopped among
+psychologists and linguists, and the charm of language will continue to impress and inspire us in the future.
+Likewise, to create the real intelligence system, researchers in the ﬁeld of artiﬁcial intelligence (AI) have been
+dedicated to training machines to model, understand and generate language.
+With the revolutionary development in computing hardware, traditional statistical methods have yielded their
+place to deep learning (LeCun et al., 2015) that heavily rely on tensor computation and huge data volume.
+Modern natural language processing (NLP) uses deep neural networks to implicitly model probability and
+capture language representations (Hochreiter & Schmidhuber, 1997; Bengio et al., 2000; Grefenstette et al.,
+2014; Kim, 2014; Vaswani et al., 2017). A standard pipeline involves encoding language into discrete tokens
+(tokenization) as model input, choosing a proper model architecture, training the network with the given
+corpora, and designing self-supervised tasks. Experimented with various model architecture, the Transformer
+neural network (Vaswani et al., 2017) produced state-of-the-art performances on a series of NLP tasks and has
+been widely acknowledged as the standard architecture for pre-trained language models (PLMs). This ushers a
+new era of pre-training and ﬁne-tuning. PLMs typically use heavily over-parameterized Transformers as the
+base architecture, and model natural language in bidirectional (Devlin et al., 2019), auto-regressive (Radford
+et al., 2018, 2019), or sequence-to-sequence (Raffel et al., 2019) manners on large-scale unsupervised corpora.
+Then for downstream tasks, task-speciﬁc objectives are introduced to ﬁne-tune the PLMs for model adaptation.
+Notably, the increasing scale of PLMs (measured by the number of parameters) seems to be an irreversible
+trend as constant empirical results show that larger models (along with more data) almost certainly lead to
+better performance. For example, the 175 billion parameters GPT-3 (Brown et al., 2020) generates natural
+language of unprecedented quality and can conduct various desired zero-shot tasks with satisfactory results
+given appropriate prompts. Nevertheless, performing full parameter ﬁne-tuning on existing computing devices
+becomes formidable with the growing model scale. This ﬁnally leads to a desperate yet thought-provoking
+question: do we really need to update all the parameters? In this context, how to efﬁciently and effectively
+adapt large models to particular downstream tasks is an intriguing research issue.
+As a predominant way to conduct model adaptations, ﬁne-tuning initializes the model with the pre-trained
+weights, updates all the parameters, and produces separate instances for different tasks. But as implied by the
+case of GPT-3, ﬁne-tuning becomes impractical as the model scales. In addition to the cost of deployment and
+computation, storing different instances for different tasks is extremely memory-intensive. To further explore
+the practical application rate of large models (PLMs with over 1 billion parameters), we randomly select 1000
+published research papers from the recent ﬁve NLP conferences (200 for each venue), including ACL 2021,
+EMNLP 2021, NAACL 2021, ACL 2020, and EMNLP 2020. Then we manually count the usage of PLMs in
+these peer-reviewed works, speciﬁcally, we only focus on the experiments part of the papers. According to
+the statistics in Table 1, although the use of PLMs has almost become standard, there are only 0.5% ∼4%
+research papers that practically adopt large ones in the experiments. This suggests, ﬁrstly, that there is still
+inertia in the academic community which has resulted in scarce usage of large models in research, and also
+that the cost of deploying and experimentally validating large PLMs hinders the development of NLP research.
+Table 1: The usage of models of different sizes in research published in NLP conferences, the statistic is based
+on 1000 randomly selected papers. Large PLMs are deﬁned as PLMs with over 1 billion parameters.
+Venue
+No PLMs
+Small PLMs
+Large PLMs
+Per. of Large PLMs
+ACL 2021
+41
+151
+8
+4.0%
+EMNLP 2021
+46
+150
+4
+2.0%
+NAACL 2021
+37
+158
+5
+2.5%
+ACL 2020
+107
+92
+1
+0.5%
+EMNLP 2020
+62
+137
+1
+0.5%
+3
+To this end, a branch of parameter-efﬁcient methods for model tuning arises. Although each of these approaches
+has its own emphasis on structural design, they essentially tune a “delta” (i.e., adaptive parameters) in the
+adaptation phase, we thus coin the term delta tuning3 to refer to these methods. Parametric efﬁciency is
+an external manifestation of delta tuning that further exposes the low-rank or low-dimensional nature of
+large model adaptation in a more fundamental way. Generally, delta tuning only updates a small number of
+parameters (inherently in the model or additionally introduced) while freezing the remaining parameters that
+account for the vast majority. Adapter tuning (Houlsby et al., 2019) is among the earliest approaches to steer
+pre-trained models with a limited number of parameters. It inserts adapter modules with bottleneck architecture
+between layers in PLMs and only these inserted modules get updated during ﬁne-tuning. Preﬁx-tuning (Li &
+Liang, 2021) tunes the PLMs by updating the pre-pended parameters in each transformer layer. Taken insights
+from GPT-3, prompt tuning (Lester et al., 2021) only prepends and updates task-speciﬁc trainable parameters
+in the original input embeddings. BitFit (Zaken et al., 2021) updates the bias terms in PLMs while freezing the
+remaining modules. LoRA (Hu et al., 2021a) decomposes attention weight gradient into low-rank matrices to
+reduce the number of trainable parameters. With the diverse ﬂourishing research and the promising results,
+efforts have been made to explain and compare the essence of some popular methods. He et al. (2022) propose
+a uniﬁed view of the existing delta tuning methods and illustrate the difference and connections among them
+formulaically.
+01
+b
+specialization
+specialization
+BERT
+Player BERT
+Broker BERT
+Physician BERT
+Strong BERT
+Instructor BERT
+Engineer BERT
+Scholar BERT
+Figure 1: Delta tuning seeks to adapt and specialize PLMs with changes of a small portion of parameters.
+The delta tuning methods enable efﬁcient tuning and practical usage for large pre-trained models and often
+achieve comparable results to the standard ﬁne-tuning. For example, the vanilla ﬁne-tuning of GPT-3 needs to
+update about 175,255 million parameters, which is almost infeasible in both industry and academia. However,
+if we only tune the injected low-rank decomposition matrices in each Transformer layer (Hu et al., 2021a),
+only 37.7 million parameters will be involved in backpropagation. Delta tuning not only provides a promising
+way to adapt large PLMs, but also sheds light on the mechanisms behind such model adaptations. Compared
+to pre-training, delta tuning makes model adaptation a considerably low-cost process in terms of data volume
+and model optimization. For instance, researchers ﬁnd that the optimization problem of the adaptations for big
+models could be reparameterized into a low-dimensional “intrinsic subspace” (Aghajanyan et al., 2021; Qin
+et al., 2021b), and various NLP tasks could be handled by only tuning very few parameters in the subspace.
+The empirical evidence takes us one step closer to understanding how pre-trained models work, and may even
+spawn new theoretical questions that are worth exploring.
+This paper ﬁrst attempts to survey the development and recent advances in delta tuning. For preliminaries, we
+give a description of the Transformer neural models and mainstream PLMs (§2: PRELIMINARIES). Then we
+formally describe the delta tuning problem and propose a categorization criterion (§3: DELTA TUNING) to pro-
+vide a uniﬁed view on delta tuning methods. Categorizing delta tuning into addition-based (§3.1: ADDITION),
+speciﬁcation-based (§3.2: SPECIFICATION), and reparameterization-based (§3.3: REPARAMETERIZATION)
+methods, we comprehensively introduce the technical details and empirical conclusions of the methods.
+3In §3: DELTA TUNING and §4: THEORY, we use the consistent mathematical expressions ∆and δ to describe and
+analyze delta tuning.
+4
+To better understand the inner connections among the delta tuning methods and the mechanisms of model
+adaptation, we develop theoretical analysis (§4: THEORY) of delta tuning by proposing theoretical frameworks
+from two different perspectives, optimization (§4.1: OPTIMIZATION) and optimal control (§4.2: OPTIMAL
+CONTROL). Our theoretical discussion is summarized as follows:
+• Optimization. Based on the intrinsic low dimension in a large pre-trained language model, we show
+that delta tuning is essentially a subspace optimization method with respect to the solution space or
+functional space. The discussion justiﬁes the designs of the existing delta tuning methods and explains
+some phenomena in the experiments.
+• Optimal Control. Inspired by the relationship between deep learning and optimal control theories, we
+interpret delta tuning as seeking optimal controllers for PLMs. We propose an optimal control framework
+that uniﬁes different delta tuning approaches. Our analysis provides theoretical references for the novel
+design of delta tuning methods.
+In terms of empirical studies, we carry out extensive and systematic experiments (§5: EXPERIMENTS) on over
+100 NLP tasks to rigorously explore the performances (§5.1: PERFORMANCE), combinability (§5.2: COMBI-
+NATION), the power of scale (§5.3: SCALE), transferability (§5.4: TRANSFERABILITY), etc. Our main ﬁndings
+are summarized as follows:
+• Performance.
+Despite the huge potential, existing delta tuning methods are still no match for the
+conventional ﬁne-tuning either in performance or convergence. Among several representative delta tuning
+methods, no single algorithm predominantly outperforms the others. We also analyze the key properties
+of delta tuning such as convergence and computational efﬁciency.
+• Combinability. Combining multiple delta tuning methods is more effective than a single method under
+most cases, despite that the optimal combination may vary for different PLM backbones, downstream
+tasks, and data scales.
+• Power of Scale. The power of scale (i.e., both the performance and convergence are improved when
+the PLM’s size is increased) is observed in all of the delta tuning methods, even in unregulated neural
+modules. We provide a reasonable perspective to explain this phenomenon.
+• Transferability. Existing delta tuning methods could well support knowledge transfer, showing non-
+trivial transferability among downstream tasks of similar categories.
+At last, we discuss the applications of delta tuning from various perspectives (§6: APPLICATIONS), including
+fast training and shareable checkpoints, multi-task learning, catastrophic forgetting mitigation, and in-batch
+parallel computing. We also discuss the broader impacts of the delta tuning technique in terms of fairness and
+energy cost (§ IMPACTS). Hopefully, this paper could inspire research to advance the efﬁcient use of large
+models. The tools, codes, data splits, trained delta checkpoints in our experiments will be publicly available to
+facilitate future research4.
+2
+Preliminaries
+Since almost all the mainstream PLMs are developed based on the Transformer (Vaswani et al., 2017) model,
+and delta tuning usually carries out operations on Transformer models, this section gives preliminaries of the
+Transformer (Vaswani et al., 2017) model and mainstream PLMs with different modeling strategies. For more
+details, please refer to original papers (Vaswani et al., 2017; Devlin et al., 2019; Brown et al., 2020; Raffel
+et al., 2019) or related surveys (Han et al., 2021b; Liu et al., 2021a; Bommasani et al., 2021).
+2.1
+Transformer
+The Transformer model has become a key infrastructure for existing state-of-the-art PLMs. The original
+Transformer is proposed as an encoder-decoder model, where both the encoder and decoder are composed
+of a stack of identical blocks. Each Transformer layer consists of an attention layer and a fully-connected
+feed-forward neural network, while the decoder block contains an extra cross-attention layer on top of the self-
+attention layer to capture information from the encoder. Between each layer, there are residual connection (He
+et al., 2016) and layer normalization (Ba et al., 2016) modules.
+4This paper focuses on pre-trained language models, however, the delta tuning technique can also be seamlessly
+transferred to other areas where large-scale neural models come into play, such as computer vision (Rebufﬁet al., 2017;
+Perez et al., 2018)
+5
+2.1
+Transformer
+Attention Layer. Attention layers are the key to the success of Transformer. It involves a query matrix
+Q ∈Rn×dk, a key matrix K ∈Rm×dk, and a value matrix V ∈Rm×dv, where each row in the matrices
+corresponds to one sample and the i-th row in K and V together form a key-value pair accordingly. The
+attention mechanism can be formally represented as
+H = ATT(Q, K, V) = Softmax(QK⊤
+√dk
+)V.
+(1)
+Intuitively, each row in H ∈Rn×dv is a weighted sum of row vectors in V, while the weights are decided by
+the dot product of the query vector and the key matrix. The speciﬁc attention adopted in the Transformer model
+is termed as self-attention, as the three matrices Q, K, V are derived from the same feature matrix X ∈Rn×d
+from the previous layer, parameterized by three weight matrices Wq ∈Rd×dk, Wk ∈Rd×dk, Wv ∈Rd×dv
+as follows:
+Q = XWq, K = XWk, V = XWv
+(2)
+Moreover, Transformer uses multi-head self-attention with multiple sets of Q(i), K(i), V(i), each set corre-
+sponding to a distinct set of weight matrix W(i)
+q
+∈Rd×dk, Wk ∈Rd×dk, Wv ∈Rd×dh, where dh is usually
+set to dv
+h . The ﬁnal output H ∈Rn×do is obtained by projecting the concatenation of a series of Hi into a new
+feature space with a new weight matrix Wo ∈Rdv×do.
+H = MH-ATT(Q, K, V)
+= Concat(H1, . . . , Hh)Wo,
+Hi = ATT(Q(i), K(i), V(i))
+= ATT(XW(i)
+q , XW(i)
+k , XW(i)
+v ),
+(3)
+For decoder blocks, however, there is an additional mask operation that prevents query vectors from attending
+to the future positions yet to be decoded. Besides, there is an extra cross-attention layer following the self-
+attention layer, where the query matrix Q is derived from the output of the previous layer in the decoder, and
+the key and value matrices K, V are transformed from the output of the last layer of the encoder. It is designed
+to avoid foreseeing the true label while considering information from the encoder when decoding.
+K
+V
+X
+Q
+WQ
+WK
+WV
+Multi-head Attention
+Add & Layer Norm
+Add & Layer Norm
+Feed Forward Network
+× L
+Q = XWQ
+K = XWK
+V = XWV
+H ←
+(Q, K, V )
+MH-ATT
+H ←
+(H + X )
+LayerNorm
+H ←
+H ←
+(H + X )
+LayerNorm
+FFN(H )
+Figure 2: An illustration of a Transformer
+block. Generally speaking, a delta tuning
+method could be applied to any positions
+in a Transformer model.
+Fully-connected Feed-Forward Layer. The fully-connected
+feed-forward layer following the attention layer is composed of
+two linear transformation and a non-linear activation function.
+Denote the input matrix as X ∈Rn×di, the output of the feed-
+forward layer is
+F = FFN(X) = σ(XW1 + b1)W2 + b2,
+(4)
+where σ(·) is the activation function (usually the ReLU function),
+and W1 ∈Rdi×dm, b1 ∈Rdm, W2 ∈Rdm×do, b2 ∈Rdo are
+all learnable parameters. Empirically, di is set equal to do, dm
+is set to be much larger than di and do.
+Residual Connection and Normalization. Following each at-
+tention layer and each feed-forward layer, residual connection
+and layer normalization are applied. They conduce to retaining
+information when the model is considerably deep and thus guar-
+antees the model performance. Formally, given a neural layer
+f(·), the residual connection and normalization layer is deﬁned
+as
+A&N(X, f) = LayerNorm(X + f(X)),
+(5)
+where LayerNorm(·) denotes the layer normalization operation,
+and A&N means “add and norm”.
+Typical Transformer Layer. As depicted in Figure 2, a typical
+transformer layer can be expressed as
+M = A&N(X, H)
+Y = A&N(M, F),
+(6)
+6
+2.2
+Pre-trained Language Models
+where M is the intermediate representation after the attention block, and Y denotes the output of the layer
+with respect to input X.
+2.2
+Pre-trained Language Models
+Current pre-trained language models are almost consistently based on the Transformer model. However, they
+usually vary in the speciﬁc structure adopted (e.g. only using Transformer encoder or decoder, or both). This
+section brieﬂy reviews some of the popular PLMs with respect to different modeling strategies (as shown in
+Figure 3).
+x1
+x2
+[MASK]
+x4
+x5
+x3
+x1
+x2
+x4
+x5
+x3
+x2
+x4
+x5
+x3
+y1
+x1
+x2
+x4
+x5
+x3
+y1
+y2
+y3
+Masked Language Modeling
+Auto-regressive
+Seq2Seq
+Decoder
+Encoder
+Figure 3: Different modeling strategies of PLMs.
+Masked Language Modeling.
+The ﬁrst group of PLMs are bidirectional models based on the Transformer
+encoder, among which BERT (Devlin et al., 2019) is the most representative one. It is pre-trained with masked
+language modeling (MLM) task and next sentence prediction (NSP) task. When pre-training, the input is
+a pair of sequences, where special tokens [CLS] and [SEP] are added to the original input, and tokens are
+randomly replaced with [MASK] tokens. MLM loss seeks to maximize the conditional probability of label
+tokens at [MASK] position, as shown in equation (7), where M(x) contains all masked token positions. While
+the ﬁnal representation of [CLS] is used to predict whether the two sentences are coherent.
+LMLM = −
+X
+xm∈M(x)
+log P(xm|x\M(x))
+(7)
+RoBERTa (Liu et al., 2019) is almost identical to BERT, except that it removes the NSP task, applies the
+more robust dynamic masking to the input, and is trained with larger batch sizes, the longer time, and more
+data. Bidirectional models are powerful in generating contextual representations of tokens and language
+understanding.
+Auto-regressive Language Modeling.
+Another set of PLMs are language models purely based on the
+Transformer decoder. They are also termed as auto-regressive language models. The objective of language
+modeling (LM) is to model the probability of the given sequence by factorizing it into the probability of the
+i-th token given the previous tokens:
+LLM = −log P(x) = −
+T
+X
+i=1
+log P(xi|x<i),
+(8)
+where x0 is a special token indicating the start of a sentence. It is natural to take the advantage of masking
+in the Transformer decoder to model the conditional probability. During pre-training, the ﬁnal output at
+each position is further fed into a softmax layer to predict the next token. The most well-known models are
+GPT (Radford et al., 2018) and GPT-2 (Radford et al., 2019), while GPT-2 is trained to be more robust to
+diverse tasks. The unidirectional characteristic of these models enables high-quality language generation.
+Sequence to Sequence Modeling.
+The last type of PLMs are sequence-to-sequence models built upon
+a complete Transformer architecture. Common models of this type include T5 (Raffel et al., 2019) and
+BART (Lewis et al., 2020). Both models adopt span-level corruption as the major pre-training task, i.e. to
+randomly replace a sequence of the text of arbitrary length with a single mask token and ask the model to ﬁll
+7
+in the original tokens. It is also termed as Seq2Seq MLM loss, whose objective is to maximize the probability
+of target sequence given a corrupted sequence:
+LSeq2Seq MLM = −
+X
+xi:j∈M(x)
+j
+X
+t=i
+log P(xt|x\M(x), xi:t−1)
+(9)
+where M(x) contains all corrupted text spans and xi:j is a single masked span. While BART requires a different
+ﬁne-tuning paradigm to assist in the classiﬁcation task, T5 uniﬁes all tasks under the text-to-text generation
+paradigm. As a combination of both bidirectional encoder and auto-regressive decoder, sequence-to-sequence
+models are powerful in both language understanding and generation tasks.
+3
+Delta Tuning
+Given a pre-trained model Θ = {w1, w2, ..., wN} and training data D, the objective of PLM adaptation is
+to produce the adapted model Θ′ = {w′
+1, w′
+2, ..., w′
+M}. Deﬁne ∆Θ = Θ′ −Θ as the operation on top of the
+original model Θ. In vanilla ﬁne-tuning, N = M and ∆Θ = ∇fΘ(D) is the update value of all parameters
+in Θ with respect to training data. While in delta tuning, ∆Θ refers to modiﬁcation of a small number of
+parameters. Empirically, |∆Θ| = |Θ| in vanilla ﬁne-tuning, while for delta tuning, |∆Θ| ≪|Θ|, where | · |
+indicates the number of parameters involved.
+Θ′ =
+Pre-trained PLM
+Θ =
+Θ′ =
+Θ′ =
+Addition
+Speciﬁcation
+Reparameterization
+Frozen Parameters
+Tunable Parameters
+Delta Tuning
+Θ →Θ′
+Figure 4: The categorization criterion of delta tuning, where Θ denote the pre-trained parameters, and Θ′
+represent the well-tuned parameters.
+To organize them under a uniﬁed framework, we categorize the delta tuning methods into three groups
+according to the operations on the delta parameters (as illustrated in Figure 4): addition-based, speciﬁcation-
+based, and reparameterization-based approaches.
+• Addition-based methods introduce extra trainable neural modules or paramters that do not exist in the
+original model or process. In addition-based methods, M ≥N and ∆Θ = {wN+1, wN+2, ..., wM}.
+• Speciﬁcation-based methods specify certain parameters in the original model or process become
+trainable, while others are frozen.
+Denote the set of trainable parameters as W, then ∆Θ =
+{∆w1, ∆w2, ..., ∆wN}. When wi ∈W, ∆wi is the incremental value from wi to w′
+i, else, ∆wi = 0.
+• Reparameterization-based methods reparameterize existing parameters to a parameter-efﬁcient form
+by transformation. Denote the set of parameters to be reparameterized as W, and suppose that each
+wi ∈W is reparameterized with new parameters R(wi) = {u1, u2, ..., uNi}, then ∆Θ = (Θ \ W) ∪U,
+where U = {uj|∃wi ∈W, uj ∈R(wi)}.
+3.1
+Addition-based Methods
+With the above deﬁnition in mind, addition-based methods introduce additional parameters to the neural
+network. In this section, we introduce two branches of representative addition-based methods, adapter-based
+tuning and prompt-based tuning.
+Adapters-based Tuning.
+As a seminal work in delta tuning, adapter-based methods inject small-scale neural
+modules (adapters) to the Transformer layers and only tune these adapters for model adaptation. Although such
+a strategy leaves an open choice of adapter structures, a simple instantiation (Houlsby et al., 2019) achieves
+impressive performance and has become the most widely used baseline in recent research. Speciﬁcally, one
+8
+3.1
+Addition-based Methods
+adapter module contains a down-projection and an up-projection. For an input feature h ∈Rd, a down-
+projection projects the input to a r-dimensional space with a parameter matrix Wd ∈Rd×r, after which a
+nonlinear function f(·) is applied. Then the up-projection Wu maps the r-dimensional representation back to
+d-dimensional space. Added with a residual connection, the complete computation could be written as
+h ←f(hWd)Wu + h.
+(10)
+In each block, the adapter modules are separately inserted after the multi-head self-attention and the feed
+forward network sublayers, which reduces the tunable parameters per layer to 2×( 2dr (projection matrices)+
+d (residual connection)+r (bias term)). Practically, 0.5%∼8% parameters of the whole model (Houlsby et al.,
+2019) could be involved in tuning process under such strategy.
+Although adapter works with signiﬁcantly fewer tunable parameters than vanilla ﬁne-tuning, some work
+attempts for a more rigorous saving strategy by introducing inductive biases into the structure of the adapter
+layer. For example, Compacter (Mahabadi et al., 2021a) propose to use a combination of hypercomplex
+multiplication and parameter sharing. The hypercomplex multiplication parameterizes the original linear layer
+as the sum of the Kronecker products of two small matrices. Taking the down-projection as an example,
+Wd =
+n
+X
+i=1
+Ai ⊗Bi, where A ∈Rn×n, B ∈R
+d
+n × r
+n
+(11)
+Their method reduces the number of parameters in the adapter layer to 1
+n without harming the performance,
+where n is the number of divisions of the linear layer. It also shows that a simple low-rank decomposition of
+the linear layer leads to comparable performance with the adapter layer, i.e.,
+Wd = ABT , where A ∈Rd×n, B ∈Rr×nand n ≪min(d, r).
+(12)
+As an addition-based approach, adapter-based tuning has the advantage of placing multiple adapter instances
+on a pre-trained model simultaneously, which can beneﬁt many application scenarios. For example, multi-task
+learning (Stickland & Murray, 2019; Mahabadi et al., 2021b) is an advantageous setting for adapter-based
+methods, inserted with adapter modules in parallel with the self-attention module, PLMs could demonstrate
+impressive representational capacity in the multi-task setting. In contrast to directly conducting multi-task
+learning on adapters, adapterFusion (Pfeiffer et al., 2021) ﬁrst pre-train task-speciﬁc adapters and then
+combine the representations of the pre-trained adapters to leverage the cross-task knowledge and enhance the
+performance of transfer learning.
+In terms of computational efﬁciency, the training of adapters could be 60% faster than vanilla ﬁne-tuning while
+the inference is only 4%-6% slower. And the computational cost could be further reduced dynamically by
+removing adapters from lower transformer layers (Rücklé et al., 2021). Research also shows that adapter-based
+ﬁne-tuning demonstrates better robustness than ﬁne-tuning. Speciﬁcally, adapter-based ﬁne-tuning could
+perform better than vanilla ﬁne-tuning on few-shot and cross-lingual scenarios (He et al., 2021) and is more
+robust under adversarial attacking (Han et al., 2021a). We provide a comparison of different adapters, as well
+as other delta tuning methods in Table 2.
+To sum up, adapters are lightweight additional neural modules that could be trained in a task-speciﬁc style,
+which could be regarded as “encapsulation” of task information (in fact, this perspective can be applied to all
+the “deltas”). Although in an ideal world, adapters could be freely shared and reused by researchers, in practice,
+sharing and reusing such modules face substantial obstacles. Taking the ﬁrst step, AdapterHub (Pfeiffer et al.,
+2020a) provides a feasible platform and toolkit to deploy adapters inside the transformer-based models.
+Prompt-based Tuning.
+Instead of injecting neural modules to the Transformer model, prompt-based meth-
+ods wrap the original input with additional context. As a strategy to stimulate pre-training language models
+by mimicking pre-trained objectives in the downstream tasks, prompt-based learning has achieved promising
+performance in various NLP tasks (Gao et al., 2021; Hu et al., 2021b; Tan et al., 2021), especially in low-data
+settings (Scao & Rush, 2021). The introduction of the technique and implementations of prompt-based learning
+have already been comprehensively presented in other literature (Liu et al., 2021a; Ding et al., 2021). In
+this paper, we primarily focus on the parameter-efﬁcient attribute of prompt-based learning (only preﬁxes or
+prompts are optimized) and pay less attention to the settings where the models and prompts are simultaneously
+optimized.
+An important seminal work of this branch of research is preﬁx-tuning (Li & Liang, 2021), which prepends
+trainable continuous tokens (preﬁxes) to the input and hidden states of each Transformer layer. Each preﬁx
+9
+3.2
+Speciﬁcation-based Methods
+is drawn from a newly initialized trainable parameter matrix P, while other parameters of the pre-trained
+model remain unchanged during training. During generation, if an activation hi is in a preﬁx position, it
+is the direct copy of the corresponding trainable parameter; otherwise, the activation is computed by the
+model as hi = LM(zi, h<i). It is worth noting that the paradigm could be applied to both autoregressive and
+encoder-decoder models. Liu et al. (2021b) demonstrate that such a strategy could be effectively applied to
+natural language understanding (NLU) with different scales of models.
+Compared to preﬁx-tuning which adds tunable preﬁxes to every intermediate Transformer layer, prompt
+tuning (Lester et al., 2021) proposes a more simpliﬁed strategy that only adds soft prompts to the input layer.
+Similar to preﬁx-tuning, the newly introduced prompts are not parameterized by the pre-trained model but
+an additional parameter matrix. And during training, the parameters of soft prompts are updated by gradient
+descent while the model parameters keep frozen. As the model size increases, the performance gap between
+prompt-tuning and full parameter ﬁne-tuning is narrowed. Particularly, when the model scales to T5-XXL
+with 11 billion parameters, prompt tuning yields comparable performance on SuperGlue with ﬁne-tuning. This
+strategy also exhibits sensitivity to the length and initialization of the soft prompts. Prompts could also be
+injected in the pre-training stage to seek a satisfying initialization point (Gu et al., 2021). Moreover, similar to
+other methods, prompt tuning also demonstrates transferability across tasks (Vu et al., 2021; Su et al., 2021),
+which suggests that appropriate initialization could be substantially beneﬁcial for downstream tasks.
+The Training Curse of Prompt-based Methods
+Although prompt-based methods exhibit a promising
+future for the adaptation of large pre-trained models, especially that prompt tuning does not need to modify
+anything inside the neural network, there still exist unsolved challenges. In practice, prompt tuning is difﬁcult
+to optimize, and generally, this phenomenon becomes more apparent as the volume of data and the size of the
+model decreases. Even though soft prompts can be trained successfully, they converge signiﬁcantly slower
+than full parameter ﬁne-tuning and other delta tuning methods during training. In our experiments, we validate
+the phenomenon across different datasets (§5.1: PERFORMANCE), indicating that it is an interesting topic to
+train soft prompt to converge stably in various situations.
+3.2
+Speciﬁcation-based Methods
+Speciﬁcation-based methods ﬁne-tune a few inherent parameters while leaving the majority of parameters
+unchanged in model adaptation. This approach does not seek to change the internal structure of a model but to
+optimize a small number of internal parameters to solve particular tasks. Generally, such speciﬁcations could
+be implemented based on heuristics or training supervision.
+Heuristic Speciﬁcation.
+Speciﬁcation-based methods do not introduce any new parameters in the model,
+but directly specify part of the parameters to be optimized. The idea is simple but surprisingly effective, Lee
+et al. (2019) only ﬁne-tune one-fourth of the ﬁnal layers of BERT and RoBERTa and could produce 90% of
+the performance of full parameter ﬁne-tuning. BitFit (Zaken et al., 2021) empirically proves that by only
+optimizing the bias terms inside the model and freezing other parameters, the model could still reproduce
+over 95% performance on several benchmarks. Empirical results in BitFit also show that even if we use a
+small random set of parameters for delta tuning (which obviously will degrade the performance), the model
+could still yield passable results on the GLUE benchmark. Unfortunately, the work only applies this trick to
+small-scale models, and there is no guarantee that randomly choosing some parameters to be tuned would
+remain competitive for larger models. Another valuable observation is that different bias terms may have
+different functionalities during model adaptation.
+Learn the Speciﬁcation.
+Rather than manually or heuristically specify which parameters to be updated, one
+alternative is to “learn” such speciﬁcations. Following the deﬁnition in §3: DELTA TUNING, diff pruning (Guo
+et al., 2021) reparameterizes the ﬁne-tuned model parameters Θ′ as the summation of the pre-trained parameters
+Θ and the difference vector ∆Θ, i.e., Θ′ = Θ+∆Θ, where |Θ| = |Θ′|. Hence, the key issue is to encourage the
+difference vector to be as sparse as possible, this work regularizes the vector by a differentiable approximation
+to the L0-norm penalty to achieve the goal of sparsity. Practically, because new parameters to be optimized are
+introduced in the learning phase, diff pruning takes up more GPU memory than full parameter ﬁne-tuning,
+which may establish barriers in the application on large PLMs. The masking method (Zhao et al., 2020)
+learns selective masks for PLMs to only update the critical weights for particular tasks. To learn such a set of
+masks, a binary matrix associated with the model weights is introduced, where each value is generated by a
+thresholding function. During back-propagation, the matrix is updated by a noisy estimator.
+10
+3.3
+Reparameterization-based Methods
+Table 2: Comparison between different delta tuning methods, we use the green color to denote tunable
+parameters and modules. [:] is the concatenation operation; dh means the hidden dimension of transformer
+model; dm is the intermediate dimension between down projection and up projection, where dm is far smaller
+than dh. COMPACTER utilize hypercomplex matrix multiplication and low-rank decomposition to reduce the
+amount of parameters; ADAPTERDROP randomly dropout adapters in the ﬁrst n layers and also bring down
+back-propagation time; PREFIX-TUNING add preﬁx of n past key value.
+Name & Refs
+Method
+#Params
+SEQUENTIAL ADAPTER
+Houlsby et al. (2019)
+LayerNorm(X + H(X)) →LayerNorm(X + ADT(H(X)))
+LayerNorm(X + F(X)) →LayerNorm(X + ADT(F(X)))
+ADT(X) = X + σ(XWdh×dm)Wdm×dh, σ = activation
+L × 2 × (2dhdm)
+COMPACTER
+Mahabadi et al. (2021a)
+L × 2 × (2(dh + dm))
+ADAPTERDROP
+Rücklé et al. (2021)
+(L −n) × 2 × (2dhdm)
+PARALLEL ADAPTER
+He et al. (2022)
+LayerNorm(X + H(X)) →LayerNorm(X + ADT(X) + H(X))
+LayerNorm(X + F(X)) →LayerNorm(X + ADT(X) + F(X))
+ADT(X) = σ(XWdh×dm)Wdm×dh, σ = activation
+L × 2 × (2dhdm)
+ADAPTERBIAS
+LayerNorm(X + F(X)) →LayerNorm(ADT(X) + F(X))
+ADT(X) = XWdh×1W1×dh
+L × 2 × dh
+PREFIX-TUNING
+Li & Liang (2021)
+Hi = ATT(XW(i)
+q , [MLP(i)
+k (P′
+k) : XW(i)
+k ], [MLP(i)
+v (P′
+v) : XW(i)
+v ])
+MLP(i)(X) = σ(XWdm×dm)W(i)
+dm×dh
+P ′ = Wn×dm
+n × dm + d2
+m
++ L × 2 × dhdm
+LORA
+Hu et al. (2021a)
+Hi = ATT(XW(i)
+q , ADTk(X) + XW(i)
+k , ADTv(X) + XW(i)
+v )
+ADT(X) = XWdh×dmWdm×dh
+L × 2 × (2dhdm)
+BITFIT
+Zaken et al. (2021)
+f(X) →f(X) + B, for all function f
+L × (7 × dh + dm)
+3.3
+Reparameterization-based Methods
+Reparameterization-based methods transform the adaptive parameters during optimization into parameter-
+efﬁcient forms. This branch of delta tuning is typically motivated by the hypothesis that PLM adaptations
+towards most downstream tasks are inherently low-rank, and could thus be equivalently completed in a
+parameter-efﬁcient way.
+Intrinsic Dimensions of PLM Adaptation.
+Aghajanyan et al. (2021) empirically show that the full-
+parameter ﬁne-tuning process of pre-trained models can be reparameterized into optimization within a
+low-dimensional subspace, i.e., ﬁne-tuning has a low intrinsic dimension (Li et al., 2018), which measures
+the minimum number of parameters needed to reach satisfactory performance. In experiments, they ﬁnd
+that a relatively low-dimensional (e.g., thousands) reparameterization could achieve over 85% ﬁne-tuning
+performance. In this sense, PLMs may serve as general compression frameworks, which compress the op-
+timization complexity from high dimensions to low dimensions. They also demonstrate that, larger PLMs
+generally have smaller intrinsic dimensions, and the process of pre-training implicitly reduces PLM’s intrinsic
+dimension. Taking inspiration from these observations, reparameterization-based delta tuning methods are
+proposed, which reparameterize (a part of) original model parameters with low-dimensional proxy parameters
+and only optimize the proxy parameters and thus reduce the computation and memory cost.
+Intrinsic Rank of Weight Differences.
+Inspired by Aghajanyan et al. (2021), LoRA (Hu et al., 2021a)
+hypothesizes that the change of weights during model tuning has a low intrinsic rank. Based on this hypothesis,
+they propose to optimize the low-rank decomposition for the change of original weight matrices in the self-
+attention modules. In deployment, the optimized low-rank decomposition matrices are multiplied to obtain
+the delta of self-attention weight matrices. In this way, LoRA could match the ﬁne-tuning performance on
+11
+the GLUE benchmark. They demonstrate the effectiveness of their methods on PLMs of various scales and
+architectures.
+Intrinsic Space of Multiple Adaptations.
+Furthermore, Qin et al. (2021b) make a stronger hypothesis that
+the adaptations to multiple tasks could be reparameterized into optimizations within the same low-dimensional
+intrinsic subspace. Instead of resorting to a random subspace (Aghajanyan et al., 2021), they try to ﬁnd a
+common subspace shared by various NLP tasks, which is implemented through decomposing the trained soft
+prompts of multiple NLP tasks into the same low-dimensional nonlinear subspace, and then learn to adapt
+the PLM to unseen tasks or data by only tuning parameters in the subspace. Experiments show that in a
+250-dimensional subspace found with 100 random tasks, by only tuning 250 free parameters, 97% and 83% of
+the full prompt tuning performance can be recovered for 100 seen tasks (using different training data) and 20
+unseen tasks, respectively. This provides strong evidence for their universal reparameterization hypothesis and
+may inspire future work. Moreover, Qin et al. (2021b) also shows that the low-dimensional reparameterization
+can signiﬁcantly improve the stability of prompt tuning. Their method could also be leveraged as a tool for
+analyzing the similarity and differences for various NLP tasks. The motivation differences of the above three
+works are visualized in Figure 5.
+Intrinsic Space
+Intrinsic Space
+PLM
+PLM
+Task #2
+Task #1
+Task #3
+Task #2
+Task #1
+Task #3
+PLM
+Task #2
+Task #1
+Task #3
++
+×
+×
+×
+Intrinsic Rank
+Weights  
+Change
+Figure 5: Conditioned on a PLM, Aghajanyan et al. (2021) hypothesize that there exist a low-dimensional
+intrinsic subspace that could reparameterize one speciﬁc ﬁne-tuning process (the left part). Hu et al. (2021a)
+hypothesize that the change of weights during adaptation has a low intrinsic rank (the middle part). And Qin
+et al. (2021b) hypothesize there may exist a common intrinsic space that could handle the ﬁne-tuning for
+various NLP tasks (the right part).
+4
+Theoretical Perspectives of Delta Tuning
+Are these methods essentially doing the same thing? We are interested in the theoretical principles behind delta
+tuning. A pre-trained language model usually can be easily adapted to almost any downstream tasks with only
+a very small cost (compared to pre-training), and this phenomenon leads to theoretical issues that are worth
+exploring in depth. In this section, we propose two frameworks to introduce theoretical insights of delta tuning
+from the perspectives of optimization (§4.1: OPTIMIZATION) and optimal control (§4.2: OPTIMAL CONTROL).
+4.1
+Optimization Perspective for Delta Tuning
+The delta tuning technique seeks to tune a small portion of parameters so as to match the performance of the
+ﬁne-tuning in the original large language model while reducing the memory footprint. From the perspective of
+optimization, we analyze the effects of delta tuning and discuss the designs of several delta tuning methods
+under the low dimension assumption.
+Let F(θ) denote the objective function of the original language model. Then the new objective function
+optimized by delta tuning is ˜F(θ, δ). Here θ denotes the parameters of the original language model, and
+δ denotes the speciﬁc parameters tuned by delta tuning 5. The starting point is (θ0, δ0), where θ0 is the
+pre-trained language model parameters and δ0 is the initialization of δ. In principle, though one may adopt
+some initialization of δ to facilitate the training process of delta tuning, there still exists the δ0 such that
+˜F(θ, δ0) = F(θ),
+(13)
+5The variables θ and δ correspond to the concepts of Θ and ∆Θ in §3: DELTA TUNING. Also, δ is not necessarily
+independent of θ.
+12
+4.1
+Optimization Perspective for Delta Tuning
+which guarantees that ˜F is identical to F if the delta tuning is disabled. Thus, the following relations hold:
+min
+θ,δ
+˜F(θ, δ) ≤min
+θ
+˜F(θ, δ0) = min
+θ
+F(θ),
+min
+θ,δ
+˜F(θ, δ) ≤min
+δ
+˜F(θ0, δ),
+(14)
+which suggests that simultaneously tuning θ and δ may be beneﬁcial. Nonetheless, we are only interested in
+analyzing the case that either θ or δ is ﬁne-tuned. Let θ+ = arg minθ ˜F(θ, δ0) and δ+ = arg minδ ˜F(θ0, δ).
+The delta tuning essentially does no harm to the tuning of the original model under some conditions. For
+instance, assuming that ˜F is twice Lipschitz continuously differentiable, it can be proved that
+| ˜F(θ+, δ0) −˜F(θ0, δ+)| = O(∥θ+ −θ0∥2
+2 + ∥δ+ −δ0∥2
+2),
+(15)
+in a local small region around (θ+, δ0) and (θ0, δ+). For a sufﬁciently good starting point, the error bound
+holds. However, to guarantee the effectiveness of delta tuning, it is essential to exploit the problem structures
+to design ˜F. The intuition is to leverage the intrinsic low dimensions of the problems. Basically, there are two
+approaches that turn out to be useful in practice:
+• The solution is updated in a lower dimensional subspace;
+• The objective function (with constraints) is approximated in a certain smaller functional subspace.
+For the applications in deep learning, the optimization of the objective function often has lots of local
+minimizers due to over-parameterization. Therefore, these approaches typically work well when the starting
+point is close to a local minimizer, where only some searching directions matter or the objective function
+can be well approximated by some simpler function in the trust region. Moreover, the small dimensional
+optimization can lead to a more efﬁcient and more stable training process.
+Low dimensional representation in solution space.
+As it is observed that the optimization trajectory of
+θ approximately follows a manifold (Aghajanyan et al., 2021), we can embed the hidden manifold to a low
+dimensional space of δ, i.e., θ = ψ(δ) + ϵ, where ϵ is the error term depending on θ0, θ+. Then,
+˜F(θ, δ0) = F(θ),
+˜F(θ0, δ) = F(ψ(δ)).
+(16)
+If ϵ = 0, the delta tuning ﬁnds the exact solution of the ﬁne-tuning of the original language model. Otherwise,
+the ﬁnal discrepancy depends on the approximation error, the condition number of the objective function, and
+the stability of the training process. Let δ+ = arg minδ F(ψ(δ)), and θ+ = ψ(δ′) + ϵ′. Suppose that F and
+F ◦ψ are Lipschitz continuous and the Lipschitz constants are L1 and L2, respectively. Then, we have the
+following bound of the approximation error of delta tuning to the full-parameter ﬁne-tuning of the original
+language model:
+|F(θ+) −F(ψ(δ+))| ≤|F(θ+) −F(ψ(δ′))| + |F(ψ(δ′)) −F(ψ(δ+))|
+≤L1∥ϵ′∥2 + L2∥δ′ −δ+∥2 ≤L1∥ϵ′∥2 + L2(∥δ′∥2 + ∥δ+∥2).
+(17)
+The error ϵ′ is controlled by the approximation of the low dimensional representation ψ. Since the minimization
+of F(ψ(δ)) can be viewed as minimization of a perturbed objective function of F(θ), the ∥δ′−δ+∥2 is bounded
+provided that F is well-conditioned and the optimization algorithm is stable. Also, if the magnitudes of δ′ and
+δ+ are small, the bound (17) can still lead to the good quality of F(ψ(δ+)).
+Some delta tuning methods beneﬁt from such approach. In LoRA (Hu et al., 2021a), the weight matrix W ∈
+Rd×n is constructed as W ≈W0 + AB, where W0 is the corresponding part of δ0, and A ∈Rd×r, B ∈Rr×n
+are rank-r low rank matrices learned by the training process. The numerical results validate the assumption of
+low-rank approximation (Hu et al., 2021a). In BitFit (Zaken et al., 2021) or diff pruning (Guo et al., 2021),
+some coordinates of δ are selected to be optimized during the training process. Thus, the approximation is
+θ = θ0 + V y, where the columns of V consist of columns chosen from the identity matrix and y is the low
+dimensional vector to be learned. We can also apply some suitable transformation to θ to make the F easier to
+be optimized. For example, choose a transformation matrix S, and let Sθ = Sθ0 + V y. The resulting delta
+tuning method can be viewed as a re-parameterization followed by a diff pruning.
+Low dimensional representation in functional space.
+Another approach is to directly design an approxi-
+mate function that matches the ﬁnal F(θ+), i.e., we seeks to ﬁnd ˆF(δ), such that
+|F(θ) −ˆF(δ)| < ϵ,
+(18)
+13
+4.2
+Optimal Control Perspective for Delta Tuning
+where ϵ is the approximation error. By this way, we recognize that ˜F(θ, δ0) = F(θ) and ˜F(θ0, δ) = ˆF(δ).
+The construction of ˆF can be characterized by an incremental network (Houlsby et al., 2019) or an augmented
+feature space (Lester et al., 2021). Since we are more interested in the ﬁnal performance of the language model,
+rather than the model parameters, it is promising to directly model the function F(θ) which is approximately
+restricted in a small manifold in the functional space, and we discard the need to estimate the error (17) from
+model parameters.
+The construction of ˆF is an art and differs in practice. The simplest strategy is to freeze some certain
+parts of the networks like BitFit (Zaken et al., 2021). Consider the more sophisticated construction that can
+improve the approximation. Since the action of the function is characterized by the data ﬂow, one natural
+idea is to inject the low-rank representation in the data path of the original neural networks and the resulting
+new language model is an incremental network like Adapter (Houlsby et al., 2019), as shown in (10). The
+approximation error (18) is determined by the representation capacity of the incremental network. Due to the
+universal approximation property (Leshno et al., 1993) of multilayer feedforward networks, the quality of
+the approximation is guaranteed. It is worth noting that a similar architecture is also proposed in the area of
+computer vision (Rebufﬁet al., 2017; Ye et al., 2020).
+By exploiting the autoregressive structure of Transformer, some more dedicated functional approximation can
+be conceived. Note that the objective function generally is determined by the input and model parameters,
+namely L
+ (X, Y ); θ
+
+. In principle, we can frozen the model parameters θ, and make X and Y variable. In
+some cases, it may be convenient to swap the positions of (X, Y ) and θ to obtain a more tractable optimization
+problem. Since θ is the pre-trained language model that is unwieldy to process, it makes sense to use some
+trainable ˜X to replace X since the feature space of X, namely range(X), is generally limited in a few
+thousand of dimension in a language task. This idea has been exploited in the prompt tuning (Lester et al.,
+2021), where a series of prompt tokens P are prepended to the input X. The prompt P is not parameterized
+by θ; instead, it has individual trainable parameters θP . By this way, the feature space is augmented but still
+feasible for training. Owing to the autoregressive property of Transformer, the approximate function serves
+as a good surrogate of the original function F to be optimized and steers the language model to focus on
+the speciﬁc task. The preﬁx tuning (Li & Liang, 2021) further makes some activations in the intermediate
+layers trainable, thus leading to a more accurate functional approximation, or in other words, enlarging the
+representation capability of the modiﬁed language model. Regarding to the performance, since the prompt
+tuning is a dimension reduction method that models the probability distribution with less parameters, the
+effectiveness is closely related to the model size and data size. With larger model size and data size, prompt
+tuning is prone to achieve better performance that is consistent with the dimension reduction theory (Wright
+& Ma, 2021). Moreover, for high dimensional problems, it is possible to have more freedoms to choose the
+subspace for the functional approximation, Su et al. (2021) and our experimental results in §5.3: SCALE also
+verify this intuition.
+The uniﬁed view of the approximations in solution space and functional space.
+Generally speaking, the
+representations in solution space and function space often lead to similar constructions of the approximate
+˜F due to the duality relation. In fact, a uniﬁed view of Adapter (Houlsby et al., 2019), preﬁxing tuning
+(Li & Liang, 2021) and LoRA (Hu et al., 2021a) is proposed in (He et al., 2022) by analyzing the data
+ﬂow in the modiﬁed language model. It is pointed out that these delta tuning methods all construct low
+dimensional modiﬁcations of the original data ﬂow, i.e., h ←h + ∆h, where ∆h is parameterized by some
+low dimensional parameters. This view can be recognized as understanding the different delta tuning methods
+from the perspective of functional space. Some useful empirical results about the ways to design the functional
+approximation can also be found in (He et al., 2022).
+Our discussion suggests that the performance of all these delta tuning methods rely on the low dimension
+assumption. In fact, it can even be found that there may exist some common subspace among various tasks
+(Qin et al., 2021b), Su et al. (2021) and our experimental results in §5.4: TRANSFERABILITY also show the
+transferability of delta tuning in different tasks. Since the actual performance of a delta tuning method is
+inevitably problem-dependent, it is promising to exploit more speciﬁc structures in the tasks at hand or build
+some hybrid algorithm to make it more competitive with the full ﬁne-tuning of the original language model.
+4.2
+Optimal Control Perspective for Delta Tuning
+Yang & Liu (2022) propose to interpret preﬁx tuning from the perspective of optimal control. In this section,
+we generalize the optimal control view to different delta tuning scenarios.
+14
+4.2
+Optimal Control Perspective for Delta Tuning
+Relationship Between Optimal Control And Deep Learning. We start with interpreting deep learning from
+the optimal control perspective. According to Section 4 in Li et al. (2017), we review the theorems in the
+following and directly follow their notations:
+Theorem 4.1 (discrete-time PMP) Consider the discrete-time control problem
+min
+{θ0,...,θT −1}∈ΘT Φ(xT ) + δ
+T −1
+X
+t=0
+L(θt),
+xt+1 = xt + δft(xt, θt), x0 = x, 0 ≤t ≤T −1
+(19)
+where Φ and L are termination and running losses, respectively. There exists a co-process
+x∗
+t+1 = gt(x∗
+t , θ∗
+t ),
+x∗
+0 = x,
+(20)
+p∗
+t = ∇xHt(x∗
+t , p∗
+t+1, θt),
+p∗
+T +1 = −∇xΦ(x∗
+T +1)
+(21)
+such that
+Ht(x∗
+t , p∗
+t+1, θ∗
+t ) ≥Ht(x∗
+t , p∗
+t+1, θ), θ ∈Θ, 0 ≤t ≤T −1.
+(22)
+Here gt(xt, θt) := xt + δft(xt, θt) and
+Ht(x, p, θ) = p · gt(x, θ) −δL(θ)
+(23)
+is the discrete Hamiltonian with a scaling factor δ > 0.
+Theorem 4.2 (discrete-time MSA) The discrete-time method of successive approximations (MSA) character-
+izes the co-process in Theorem 4.1. For each iteration k,
+set xk
+0 = x, and
+xk
+t+1 = gt(xk
+t , θk
+t )
+(24)
+with t enumerating from 0 to T −1;
+then set pk
+T = −∇xΦ(xk
+T ), and
+pk
+t = ∇xHt(xk
+t , pk
+t+1, θk
+t )
+(25)
+with t enumerating from T −1 to 0;
+ﬁnally, with t enumerating from 0 to T −1, set
+θk+1
+t
+= θk
+t + η∇θHt(xk
+t , pk
+t+1, θk
+t ).
+(26)
+Theorem 4.3 (equivalence between MSA and backpropagation) The MSA in Theorem 4.2 is equivalent to the
+backpropagation process in deep networks.
+The proofs of Theorems 4.1, 4.2 and 4.3 are provided in Li et al. (2017).
+Tuned Delta’s As Optimal Controllers. We consider delta tuning with pretrained autoregressive LMs (e.g.,
+GPT-2) for text classiﬁcation. By framing the content as the input sentence, the model generates the predicted
+label at the last step. For simplicity, we denote the position of label prediction as o. At position o, the model is
+inputted with a special token [ANS] and is expected to generate the prediction.
+Denote θ as the parameters of the L-layer PLM. We use the training set Dtr to optimize the delta parameters at
+each layer: {δ(0), . . . , δ(L−1)}. The intermediate activation of the j-th layer at step i is denoted as h(j)
+i . The
+optimization problem for delta tuning is formulated as
+min
+{δ(0),...,δ(L−1)} E(x,y)∼Dtr
+
+S
+
+h(L)
+o
+, y
+
++
+L−1
+X
+j=0
+R
+
+δ(j)
+
+
+h(j+1)
+o
+= h(j)
+o
++ G(j)
+θ
+
+h(j)
+o , δ(j)
+, h(0)
+o
+= zo = [ANS], 0 ≤j ≤L −1,
+(27)
+where S as the softmax scoring function, R as the regularizer for delta parameters, zi as the i-th token in the
+input and y as the label. The function G deﬁnes the altered forward propagation in the LM with the intervention
+of delta. Speciﬁcally, the learnable δ(j) activates the ﬁxed parameters from θ so that the representation h(j)
+o
+at
+15
+4.2
+Optimal Control Perspective for Delta Tuning
+the j-th layer can be properly transformed as G(j)
+θ
+
+h(j)
+o , δ(j)
+. The representation transformation between
+two consecutive layers is thus described by function G and the residual connection in Transformer.
+We proceed to show that the problem (27) uniﬁes various delta tuning scenarios with different instances of G.
+I. Preﬁx-tuning (PF). Preﬁx-tuning belongs to addition-based methods and exploits the idea of prompting.
+With Pidx as the preﬁx indexes, the forward propagation at the output position o can be formulated as
+h(j+1)
+o
+= LM(j)
+θ
+
+h(j)
+o
+ h(j)
+<o
+
+,
+(28)
+where h(j)
+i
+= Pδ(j)[i, :] for all j = 0 to L −1, i ∈Pidx and h(0)
+i
+= zi for i /∈Pidx. LM(j)
+θ , the j-th layer of
+the LM, can be decomposed into a self-attention layer (SAN(j)
+θ ) and a FFN layer (FFN(j)
+θ ). Formally,
+h(j+1)
+o
+= h(j)
+o
++ SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ FFN(j)
+θ
+
+h(j)
+o
++ SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
+(29)
+with h(j)
+i
+= Pδ(j)[i, :] for i ∈Pidx. As Eq. (29) is recursive and according to the fact that the PLM is
+autoregressive, after unrolling the recursion for all h(j)
+<o in Eq. (29), we have that for any i < o, h(j)
+i
+is steered
+by the preﬁx δ(j), namely h(j)
+i
+= h(j)
+i
+ δ(j)
+. As a result, for preﬁx-tuning, the G(j)
+θ
+
+h(j)
+o , δ(j)
+in problem
+(27) is instantiated as
+G(j)
+θ
+
+h(j)
+o , δ(j)
+= SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ FFN(j)
+θ
+
+h(j)
+o
++ SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
+,
+(30)
+where each item in h(j)
+<o is a function of δ(j).
+II. Adapter (AP). Adapter belongs to addition-based methods as well. Instead of prompting, the Adapter
+method adds tunable modules between consecutive Transformer layers as the delta. As characterized by Eq.
+(10), the altered forward propagation is written as
+˜h(j+1)
+o
+= LM(j)
+θ
+
+h(j)
+o
+ h(j)
+<o
+
+,
+h(j+1)
+o
+= ˜h(j+1)
+o
++ σ
+
+˜h(j+1)
+o
+W (j)
+d
+
+W (j)
+u ,
+(31)
+where ˜h(j+1)
+o
+is the transformed representation by the original j-th layer in the PLM, and σ denotes the
+nonlinearity. δ(j) in this case is deﬁned as {W (j)
+d , W (j)
+u }, the two projection matrices at the j-th layer. It is
+noted that the computation of LM in Eq. (31) also follows the formulation of Eq. (29) (with difference only in
+inputs). Substituting Eq. (29) in Eq. (31) yields
+G(j)
+θ
+
+h(j)
+o , δ(j)
+= SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ FFN(j)
+θ
+
+h(j)
+o
++ SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ σ
+
+LM(j)
+θ
+
+h(j)
+o
+ h(j)
+<o
+
+W (j)
+d
+
+W (j)
+u .
+(32)
+Here each item in h(j)
+<o is independent of δ(j) = {W (j)
+d , W (j)
+u }, which is different from the preﬁx-tuning case.
+III. LoRA (LR). LoRA belongs to reparameterization-based methods. The update by LoRA is
+h ←szWdWu + h,
+(33)
+where z is the input and s ≥1 is a tunable scalar hyperparameter. Similar with the Adapter scenario, we still
+deﬁne δ(j) = {W (j)
+d , W (j)
+u }. The function G in this case is
+G(j)
+θ
+
+h(j)
+o , δ(j)
+= SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ FFN(j)
+θ
+
+h(j)
+o
++ SAN(j)
+θ
+
+h(j)
+o , h(j)
+<o
+
++ szW (j)
+d W (j)
+u .
+(34)
+IV. BitFit. BitFit belongs to speciﬁcation-based methods. BitFit tunes only the bias parameters in the PLM.
+We deﬁne θ = {ψ, δ}, where δ represents the tuned bias parameters, and ψ is the ﬁxed ones. In this case, the
+formulation of LM in Eq. (29) becomes
+h(j+1)
+o
+= h(j)
+o
++ SAN(j)
+ψ
+
+h(j)
+o , δ(j)
+S , h(j)
+<o
+
++ FFN(j)
+ψ
+
+h(j)
+o
++ SAN(j)
+ψ
+
+h(j)
+o , δ(j)
+S , h(j)
+<o
+
+, δ(j)
+F
+
+,
+(35)
+16
+with δ(j) = {δ(j)
+S , δ(j)
+F } as the bias terms of the SAN and FFN layers. The function G is thus given by
+G(j)
+θ
+
+h(j)
+o , δ(j)
+= SAN(j)
+ψ
+
+h(j)
+o , δ(j)
+S , h(j)
+<o
+
++ FFN(j)
+ψ
+
+h(j)
+o
++ SAN(j)
+ψ
+
+h(j)
+o , δ(j)
+S , h(j)
+<o
+
+, δ(j)
+F
+
+.
+(36)
+We have listed the formulations of the function G in problem (27) for different delta tuning methods. With
+Theorem 4.1, S and R in problem (27) can be viewed as the terminal and the running loss with the delta
+parameters as the control variables. This means that (27) can be formulated as a discrete-time control problem.
+With Theorems 4.2 and 4.3, the forward and backward propagation in optimization delta’s are equivalent to
+the calculation of the co-state process in Pontryagin’s Maximum Principle (Kopp, 1962). To conclude, delta
+tuning can be viewed as seeking the optimal control of PLMs for speciﬁc downstream tasks.
+Our analysis sheds light on designing novel delta tuning methods that are inspired from control theories. One
+can refer to control theories when designing robust models (Zhang et al., 2019a). For example, Yang & Liu
+(2022) propose robust preﬁx-tuning that tunes an additional robust preﬁx during inference to guide the LM
+towards correct predictions. The idea of test-time activation rectiﬁcation can be viewed as close-loop feedback
+control (Chen et al., 2021). We have also shown that the intervention of delta’s with the PLMs is equivalent
+to the design of controllers. By applying the theories of controller design (Boyd & Barratt, 1991; Ang et al.,
+2005), we expect more delta methods be proposed with theoretical guarantees. The designed delta structures
+are in this way interpretable in principle while sufﬁciently exploiting the power of PLMs.
+5
+Comparisons and Experimental Discoveries
+As an effective engine to stimulate large-size PLMs, delta tuning presents an enormous practical potential
+for various real-world applications. In this section, we carry out systematic experiments to gain a deeper
+understanding of the attributes of different mainstream delta tuning methods.
+Speciﬁcally, (1) we ﬁrst conduct thorough comparisons among four representative delta tuning methods and
+ﬁne-tuning in §5.1: PERFORMANCE, covering the performance, convergence and the efﬁciency analysis; (2)
+secondly, we explore the combinability of three representative delta tuning methods in §5.2: COMBINATION
+by comparing the performance under both the full-data and low-resource setting. We also explore the effects of
+manual templates for delta tuning methods; (3) furthermore, we investigate the scaling law in §5.3: SCALE and
+(4) the transferability of delta tuning methods among different downstream tasks in §5.4: TRANSFERABILITY.
+The implementation details and tasks are described in §A: DETAILS and §B: TASKS. We will release the codes,
+dataset splits and trained delta checkpoints to facilitate future research attempts.
+5.1
+Performance, Convergence and Efﬁciency
+Experimental Setting.
+We evaluate vanilla ﬁne-tuning (FT) and four representative delta tuning methods,
+including prompt tuning (PT), preﬁx-tuning (PF), LoRA (LR) and adapter (AP). Other representative delta
+tuning methods (Liu et al., 2021b; Zaken et al., 2021; Guo et al., 2021; Liu et al., 2022) are omitted.
+To cover broad and diverse NLP tasks, we randomly select over 100 representative tasks from Huggingface
+datasets6 (Lhoest et al., 2021). The selected tasks include text classiﬁcation (e.g., sentiment analysis and
+natural language inference), question answering (e.g., machine reading comprehension and multi-choice
+question answering), conditional generation (e.g., summarization and dialogue), etc. We list the task details
+of each category in Table 10. To handle different tasks with a single text-to-text PLM, following Raffel et al.
+(2019), we process the input and output of each task into the same sequence-to-sequence format.
+We choose T5BASE (Raffel et al., 2019) as the mainly evaluated PLM backbone for different tuning methods,
+and we additionally report the performance of PT with T5LARGE (Raffel et al., 2019). For both models, we use
+the checkpoints released by Lester et al. (2021), who conducted additional 100k steps of LM adaption on the
+ofﬁcial checkpoints released by Raffel et al. (2019). Such an LM adaptation objective has been demonstrated
+beneﬁcial for better performance and faster convergence during downstream adaptation, compared with only
+the original “span corruption” pre-training objective of T5. We follow the common practice for each delta
+tuning’s implementation. For PF, we use 5 preﬁx tokens; for PT, we prepend 100 tunable soft tokens into the
+input embedding; for LR, we reparameterize all the query matrices and the value matrices in the multi-head
+attention modules as low-rank decompositions, and set the rank to 8; for AP, we insert adapter modules
+into both the multi-head attention module and the feed-forward network in each Transformer layer, set the
+bottleneck dimension to 64, and choose SiLU (Elfwing et al., 2018) as the activation function. More training
+details are left in §A.1: PERFORMANCE DETAILS.
+6https://huggingface.co/datasets
+17
+5.1
+Performance, Convergence and Efﬁciency
+Performance Analysis.
+The overall results are listed in Table 3, from which we observe that: (1) in general,
+since different delta tuning methods signiﬁcantly reduce the amounts of tunable parameters, they are no match
+for FT in performance under most cases. But after averaging the results over all datasets, the gap between the
+delta tuning methods and the ﬁne-tuning method is not insurmountable, which demonstrates the potential of
+the large-scale applications of parameter-efﬁcient adaptations. (2) Despite having different design elements,
+PF, LR and AP are comparable with each other in performance. Speciﬁcally, each of them is possible to show
+dominant performance (even better than FT) over others on certain tasks. According to the average results, the
+performances of all the methods are ranked as FT > LR > AP > PF > PT. Interestingly, the performance
+of the delta tuning methods is not consistent with their number of tunable parameters, i.e., at least on small
+PLMs, more tunable parameters do not necessarily lead to approximately better performance, and the design
+of the structure for delta tuning may play a greater role. (3) As the easiest of these methods to implement
+(i.e. without modifying the internal structure of the model), PT lags far behind other delta tuning methods in
+most cases when experimented on T5BASE, although better PT performance is observed when the model size is
+signiﬁcantly enlarged to T5LARGE, which is aligned with previous ﬁndings on the power of scale for prompt
+tuning (Lester et al., 2021)7. However, as we would show later (§5.3: SCALE), other delta tuning methods also
+exhibit far better performance when the scale of the backbone PLM grows extremely large. That is, unlike the
+conclusion of (3), when the model increases sharply, the design of the structure may become less important for
+the delta tuning methods.
+Table 3: Overall (test) performance of over 100 NLP tasks comparing prompt tuning (PT), preﬁx-tuning
+(PF), LoRA (LR), Adapter (AP) and ﬁne-tuning (FT). We experiment all methods on T5BASE, with the best
+performance highlighted in bold, and additionally report the performance of PT on T5LARGE.
+Task
+PT
+PT
+PF
+LR
+AP
+FT
+(base)
+(large)
+Ratio of tunable parameters
+0.03%
+0.01%
+7.93%
+0.38%
+2.38%
+100%
+ACRONYM_IDENTIFICATION
+93.35
+96.68
+96.12
+96.12
+95.57
+96.12
+ADE_CORPUS_V2-CLASSIFICATION
+41.76
+94.42
+93.25
+94.47
+93.91
+94.27
+ADE_CORPUS_V2-DOSAGE
+78.57
+89.29
+82.14
+85.71
+82.14
+82.14
+ADE_CORPUS_V2-EFFECT
+59.15
+61.35
+63.25
+62.52
+60.91
+62.66
+ADVERSARIAL_QA
+34.10
+54.60
+43.17
+46.40
+45.35
+48.56
+AG_NEWS
+91.37
+93.61
+93.42
+94.63
+94.60
+95.19
+ANLI
+25.85
+44.96
+43.88
+45.27
+49.19
+50.54
+ASLG_PC12
+15.78
+44.07
+47.71
+73.72
+80.65
+92.92
+BLIMP-ANAPHOR_GENDER_AGREEMENT
+100.00
+100.00
+100.00
+100.00
+100.00
+99.00
+BLIMP-ANAPHOR_NUMBER_AGREEMENT
+49.00
+100.00
+100.00
+100.00
+100.00
+100.00
+BLIMP-DETERMINER_NOUN_AGREEMENT
+46.00
+100.00
+100.00
+100.00
+100.00
+100.00
+_WITH_ADJ_IRREGULAR_1
+BLIMP-ELLIPSIS_N_BAR_1
+49.00
+100.00
+100.00
+100.00
+100.00
+100.00
+BLIMP-EXISTENTIAL_THERE
+53.00
+100.00
+100.00
+100.00
+100.00
+100.00
+_QUANTIFIERS_1
+BLIMP-IRREGULAR_PAST
+100.00
+100.00
+100.00
+100.00
+100.00
+100.00
+_PARTICIPLE_ADJECTIVES
+BLIMP-SENTENTIAL_NEGATION
+54.00
+100.00
+100.00
+100.00
+100.00
+100.00
+_NPI_SCOPE
+BLIMP-WH_QUESTIONS_OBJECT_GAP
+55.00
+100.00
+100.00
+100.00
+100.00
+100.00
+BOOLQ
+61.28
+77.43
+77.55
+80.00
+78.47
+81.77
+CIRCA
+13.51
+77.39
+80.16
+82.38
+82.93
+84.69
+CLIMATE_FEVER
+15.47
+33.42
+38.03
+39.35
+37.48
+41.57
+COMMONSENSE_QA
+58.43
+76.76
+58.43
+62.52
+60.72
+61.21
+COS_E
+12.41
+14.82
+13.90
+14.05
+14.31
+13.46
+COSMOS_QA
+7.30
+10.98
+9.91
+10.78
+10.85
+11.32
+CRAWL_DOMAIN
+68.16
+76.91
+73.04
+73.00
+72.76
+75.12
+DISCOVERY
+0.18
+18.83
+16.67
+18.98
+18.41
+25.88
+DREAM
+49.19
+71.83
+58.70
+61.00
+59.53
+62.42
+ELI5-ASKH
+11.26
+11.70
+12.64
+11.99
+11.45
+13.00
+ELI5-ASKS
+14.79
+15.54
+15.09
+15.25
+15.01
+15.28
+7We found empirically that PT tends to perform worse and converge more slowly for small-scale PLMs.
+18
+5.1
+Performance, Convergence and Efﬁciency
+ELI5-ELI5
+14.19
+15.38
+15.23
+14.59
+14.43
+14.75
+EMO
+69.91
+71.47
+73.31
+76.13
+74.88
+75.69
+EMOTION
+89.19
+88.73
+88.29
+88.63
+88.98
+89.25
+ETHOS-DIRECTED_VS_GENERALIZED
+76.86
+86.64
+94.76
+92.29
+94.94
+94.94
+ETHOS-DISABILITY
+46.99
+100.00
+93.81
+93.81
+100.00
+93.81
+ETHOS-GENDER
+63.84
+77.08
+77.44
+79.91
+79.91
+74.48
+ETHOS-NATIONAL_ORIGIN
+44.30
+81.77
+81.77
+87.95
+84.72
+84.72
+ETHOS-RACE
+84.36
+97.06
+94.54
+97.21
+94.27
+97.21
+ETHOS-RELIGION
+93.02
+93.02
+96.35
+93.02
+96.35
+96.64
+FINANCIAL_PHRASEBANK
+97.18
+98.36
+98.36
+97.94
+97.95
+98.36
+FREEBASE_QA
+1.90
+6.71
+2.63
+3.75
+5.86
+23.52
+GLUE-COLA
+0.00
+55.60
+50.95
+49.40
+44.66
+51.53
+GLUE-MNLI
+35.43
+86.12
+82.21
+83.74
+83.90
+86.39
+GLUE-MRPC
+67.65
+88.24
+87.25
+87.25
+87.25
+89.71
+GLUE-QNLI
+52.34
+93.01
+87.48
+92.02
+91.58
+92.57
+GLUE-QQP
+84.65
+86.21
+84.62
+86.87
+85.93
+89.13
+GLUE-RTE
+45.32
+79.14
+72.66
+79.14
+78.42
+80.58
+GLUE-SST2
+92.20
+94.95
+92.66
+94.04
+93.35
+94.27
+HATE_SPEECH_OFFENSIVE
+73.27
+79.08
+75.22
+75.21
+75.06
+75.04
+HATE_SPEECH18
+75.57
+74.45
+79.42
+79.59
+80.86
+80.93
+HATEXPLAIN
+50.98
+67.62
+66.06
+68.03
+68.11
+68.02
+HEALTH_FACT
+39.15
+45.60
+50.38
+52.05
+51.21
+54.19
+HELLASWAG
+23.82
+70.28
+24.76
+32.82
+27.60
+41.90
+HOTPOT_QA
+65.95
+76.41
+73.76
+76.13
+74.65
+78.45
+LAMA-CONCEPTNET
+15.25
+26.12
+22.63
+34.96
+43.62
+70.28
+LAMA-GOOGLE_RE
+11.78
+14.08
+12.60
+18.82
+23.73
+24.88
+LAMA-SQUAD
+3.23
+16.13
+12.90
+9.68
+3.23
+9.68
+LAMA-TREX
+59.13
+63.68
+63.91
+66.21
+67.23
+69.12
+LIAR
+13.23
+28.87
+26.46
+28.67
+27.08
+28.20
+MC_TACO
+76.25
+88.39
+86.02
+88.13
+86.81
+87.34
+MEDICAL_QUESTIONS_PAIRS
+46.56
+91.80
+85.25
+88.52
+90.16
+87.21
+MULTI_NEWS
+18.09
+19.23
+18.81
+19.44
+19.10
+19.80
+NUMER_SENSE
+50.53
+56.75
+53.30
+56.27
+53.97
+57.32
+ONESTOP_ENGLISH
+22.53
+98.23
+100.00
+100.00
+100.00
+100.00
+OPENBOOKQA
+44.80
+54.40
+50.20
+52.20
+53.80
+57.00
+PAWS
+49.60
+91.27
+92.07
+93.39
+92.91
+93.60
+POEM_SENTIMENT
+54.18
+70.31
+85.38
+86.80
+82.52
+83.26
+PROTO_QA
+21.16
+37.66
+24.57
+27.87
+26.17
+34.47
+QASC
+19.22
+47.73
+33.26
+37.80
+33.05
+43.63
+QUAREL
+54.89
+54.71
+57.25
+59.78
+57.61
+62.50
+QUARTZ-NO_KNOWLEDGE
+65.43
+68.88
+68.49
+67.09
+66.96
+69.39
+QUARTZ-WITH_KNOWLEDGE
+64.03
+85.97
+71.56
+74.23
+73.72
+76.28
+RACE-HIGH
+34.51
+60.09
+42.82
+59.52
+58.92
+65.95
+RACE-MIDDLE
+47.21
+74.65
+62.67
+68.31
+65.46
+70.61
+ROTTEN_TOMATOES
+88.36
+91.84
+89.96
+89.30
+89.20
+89.77
+SAMSUM
+39.35
+45.12
+43.38
+45.00
+44.68
+45.73
+SCIQ
+96.95
+98.53
+98.08
+98.42
+98.19
+98.30
+SCITAIL
+91.02
+95.47
+93.04
+93.80
+94.04
+94.77
+SEARCH_QA
+7.14
+19.17
+8.70
+10.17
+9.72
+19.26
+SICK
+40.10
+88.82
+87.91
+88.69
+88.88
+89.15
+SMS_SPAM
+95.80
+97.46
+97.14
+97.14
+97.46
+97.11
+SPIDER
+3.29
+6.38
+7.74
+9.67
+8.70
+6.77
+SUPERGLUE-CB
+75.00
+78.57
+100.00
+100.00
+96.43
+96.43
+SUPERGLUE-COPA
+53.60
+56.00
+58.40
+56.40
+60.40
+59.20
+SUPERGLUE-RECORD
+44.67
+73.82
+61.62
+64.66
+62.08
+67.20
+SUPERGLUE-RTE
+50.36
+84.89
+73.38
+79.14
+82.01
+78.42
+SUPERGLUE-WIC
+50.16
+68.34
+64.89
+68.65
+70.53
+71.79
+TAB_FACT
+46.65
+50.16
+52.53
+56.86
+53.42
+57.34
+19
+5.2
+Combinations of Delta Tuning Methods
+TREC
+90.80
+91.51
+91.38
+93.38
+93.36
+94.81
+TREC-FINEGRAINED
+80.63
+88.18
+90.04
+91.44
+90.00
+91.27
+TWEET_EVAL-HATE
+53.00
+42.23
+44.67
+48.16
+47.88
+51.33
+TWEET_EVAL-IRONY
+58.02
+69.73
+76.00
+76.75
+73.88
+77.43
+TWEET_EVAL-OFFENSIVE
+75.94
+78.87
+80.94
+80.97
+80.59
+82.05
+TWEET_EVAL-SENTIMENT
+28.90
+72.79
+71.78
+71.31
+71.90
+71.98
+TWEET_EVAL-STANCE_ABORTION
+32.59
+61.42
+61.47
+63.20
+62.61
+61.72
+TWEET_EVAL-STANCE_ATHEISM
+56.28
+67.58
+71.54
+71.77
+71.27
+74.41
+TWEET_EVAL-STANCE_CLIMATE
+47.61
+52.43
+52.86
+55.92
+59.06
+57.38
+TWEET_EVAL-STANCE_FEMINIST
+29.65
+51.63
+56.27
+57.41
+58.57
+58.51
+TWEET_EVAL-STANCE_HILLARY
+41.34
+63.18
+62.15
+65.40
+61.74
+66.41
+WEB_QUESTIONS
+11.90
+19.58
+15.87
+18.78
+20.63
+25.40
+WIKI_BIO
+42.39
+44.03
+44.84
+45.36
+46.19
+47.09
+WIKI_QA
+48.78
+73.97
+64.10
+72.15
+70.75
+74.41
+WIKI_SPLIT
+79.80
+80.10
+79.91
+80.09
+80.05
+80.34
+WINO_GRANDE
+48.42
+58.20
+50.79
+61.20
+50.47
+67.19
+WIQA
+36.10
+65.27
+63.67
+77.99
+64.44
+79.82
+XSUM
+21.35
+26.56
+23.84
+25.87
+26.07
+29.90
+YELP_POLARITY
+95.47
+98.18
+97.78
+97.37
+97.30
+97.92
+Average
+48.81
+65.92
+64.07
+66.06
+65.58
+67.96
+Convergence Analysis.
+In Figure 6, Figure 7 and Figure 8, we visualize the performance of different delta
+tuning methods (LR, AP, PF) and ﬁne-tuning (FT) at different training steps to compare their convergence rate.
+It could be derived that, the convergence rate of these tuning methods are ranked as: FT > AP ≈LR > PF.
+Overall, FR is the most stable method for convergence, and despite the fact that PF has the highest number of
+tunable parameters of all delta tuning methods, it still faces some convergence difﬁculties (the original paper
+also mentions that the convergence of PF is very dependent on the reparameterization).
+Since PT lags far behind other tuning methods in both convergence rate and performance, we do not visualize
+it in the above ﬁgures. But as mentioned in §3.1: ADDITION, PT is the easiest method to implement and
+it is desirable to theoretically and empirically further study the convergence issue across different sizes of
+PLMs. We also found empirically that, (1) for each delta tuning method, within a reasonably broad range,
+both performance and convergence are not sensitive to the number of tunable parameters, but more sensitive to
+the structures of the methods, and (2) with the scale of PLM growing larger, the convergence of delta tuning is
+also accelerated (§5.3: SCALE). To summarize, our experiments yield very similar conclusions in terms of
+convergence and overall performance, and these conclusions are well supported by the fact that we used the
+same experimental and implementation setup, same model selection strategy, and plenty of datasets.
+Efﬁciency Analysis.
+Delta tuning saves GPU memory by alleviating the need for gradient computations for
+most parameters. To speciﬁcally verify the efﬁciency of GPU memory, in Figure 9, we conduct experiments to
+compare the GPU memory consumed by different delta tuning methods and ﬁne-tuning across different PLM
+scales. We choose three scales of T5 model, i.e., T5BASE,T5LARGE, T5XL, , and test the peak GPU memories
+achieved under different batchsizes. The static GPU memories, which leave out the intermediate tensors such
+as hidden states, are draw on Batchsize=0. We use NVIDIA A100 (maximum GPU memory=39.58GB) and
+library OpenDelta 8 for these experiments. For the cases which consume large GPU memory than a single
+A100, we parallelize the model across several GPUs using model parallelization, which doesn’t introduce
+additional memory consumption. We can see from the ﬁgure that under small batchsizes (e.g., 1, 8), delta
+tuning saves up to 3/4 GPU memory, which under big batchsizes (e.g., 64), delta tuning saves at least 1/3
+GPU memory. Given the fact that small batchsize is more preferred when applying big models to save GPU
+memory, delta tuning can further reduce the gpu memory dramatically.
+5.2
+Combinations of Delta Tuning Methods
+Considering that different delta tuning methods are compatible with each other, which means they could be
+applied on the same PLM together, we thus investigate whether such a combination would bring additional
+beneﬁts. Speciﬁcally, we evaluate both simultaneous combination and sequential combination. We choose
+8https://github.com/thunlp/OpenDelta
+20
+5.2
+Combinations of Delta Tuning Methods
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.79
+0.84
+0.89
+0.94
+0.99
+EM
+acronym_identification
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.79
+0.84
+0.88
+0.92
+0.97
+Classification-F1
+ag_news
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.02
+0.15
+0.28
+0.41
+0.54
+Classification-F1
+anli
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.24
+0.48
+0.72
+0.97
+EM
+aslg_pc12
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.36
+0.48
+0.6
+0.72
+0.84
+ACC
+boolq
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.05
+0.26
+0.48
+0.69
+0.9
+Classification-F1
+circa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.02
+0.19
+0.36
+0.52
+0.69
+ACC
+commonsense_qa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.18
+0.33
+0.48
+0.62
+0.77
+EM
+crawl_domain
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.06
+0.13
+0.19
+0.25
+Classification-F1
+discovery
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.17
+0.34
+0.51
+0.68
+ACC
+dream
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.06
+0.12
+0.17
+0.23
+EM
+freebase_qa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.29
+0.44
+0.6
+0.75
+0.9
+ACC
+glue-mnli
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.45
+0.57
+0.7
+0.82
+0.94
+ACC
+glue-qnli
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.3
+0.46
+0.62
+0.77
+0.93
+ACC
+glue-qqp
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.44
+0.57
+0.71
+0.85
+0.98
+ACC
+glue-sst2
+PF
+FT
+AP
+LR
+Figure 6: The performance of T5BASE with different delta tuning methods (LR, AP, PF) and ﬁne-tuning (FT)
+at different training steps. Note we apply early stop in all the experiments. The performance of PT is omitted
+since it lags far behind other tuning methods in both convergence and performance.
+three representative delta tuning methods, including prompt tuning, BitFit, and adapter, to explore the effects
+of their combinations. The training details are described in §A.2: COMBINATION DETAILS.
+Simultaneous Combination.
+We ﬁrst explore the effects of directly applying all the three delta tuning
+methods simultaneously. The experiments are conducted using both RoBERTaLARGE (Liu et al., 2019) and
+T5BASE on eight GLUE tasks (Wang et al., 2019), and we report the performance on development sets. We also
+test the performance of RoBERTaLARGE under the few-shot setting, where we randomly sample 16 training
+examples per label to construct the new training set and development set, respectively.
+21
+5.2
+Combinations of Delta Tuning Methods
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.26
+0.4
+0.54
+0.68
+0.82
+Classification-F1
+hate_speech_offensive
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.06
+0.26
+0.46
+0.65
+0.85
+Classification-F1
+hate_speech18
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.19
+0.37
+0.56
+0.75
+Classification-F1
+hatexplain
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.13
+0.27
+0.4
+0.54
+ACC
+hellaswag
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.22
+0.38
+0.53
+0.69
+0.85
+QA-F1
+hotpot_qa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.04
+0.21
+0.39
+0.57
+0.74
+EM
+lama-conceptnet
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.43
+0.5
+0.57
+0.64
+0.71
+EM
+lama-trex
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.08
+0.17
+0.25
+0.34
+Classification-F1
+liar
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+mc_taco
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.47
+0.58
+0.7
+0.81
+0.92
+ACC
+medical_questions_pairs
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.15
+0.3
+0.46
+0.61
+EM
+numer_sense
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.01
+0.16
+0.32
+0.47
+0.62
+ACC
+openbookqa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.1
+0.32
+0.54
+0.77
+0.99
+Classification-F1
+paws
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.02
+0.11
+0.19
+0.27
+0.36
+EM
+proto_qa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.11
+0.22
+0.32
+0.43
+ACC
+qasc
+PF
+FT
+AP
+LR
+Figure 7: Continued with Figure 6. The performance of T5BASE with different delta tuning methods (LR, AP,
+PF) and ﬁne-tuning (FT) at different training steps. Note we apply early stop in all the experiments.
+Similar to prompt-based ﬁne-tuning (Schick & Schütze, 2021), we insert a natural language prompt template
+into the input text for each task. Take the sentiment classiﬁcation task as an example, an input sentence x =
+(I like this movie.) could be re-formulated as: xprompt = [CLS] x It was [MASK]. [SEP], where “It was
+[MASK].” is a manual template. The PLM is trained to ﬁll in the [MASK] token with either “great” (positive)
+or “terrible” (negative) for classiﬁcation. The manual templates are designed to bridge the gap between
+pre-training and downstream tuning, we also test the performance of delta tuning combinations without
+templates, i.e., x′
+prompt = [CLS] x [SEP] [MASK] [SEP], to evaluate manual templates’ functionalities.
+The manual templates and label words for different GLUE tasks are listed in Table 4.
+22
+5.2
+Combinations of Delta Tuning Methods
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.17
+0.34
+0.51
+0.68
+ACC
+quarel
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.45
+0.54
+0.63
+0.72
+0.81
+ACC
+quartz-no_knowledge
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.21
+0.43
+0.64
+0.86
+ACC
+quartz-with_knowledge
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.18
+0.36
+0.54
+0.72
+ACC
+race-high
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.19
+0.38
+0.57
+0.77
+ACC
+race-middle
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+Classification-F1
+rotten_tomatoes
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.19
+0.39
+0.6
+0.8
+1.0
+Classification-F1
+scitail
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.06
+0.12
+0.17
+0.23
+EM
+search_qa
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.18
+0.37
+0.55
+0.74
+0.93
+Classification-F1
+sick
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.2
+0.33
+0.46
+0.6
+0.73
+QA-F1
+superglue-record
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+Classification-F1
+trec
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.12
+0.33
+0.53
+0.73
+0.94
+Classification-F1
+trec-finegrained
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.21
+0.41
+0.62
+0.83
+Classification-F1
+tweet_eval-hate
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.0
+0.2
+0.4
+0.6
+0.8
+Classification-F1
+tweet_eval-sentiment
+PF
+FT
+AP
+LR
+100
+200
+400
+800
+1600
+3200
+6400
+12800
+25600
+steps
+0.03
+0.09
+0.15
+0.2
+0.26
+EM
+web_questions
+PF
+FT
+AP
+LR
+Figure 8: Continued with Figure 7. The performance of T5BASE with different delta tuning methods (LR, AP,
+PF) and ﬁne-tuning (FT) at different training steps. Note we apply early stop in all the experiments.
+We list the results of RoBERTaLARGE in Table 5, from which we could conclude that: for RoBERTaLARGE, (1)
+under both full-data setting and the few-shot setting, introducing adapter into the combination almost always
+conduces to the average GLUE performance no matter whether there exist manual templates; (2) introducing
+prompt tuning into the combination generally harms the average performance, showing that prompt tuning
+may not be compatible with other two delta tuning methods; (3) introducing BitFit into the combination
+generally improves the average performance; (4) manual templates could signiﬁcantly improve the zero-shot
+performance (from 23.7 to 43.4) by narrowing the gap between downstream tuning and pre-training. Under the
+few-shot setting, manual templates could also help boost the average performance evidently. However, when
+23
+5.2
+Combinations of Delta Tuning Methods
+0
+1
+8
+32
+64
+Batchsize
+0.0
+2.5
+5.0
+7.5
+10.0
+GPU Memory (GB)
+3.3
+3.7
+4.4
+7.3
+9.8
+0.9
+0.9
+1.6
+4.0
+7.2
+0.8
+0.9
+1.6
+3.8
+6.8
+0.8
+0.9
+1.4
+3.3
+5.8
+T5BASE
+0
+1
+8
+32
+64
+Batchsize
+0.0
+7.5
+15.0
+22.5
+30.0
+11.0
+11.6
+13.5
+21.1
+28.1
+2.8
+3.0
+4.8
+11.0
+19.3
+2.8
+2.9
+4.7
+10.5
+18.3
+2.8
+2.9
+4.4
+9.3
+15.9
+T5LARGE
+0
+1
+8
+32
+64
+Batchsize
+0.0
+25.0
+50.0
+75.0
+100.0
+42.5
+43.6
+48.5
+66.5
+90.5
+10.7
+11.2
+16.1
+33.1
+55.6
+10.7
+11.1
+16.0
+32.6
+54.6
+10.7
+11.2
+15.8
+30.5
+52.3
+T5XL
+FT
+AP
+LR
+BF
+Figure 9: GPU memory consumed by each delta tuning methods compared with ﬁne-tuning.
+Table 4: Manual templates and the corresponding label words for different tasks.
+Task
+Template
+Label words
+CoLA (Warstadt et al., 2019)
+⟨S1⟩This is [MASK] .
+grammatical: correct, not_grammatical: incorrect
+SST-2 (Socher et al., 2013)
+⟨S1⟩It was [MASK] .
+positive: great, negative: terrible
+MRPC (Dolan & Brockett, 2005)
+⟨S1⟩[MASK] , ⟨S2⟩
+equivalent: Yes, not_equivalent: No
+STS-B (Cer et al., 2017)
+⟨S1⟩[MASK] , ⟨S2⟩
+yu: Yes, yl: No
+QQP (link)
+⟨S1⟩[MASK] , ⟨S2⟩
+equivalent: Yes, not_equivalent: No
+MNLI (Williams et al., 2018)
+⟨S1⟩? [MASK] , ⟨S2⟩
+entailment: Yes, neutral: Maybe, contradiction: No
+QNLI (Rajpurkar et al., 2016)
+⟨S1⟩? [MASK] , ⟨S2⟩
+entailment: Yes, no_entailment: No
+RTE (Dagan et al., 2005)
+⟨S1⟩? [MASK] , ⟨S2⟩
+entailment: Yes, no_entailment: No
+the training supervision is abundant (full-data setting), manual templates only exhibit marginal improvements
+or even harm the performance.
+We list the results of T5BASE in Table 6, from which we observe slightly different phenomena than
+RoBERTaLARGE as follows: (1) still, introducing prompt tuning into the combination would always harm
+the performance no matter whether there exist manual templates, showing that prompt tuning may not be
+compatible with other two delta tuning methods for T5BASE, either; (2) introducing BitFit into the combina-
+tion, however, could always conduce to the average performance; (3) adapter does not always improve the
+performance when there exist manual templates but could still bring beneﬁts when there do not exist manual
+templates; (4) inserting manual templates into the input text would always improve the average performance.
+The improvements tend to be more evident than RoBERTaLARGE.
+Sequential Combination.
+In addition to the simultaneous combination, we further investigate the com-
+patibility when the above three delta tuning methods (prompt tuning, BitFit, and adapter) are sequentially
+introduced. Speciﬁcally, we split the whole tuning process into 3 stages. During each stage, we train an
+individual delta tuning method for 6, 000 steps; in the stages to follow, we freeze the tuned parameters in
+previous stages and only optimize the newly introduced delta parameters. We experiment RoBERTaLARGE on
+SST-2 (Socher et al., 2013) with / without manual templates. The results are visualized in Figure 10, from
+which we could derive that, under certain cases, the performance could be improved with the involvements
+of subsequent delta tuning methods. However, there does not exist an optimal sequential combination under
+different settings.
+Generalization Gap.
+Additionally, we report the generalization gap (train performance - dev performance)
+for RoBERTaLARGE under the full-data setting, with the results shown in Table 7. It could be derived that, (1)
+the gap of a single delta tuning method is always smaller than ﬁne-tuning, which means over-parameterization
+may help better memorize (overﬁt) training samples. Among all the delta tuning methods, prompt tuning
+tends to have the smallest generalization gap. Considering that each delta tuning method could already
+generalize well and achieve non-trivial performance on the dev set, hence overﬁtting the training set may not
+be the prerequisite for good generalization; (2) in general, combining delta tuning methods would enlarge the
+generalization gap, even to the extent that is comparable with ﬁne-tuning, despite tuning far fewer parameters.
+This suggests that, for the investigated tasks, memorizing the training set may not require employing all of the
+parameters; in other words, a small model capacity during downstream adaptation may be enough for good
+memorization; (3) utilizing manual templates generally would not inﬂuence the generalization gap.
+24
+5.2
+Combinations of Delta Tuning Methods
+Table 5: Performance of RoBERTaLARGE on GLUE datasets. We report the average result of multiple random
+seeds on the validation set.
+Prompt
+%
+%
+%
+%
+!
+!
+!
+!
+BitFit
+%
+%
+!
+!
+%
+%
+!
+!
+Adapter
+%
+!
+%
+!
+%
+!
+%
+!
+Tunable parameters
+0%
+1.75%
+0.09%
+1.84%
+0.003%
+1.76%
+0.09%
+1.85%
+RoBERTaLARGE , full-data, without manual templates
+CoLA(Matt.)
+4.6
+66.61.6
+63.50.6
+65.90.5
+42.72.3
+63.11.5
+63.70.9
+64.40.9
+SST-2(acc)
+50.9
+95.80.1
+95.60.1
+95.70.2
+95.30.2
+95.70.1
+95.30.2
+95.50.1
+MRPC(F1)
+1.4
+92.70.2
+91.90.4
+93.00.4
+85.40.5
+92.00.5
+92.20.5
+92.90.3
+STS-B(Pear.)
+-6.2
+91.40.1
+90.70.2
+90.50.1
+83.02.8
+90.50.4
+90.30.7
+90.90.1
+QQP(F1.)
+6.4
+83.50.1
+83.50.0
+84.40.0
+77.20.4
+84.30.0
+83.60.1
+84.40.0
+MNLI(acc)
+34.2
+88.60.2
+88.00.2
+89.00.1
+77.92.5
+88.90.1
+88.00.2
+88.90.1
+QNLI(acc)
+50.6
+93.70.3
+93.40.3
+94.20.1
+86.20.5
+94.20.1
+93.20.3
+94.40.1
+RTE(acc)
+47.7
+86.80.5
+86.21.0
+84.50.5
+74.40.5
+84.10.8
+85.71.5
+84.71.1
+Average
+23.7
+87.40.4
+86.60.4
+87.10.2
+77.71.2
+86.60.4
+86.50.6
+87.00.3
+RoBERTaLARGE , full-data, with manual templates
+CoLA(Matt.)
+2.2
+66.91.1
+64.20.5
+65.51.0
+37.820.8
+64.71.3
+64.80.7
+64.91.0
+SST-2(acc)
+83.6
+96.30.2
+96.10.1
+96.20.2
+95.70.2
+95.80.1
+95.90.1
+95.80.2
+MRPC(F1)
+61.9
+92.20.4
+92.70.6
+92.70.2
+84.20.5
+91.80.2
+92.20.4
+92.00.4
+STS-B(Pear.)
+-3.3
+91.30.5
+90.90.1
+90.70.2
+79.61.3
+91.90.3
+90.80.4
+90.10.6
+QQP(F1)
+49.7
+83.60.1
+83.60.0
+84.60.1
+77.00.7
+84.30.0
+83.70.0
+84.40.2
+MNLI(acc)
+50.9
+88.60.1
+87.70.1
+88.70.1
+80.20.2
+88.70.1
+88.00.1
+88.90.1
+QNLI(acc)
+50.8
+93.60.1
+93.10.2
+93.80.1
+86.60.4
+93.80.1
+93.00.1
+93.80.1
+RTE(acc)
+51.3
+86.90.2
+86.21.0
+86.00.7
+78.30.3
+84.60.5
+86.41.5
+84.70.9
+Average
+43.4
+87.40.3
+86.80.3
+87.30.3
+77.43.0
+86.90.3
+86.90.4
+86.80.4
+RoBERTaLARGE , 16-shot, without manual templates
+CoLA(Matt.)
+4.6
+19.69.6
+15.117.0
+17.711.4
+3.50.6
+21.411.5
+20.819.6
+21.513.4
+SST-2(acc)
+50.9
+92.70.4
+92.70.6
+93.10.6
+74.90.6
+91.70.8
+92.20.5
+91.60.7
+MRPC(F1)
+1.4
+78.24.4
+69.81.6
+81.20.0
+6.24.1
+74.67.1
+69.36.5
+77.45.4
+STS-B(Pear.)
+-0.6
+66.52.5
+67.58.0
+71.02.5
+10.73.5
+63.31.6
+64.75.6
+69.68.6
+QQP(F1)
+6.4
+55.95.8
+55.16.8
+54.64.2
+52.41.4
+58.37.2
+55.14.8
+58.56.1
+MNLI(acc)
+34.2
+58.14.5
+64.63.4
+62.74.1
+35.30.6
+61.43.9
+61.45.1
+61.03.8
+QNLI(acc)
+50.6
+60.23.0
+69.71.9
+59.81.7
+52.81.0
+60.24.9
+60.94.0
+61.67.0
+RTE(acc)
+47.7
+55.01.6
+54.50.8
+54.92.9
+50.10.7
+58.22.5
+54.62.4
+58.73.4
+Average
+24.4
+60.84.0
+61.15.0
+61.93.4
+35.71.6
+61.24.9
+59.96.1
+62.56.0
+RoBERTaLARGE , 16-shot, with manual templates
+CoLA(Matt.)
+2.2
+10.515.0
+4.65.0
+9.210.2
+1.41.7
+10.24.2
+5.92.5
+5.95.5
+SST-2(acc)
+83.6
+93.10.3
+92.90.1
+92.10.1
+90.90.6
+91.90.4
+92.00.4
+92.20.6
+MRPC(F1)
+61.9
+77.21.4
+74.54.9
+81.20.0
+72.14.4
+76.81.3
+76.12.4
+81.20.0
+STS-B(Pear.)
+-3.3
+65.84.7
+69.36.0
+71.04.1
+12.08.0
+61.75.7
+71.36.4
+67.12.8
+QQP(F1)
+49.7
+66.60.5
+67.80.5
+66.34.1
+53.41.0
+66.91.9
+68.61.2
+67.12.9
+MNLI(acc)
+50.9
+68.01.4
+69.43.3
+68.90.4
+53.22.5
+67.11.8
+67.12.0
+68.10.3
+QNLI(acc)
+50.8
+69.51.1
+70.23.4
+68.12.4
+59.40.5
+69.92.5
+72.53.9
+70.42.3
+RTE(acc)
+51.3
+70.63.6
+67.35.1
+73.02.0
+56.34.6
+70.42.3
+69.23.5
+72.42.8
+Average
+43.4
+65.23.5
+64.53.5
+66.22.9
+49.82.9
+64.42.5
+65.32.8
+65.62.2
+25
+5.3
+The Power of Scale for Delta Tuning
+Table 6: Performance of T5BASE on GLUE datasets. We report the average result of multiple random seeds on
+the validation set.
+Prompt
+%
+%
+%
+%
+!
+!
+!
+!
+BitFit
+%
+%
+!
+!
+%
+%
+!
+!
+Adapter
+%
+!
+%
+!
+%
+!
+%
+!
+Tunable parameters
+0%
+0.89%
+0.09%
+0.98%
+0.003%
+0.893%
+0.093%
+0.983%
+T5BASE , full-data, without manual templates
+CoLA(Matt.)
+-
+59.20.2
+58.71.7
+58.40.8
+34.018.6
+51.24.6
+36.921.7
+57.80.3
+SST-2(acc)
+-
+94.60.1
+94.40.1
+95.00.2
+94.00.3
+94.11.4
+95.00.1
+95.10.2
+MRPC(F1)
+-
+89.10.6
+90.10.4
+90.80.3
+84.81.2
+89.20.7
+88.50.7
+88.80.6
+STS-B(Pear.)
+-
+86.70.3
+86.60.1
+86.90.3
+83.11.8
+86.10.4
+85.81.4
+85.80.4
+QQP(F1)
+-
+86.70.2
+88.30.1
+87.70.3
+83.41.0
+86.90.4
+88.00.4
+88.10.2
+MNLI(acc)
+-
+84.50.4
+87.10.3
+87.10.4
+81.60.2
+86.00.2
+87.30.2
+87.10.4
+QNLI(acc)
+-
+89.80.1
+91.60.1
+91.30.1
+87.80.3
+89.10.3
+91.80.3
+91.70.2
+RTE(acc)
+-
+75.31.0
+77.51.3
+80.00.8
+64.30.9
+71.54.7
+72.96.6
+71.52.0
+Average
+-
+83.20.3
+84.30.5
+84.70.4
+76.63.1
+81.81.6
+80.83.9
+83.20.5
+T5BASE , full-data, with manual templates
+CoLA(Matt.)
+-
+57.41.8
+59.51.2
+59.10.4
+36.318.2
+39.122.8
+58.10.6
+48.27.4
+SST-2(acc)
+-
+95.00.1
+94.80.3
+95.00.2
+93.90.1
+95.20.1
+95.00.2
+95.30.3
+MRPC(F1)
+-
+90.90.3
+90.70.6
+91.40.4
+81.33.5
+87.80.5
+89.40.3
+89.20.4
+STS-B(Pear.)
+-
+87.10.2
+87.40.4
+87.70.2
+83.41.0
+86.60.1
+84.73.4
+86.80.4
+QQP(F1)
+-
+87.40.1
+88.30.1
+88.20.1
+83.71.1
+87.40.1
+88.30.1
+88.30.2
+MNLI(acc)
+-
+86.10.2
+87.10.2
+86.70.5
+83.10.5
+86.30.4
+87.20.4
+86.90.3
+QNLI(acc)
+-
+91.90.3
+92.80.4
+92.60.2
+89.30.7
+92.20.1
+92.90.1
+92.70.3
+RTE(acc)
+-
+81.90.7
+84.00.8
+83.21.5
+66.82.2
+80.00.2
+81.81.3
+80.10.6
+Average
+-
+84.70.5
+85.60.5
+85.50.4
+77.23.4
+81.83.0
+84.70.8
+83.41.2
+Conclusion.
+To sum up, the above experiments indicate that, different delta tuning methods have distinct
+functionalities for PLMs’ optimization, thus combining them is generally conducive to the downstream
+performance. However, as shown in the above results, different PLMs may favor distinct delta tuning
+combinations, and the optimal combination of delta tuning methods may vary a lot under different settings.
+That being said, it would be interesting to explore the mechanisms behind the inductive biases brought
+by different delta tuning methods under different cases in the future. Besides, we also encourage future
+research explorations to systematically report the performance of their proposed delta methods on various
+PLM backbones under different settings thoroughly.
+5.3
+The Power of Scale for Delta Tuning
+Recently, Lester et al. (2021) found that with the scale of the backbone PLM growing, prompt tuning becomes
+more and more competitive in performance, and would even achieve comparable performance than ﬁne-tuning
+for a PLM with over 10 billion parameters. Besides, Su et al. (2021) indicated that the convergence speed of
+prompt tuning beneﬁts from the scaling law. In this section, we explore whether other delta tuning methods
+also exhibit such power of scale. Speciﬁcally, we experiment on the task of MNLI (Williams et al., 2018),
+QNLI, and SST-2, and choose three PLMs (T5SMALL, T5BASE, T5XXL) of increasing sizes, and evaluate the
+performance of six representative delta tuning methods (adapter, LoRA, preﬁx-tuning, prompt tuning, last
+layer tuning, and selective module tuning). Besides, we give the the percentages of the tuned parameters for
+various methods in every scale of the PLM as shown in Table 9. We describe more training tails of this section
+in §A.3: SCALE DETAILS.
+The results are visualized in Figure 11. From Figure 11 (a-i), we could observe that, with the scale of the PLM
+backbone growing, both the performance and the convergence of all delta tuning methods are signiﬁcantly
+improved; (2) in addition, Figure 11 (j-l) indicates that compared with other delta tuning methods, prompt
+tuning tends to perform extremely bad for small-scale PLMs (T5SMALL and T5BASE). However, as found
+in §5.1: PERFORMANCE, other delta tuning methods tend to perform comparable with ﬁne-tuning even for a
+26
+5.4
+Task-level Transferability Evaluation
+Table 7: The experiments of generalization gap for RoBERTaLARGE on GLUE datasets. We report the average
+result (train performance - dev performance) of multiple random seeds.
+Prompt
+%
+%
+%
+!
+!
+!
+!
+FT
+BitFit
+%
+!
+!
+%
+%
+!
+!
+Adapter
+!
+%
+!
+%
+!
+%
+!
+Tunable parameters
+1.75%
+0.09%
+1.84%
+0.003%
+1.76%
+0.09%
+1.85%
+100%
+RoBERTaBASE , full-data, without manual templates
+CoLA
+25.41.5
+13.02.8
+28.42.4
+12.13.8
+29.56.8
+16.27.6
+18.01.8
+28.22.4
+SST-2
+3.01.3
+1.70.5
+0.90.3
+1.10.5
+3.60.5
+1.90.6
+3.51.1
+3.30.9
+MRPC
+7.10.3
+5.72.2
+7.00.4
+1.01.1
+8.00.5
+4.50.5
+7.10.2
+6.30.7
+STS-B
+5.10.0
+4.90.6
+7.00.8
+6.71.6
+6.50.3
+5.60.6
+6.50.4
+7.50.2
+QQP
+0.60.1
+0.70.1
+0.80.0
+0.10.0
+0.80.0
+0.70.1
+0.80.1
+1.90.2
+MNLI
+0.60.1
+0.50.1
+0.60.2
+0.60.4
+0.50.1
+0.50.2
+0.50.1
+0.60.0
+QNLI
+0.90.1
+0.70.1
+0.50.2
+1.60.1
+0.50.2
+0.80.3
+0.50.2
+1.60.0
+RTE
+13.10.6
+13.20.7
+14.90.3
+9.81.6
+15.90.8
+12.62.3
+15.11.3
+12.91.3
+Average
+7.00.5
+5.10.9
+7.50.6
+4.11.1
+8.21.2
+5.31.5
+6.50.7
+7.80.7
+RoBERTaBASE , full-data, with manual templates
+CoLA
+20.95.0
+25.44.4
+24.37.5
+11.41.2
+29.13.2
+29.66.4
+24.610.3
+30.42.3
+SST-2
+3.30.1
+1.40.6
+1.30.7
+1.00.3
+2.60.7
+2.50.8
+3.80.4
+4.00.1
+MRPC
+6.22.5
+6.50.6
+6.40.3
+3.82.5
+8.20.2
+7.20.3
+6.71.4
+7.20.5
+STS-B
+5.81.4
+4.90.4
+6.71.2
+10.20.6
+6.90.5
+5.50.7
+6.11.5
+7.50.2
+QQP
+0.70.1
+0.60.1
+0.80.0
+0.20.1
+0.80.2
+0.70.1
+0.80.0
+2.00.1
+MNLI
+0.80.1
+0.30.1
+0.40.1
+0.70.2
+0.60.1
+0.70.1
+0.60.1
+0.80.2
+QNLI
+0.80.1
+0.40.2
+0.10.0
+1.40.1
+0.10.0
+0.50.2
+0.00.0
+2.00.1
+RTE
+13.10.2
+11.70.8
+13.90.7
+10.15.2
+15.00.4
+13.31.3
+15.10.9
+12.71.1
+Average
+6.41.2
+6.40.9
+6.71.3
+4.81.3
+7.90.7
+7.51.2
+7.21.8
+8.30.6
+small-scale PLM (T5BASE); (3) based on existing results, in Figure 11 (m-o) and (p-r), we further design two
+delta tuning methods: last layer tuning and selective module tuning. For last layer tuning, we optimize the last
+layer in T5 encoder; for selective module tuning, we randomly choose some modules (e.g., the feed-forward
+layer, query / key / value matrix in the attention layer, or a layer norm) in the T5 model to be tunable. Both
+methods show promising results especially when the scale of the PLM is extremely large, with selective
+module tuning slightly better than last layer tuning. These results suggest that conﬁning the optimization
+within a speciﬁc layer may not be a good strategy (e.g., the case of prompt tuning and last layer tuning). On
+the other hand, randomly choosing modules across different layers could achieve excellent performance when
+the scale of PLMs grows extremely large.
+In general, the above results imply that, the power of scale may be a common phenomenon for delta tuning.
+We hypothesize the existence of such a phenomenon is because, larger PLMs generally have smaller intrinsic
+dimensionalities (Aghajanyan et al., 2021), therefore, merely tuning minimal parameters could obtain a
+strong enough representation ability to achieve non-trivial performance in downstream tasks; besides, the
+over-parameterization and large-scale pre-training may make PLMs more unlikely to get stuck in a local
+optimum during downstream optimization, and thus the convergence is accelerated.
+5.4
+Task-level Transferability Evaluation
+Recently, Su et al. (2021) and Vu et al. (2021) demonstrate the cross-task transferability of prompt tuning.
+To verify whether cross-task transferability also exists in various delta tuning methods, we investigate four
+delta tuning methods (prompt tuning, preﬁx-tuning, adapter, and LoRA) and 12 tasks of 5 different types
+(sentiment analysis, natural language inference, paraphrase identiﬁcation, question answering, summarization)
+by transferring the trained delta parameters to the unseen target tasks. More training and dataset details are left
+in §A.4: TRANSFERABILITY DETAILS.
+27
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+AP+BF+PT, without template
+AP
+BF
+PT
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+AP+PT+BF, without template
+AP
+PT
+BF
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+BF+AP+PT, without template
+BF
+AP
+PT
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+BF+PT+AP, without template
+BF
+PT
+AP
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+PT+BF+AP, without template
+PT
+BF
+AP
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+PT+AP+BF, without template
+PT
+AP
+BF
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+AP+BF+PT, with template
+AP
+BF
+PT
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+AP+PT+BF, with template
+AP
+PT
+BF
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+BF+AP+PT, with template
+BF
+AP
+PT
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+BF+PT+AP, with template
+BF
+PT
+AP
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+PT+BF+AP, with template
+PT
+BF
+AP
+0
+2000
+4000
+6000
+8000
+10000 12000 14000 16000 18000
+steps
+0.92
+0.93
+0.94
+0.95
+0.96
+0.97
+ACC
+PT+AP+BF, with template
+PT
+AP
+BF
+Figure 10: The performance of RoBERTaLARGE when different delta tuning methods (adapter (AP), BitFit
+(BF) and prompt tuning (PT)) are applied sequentially. The experiments are conducted on SST-2 (Socher
+et al., 2013).
+In experiments, we report their relative performance (zero-shot transferring performance / original perfor-
+mance). The results are shown in Figure 12, from which we can observe that: (1) for the tasks belonging to the
+same category, transferring tuned parameters among them generally performs well; (2) for the tasks of different
+types, transferring delta parameters among them generally achieves poor performance; (3) interestingly,
+we ﬁnd that transferring tuned parameters from the text generation tasks such as question answering and
+summarization can achieve non-trivial performance on sentiment analysis, indicating that text generation tasks
+might be a more complex task that includes the knowledge required to solve the sentiment analysis tasks.
+These exciting results verify some common subspace among various tasks introduced in §4.1: OPTIMIZATION,
+and demonstrate that it is promising to utilize trained delta parameters for similar tasks through knowledge
+transfer.
+6
+Applications
+Delta tuning has been successfully applied to a variety of application scenarios. In this section, we brieﬂy
+introduce several real-world applications, emphasizing on different advantages of delta tuning.
+28
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(a) Adapter (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(b) Adapter (QNLI).
+0
+1000
+2000
+3000
+4000
+5000
+6000
+7000
+8000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(c) Adapter (SST-2).
+0
+2500
+5000
+7500
+10000
+12500
+15000
+17500
+20000
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(d) LoRA (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(e) LoRA (QNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(f) LoRA (SST-2).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(g) Preﬁx-tuning (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(h) Preﬁx-tuning (QNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(i) Preﬁx-tuning (SST-2).
+0
+2500
+5000
+7500
+10000
+12500
+15000
+17500
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+Base
+Small
+XXL (Fine-tune)
+(j) Prompt Tuning (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(k) Prompt Tuning (QNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(l) Prompt Tuning (SST-2).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(m) Last Layer Tuning (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(n) Last Layer Tuning (QNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(o) Last Layer Tuning (SST-2).
+29
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.24
+0.48
+0.72
+0.96
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(p) Selective Module Tuning (MNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(q) Selective Module Tuning (QNLI).
+0
+2000
+4000
+6000
+8000
+10000
+steps
+0.0
+0.25
+0.5
+0.75
+1.0
+ACC
+XXL
+BASE
+SMALL
+XXL (Fine-tune)
+(r) Selective Module Tuning (SST-2).
+Figure 11: We perform all delta tuning methods conditioned on different scales of T5: T5SMALL(—),
+T5BASE(—), and T5XXL(—). From the above ﬁgures, we can observe that with the scale of T5 increas-
+ing, all delta tuning methods could converge faster and achieve better performance on MNLI, QNLI, and
+SST-2.
+Fast Training and Shareable Checkpoints.
+Transformer-based models, although inherently parallelizable,
+are very slow to train due to their huge sizes, especially under the current era when ever-larger PLMs constantly
+emerge. Although delta tuning may converge slower than the traditional ﬁne-tuning, the computations of
+the tunable parameters during backward propagation are signiﬁcantly reduced, which conduces to speeding
+up training, as visualized in Figure 13. For instance, Rücklé et al. (2021) show that using adapters for
+downstream tuning could reduce training time to 40% while maintaining comparable performance than ﬁne-
+tuning; Mahabadi et al. (2021a) also indicate that a series of delta tuning methods signiﬁcantly reduce both
+the training time for each epoch and the peak GPU memory, which is of paramount importance for practical
+applications. Another observation is that the structures of delta tuning methods could have considerable impact
+on the time of a single forward or backward process. Since AP injects additional neural modules to each layer
+of the Transformer model, the path of data ﬂow has indeed become longer and further lead to inference latency.
+And such latency could be relatively reduced as the model scales.
+Due to the lightweight nature, the tuned delta parameters could also save the storage space, making it easier to
+share the trained delta checkpoints among practitioners. With the help of delta tuning, researchers could easily
+scale up experiments to extremely large models containing even billions of parameters. Recently, researchers
+have been spending huge efforts to create a community of shareable delta tuning checkpoints, such as (1)
+AdapterHub9 (Pfeiffer et al., 2020a), an implementation of different adapter variants and a host for adapter
+checkpoints, and (2) OpenDelta10, an emerging plug-and-play library that is compatible with almost all PLMs
+based on PyTorch11.
+Multi-task Learning.
+Building a general-purpose AI system has always been the goal of researchers.
+Recently, extremely large PLMs, such as GPT-3 (Brown et al., 2020), have demonstrated the spectacular
+ability in ﬁtting different data distributions simultaneously and promoting the downstream performance
+of various tasks. Multi-task learning has thus received a growing amount of attention under the era of
+large-scale pre-training. As a parameter-efﬁcient substitution of full-model ﬁne-tuning, delta tuning exhibits
+excellent ability for multi-task learning and in the meantime, maintains a relatively low additional storage.
+Successful applications include (1) multi-lingual learning: Pfeiffer et al. (2020b) propose to learn a series
+of invertible adapters between embeddings in the source and target languages to mitigate lexical differences
+across languages. The invertible adapter could well support knowledge transfer among multiple subtasks
+and maintain a low parameter budget, and (2) question answering: Friedman et al. (2021) prove that using a
+set of adapters that specialize in different QA formats performs favorably to a single language model that is
+ﬁne-tuned on a mixture of QA formats. In addition, the simple average of specialized adapters also exhibits
+strong zero-shot transferring ability. Recently, Liu et al. (2021a); Sun et al. (2021); Karimi Mahabadi et al.
+(2021) also demonstrate that delta tuning could not only unify the tasks belonging to the same ontology, but
+also the tasks with substantially different formats so that different tasks could beneﬁt from each other through
+knowledge transfer. Expanding from this idea, delta tuning can well support adaptations of large PLMs for
+multi-lingual and multi-domain scenarios.
+9https://adapterhub.ml
+10https://github.com/thunlp/OpenDelta
+11https://pytorch.org
+30
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Target Task
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Source Task
+100 103 100 66
+19
+32
+43
+88
+0
+0
+3
+0
+90 100 72
+60
+39
+46
+74
+42
+0
+0
+1
+0
+92
+97
+96
+60
+30
+27
+73
+42
+0
+0
+1
+0
+55
+37
+37 100 82
+43
+74
+42
+0
+0
+8
+0
+65
+59
+61
+61 100 46
+74
+42
+0
+0
+22
+2
+55
+51
+41
+77
+54 100 74
+42
+0
+0
+0
+0
+54
+36
+37
+66
+19
+32 100 77
+0
+0
+0
+0
+52
+51
+51
+66
+19
+32
+75 100
+0
+0
+13
+3
+54
+37
+37
+66
+19
+32
+74
+42 100 86
+37
+21
+57
+38
+38
+66
+19
+32
+74
+42
+90 100 18
+16
+70
+72
+72
+66
+19
+32
+74
+42
+0
+0
+100 31
+61
+75
+53
+66
+19
+32
+74
+42
+0
+0
+67 100
+(a) Prompt Tuning
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Target Task
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Source Task
+99
+97
+96
+43
+32
+58
+70
+41
+0
+0
+0
+0
+85 100 83
+41
+29
+34
+72
+40
+0
+0
+0
+0
+100 88 100 39
+35
+28
+51
+68
+0
+0
+0
+0
+69
+58
+41 100 50
+32
+72
+40
+0
+0
+0
+0
+72
+58
+56
+44 100 41
+72
+41
+0
+0
+30
+12
+55
+36
+41
+48
+47 100 72
+35
+0
+0
+1
+2
+56
+36
+48
+43
+18
+31 100 79
+0
+0
+0
+0
+56
+36
+48
+43
+27
+21
+63 100
+0
+0
+0
+0
+66
+74
+71
+43
+18
+21
+68
+39
+96
+87
+28
+21
+64
+74
+68
+43
+18
+31
+72
+41 100 100 25
+18
+67
+87
+78
+43
+18
+31
+72
+40
+0
+0
+100 22
+72
+69
+71
+43
+18
+31
+72
+40
+0
+0
+55 100
+(b) Preﬁx-tuning
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Target Task
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Source Task
+100 96 100 42
+17
+33
+73
+38
+0
+0
+0
+0
+98 100 98
+43
+17
+30
+73
+38
+0
+0
+0
+0
+99
+96
+99
+42
+18
+46
+71
+38
+0
+0
+0
+0
+55
+34
+56 100 65
+80
+73
+38
+0
+0
+0
+0
+68
+64
+67
+65 100 84
+73
+38
+0
+0
+0
+0
+54
+38
+56
+59
+55 100 73
+38
+0
+0
+0
+0
+55
+52
+61
+43
+17
+30 100 73
+0
+0
+0
+0
+76
+69
+72
+43
+17
+30
+83 100
+0
+0
+0
+0
+70
+66
+75
+43
+17
+30
+73
+38 100 106 44
+24
+70
+79
+77
+43
+17
+30
+73
+38
+95 100 41
+24
+86
+91
+83
+43
+17
+30
+73
+38
+0
+0
+100 36
+69
+92
+62
+43
+17
+30
+73
+38
+0
+0
+53 100
+(c) Adapter
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Target Task
+SST-2
+Amazon_Polarity
+Rotten Tomatoes
+MNLI
+SICK
+SciTail
+QQP
+MRPC
+MathQA
+AQUA-RAT
+XSum
+SAMSum
+Source Task
+100 97 100 43
+17
+37
+72
+39
+0
+0
+0
+0
+97 100 93
+43
+17
+30
+72
+39
+0
+0
+0
+0
+100 97
+98
+43
+17
+30
+72
+39
+0
+0
+0
+0
+56
+38
+56 100 48
+78
+72
+39
+0
+0
+0
+0
+75
+64
+74
+67 100 79
+72
+39
+0
+0
+13
+0
+56
+44
+60
+60
+54 100 72
+39
+0
+0
+0
+0
+54
+35
+56
+43
+17
+30 100 72
+0
+0
+0
+0
+54
+35
+56
+43
+17
+30
+76 100
+0
+0
+0
+0
+63
+84
+59
+43
+17
+30
+72
+39 100 102 39
+19
+59
+87
+72
+43
+17
+30
+72
+39
+79 100 42
+20
+73
+84
+70
+43
+17
+30
+72
+39
+0
+0
+100 27
+61
+91
+58
+43
+17
+30
+72
+39
+0
+0
+55 100
+(d) LoRA
+Figure 12: Zero-shot transferring performance of four delta tuning methods using T5BASE. We report relative
+performance (zero-shot transferring performance / original performance) (%) on the target tasks (columns)
+when delta parameters are transferred from the source tasks (rows). Colors of the task names indicate the task
+types. Blue: sentiment analysis, Green: natural language inference, Orange: paraphrase identiﬁcation, Brown:
+question answering, and Purple: summarization.
+Catastrophic Forgetting Mitigation.
+The language abilities acquired during pre-training are stored in
+parameters. As a consequence, updating all parameters in PLMs without regularization may lead to catastrophic
+forgetting when PLMs are sequentially trained across a suite of tasks (Jin et al., 2021; Qin et al., 2021a,c).
+Since delta tuning only tunes minimal parameters, it could be a potential solution for mitigating the problem
+of catastrophic forgetting. For instance, MultiEURLEX (Chalkidis et al., 2021) introduce delta tuning into
+multilingual transfer learning, and demonstrate that using delta tuning methods rather than full-parameter
+ﬁne-tuning boosts the performance of zero-shot transfer learning between the source language and the target
+language; Jin et al. (2021) propose to introduce adapters into PLMs and maintain the original parameters ﬁxed,
+so that PLMs could be trained in a lifelong manner for emerging data.
+31
+16
+32
+64
+128
+256
+480
+Length of Inputs
+27.5
+41.2
+54.9
+68.6
+82.3
+Time(ms)
+Forward Time
+PT
+BF / FT
+AP
+16
+32
+64
+128
+256
+480
+Length of Inputs
+21.3
+46.1
+70.9
+95.7
+120.5
+Time(ms)
+Backward Time
+PT
+BF
+FT
+AP
+Figure 13: Time consumption for ﬁne-tuning (FT) and different delta tuning methods, including BitFit (BF),
+adapter (AP) and prompt tuning (PT). We report the results with different input length.
+Language Model as Services and In-batch Parallel Computing.
+From the practical perspective, extremely
+large PLMs are generally released as services (Brown et al., 2020; Nakano et al., 2021; Sun et al., 2022), that
+is, users use the model by interacting with the released APIs rather than editing the source code. Considering
+the unaffordable communication costs between users and the service provider, delta tuning is apparently a
+more competitive choice over the traditional ﬁne-tuning due to its lightweight nature. On one hand, the service
+provider could support training downstream tasks required by multiple users while consuming much fewer
+computations and storage space. In addition, considering that several delta tuning algorithms, such as prompt
+tuning (Lester et al., 2021) and preﬁx-tuning (Li & Liang, 2021) are inherently parallelizable, such a service
+could become more practical since delta tuning could well support in-batch parallel computing by allowing
+instances from multiple users to be trained / evaluated in the same batch. Recent works (He et al., 2022) also
+show that most of the delta tuning methods, if not parallelizable inherently, could be modiﬁed to support
+parallel computing, e.g., parallel adapter (He et al., 2022). On the other hand, when the gradients of the central
+PLM are not available to users, delta tuning still exhibits extraordinary talents in optimizing PLMs through
+derivative-free algorithms by only accessing the model inference APIs. Recently, Sun et al. (2022); Diao et al.
+(2022) pioneered to propose black-box tuning and show that their method could not only outperform manual
+prompts and GPT-3’s in-context learning, but also surpass the gradient-based counterparts.
+7
+Conclusion
+This paper focuses on parameter-efﬁcient methods, i.e., delta tuning, for pre-trained language models. We ﬁrst
+describe the problem and provide a categorization to systematically survey the development of delta tuning.
+Captivated by the empirical evidence, we propose two frameworks to theoretically discuss delta tuning from
+the optimization and the optimal control perspectives. Our discussion not only sheds light on the theoretical
+references of a novel design for delta tuning methods, but also implies that we could grasp the essential
+mechanisms of PLMs through deep analysis. Empirically, we conduct extensive experiments across 100+
+NLP tasks to fairly evaluate and explore the combinatorial property, inﬂuence of scale, and transferability
+for delta tuning. Furthermore, we discuss the value of the applications of this paradigm. In summary, delta
+tuning exhibits signiﬁcant potential to stimulate extremely large PLMs, and we hope that the paradigm could
+be further theoretically studied and empirically practiced.
+Broader Impacts
+Delta tuning focuses on the efﬁcient adaptation of pre-trained language models, which has both positive
+applications and potential harms for society. On the bright side, PLMs have exhibited unprecedented capability
+of natural language understanding (represented by BERT (Devlin et al., 2019)) and generation (represented
+by GPT-3 (Brown et al., 2020)), which empowers numerous real-world applications such as search engines,
+question-answering systems, intelligent writing systems, information extraction systems, and code completion,
+etc. Recent research also shows that such large-scale PLMs could mimic the behavior to use search engines to
+answer difﬁcult questions (Nakano et al., 2021). However, the risk is often hidden in the great successes, on
+the other hand, PLMs may present biases in terms of gender, race, religion, etc, and even directly produce
+32
+machine-written language with attacks, profanities, and insults (Weidinger et al., 2021). This is because PLMs
+are pre-trained with large-scale realistic corpora, and these pre-trained data are likely to contain inherent bias.
+Language is a carrier of human views, so the prejudice and discrimination that exist in human society can
+easily be mapped onto language, and how to alleviate such challenges of fairness is a question that is well
+worth further study. Efforts could be made in two ways, ﬁrst, directly by normalizing the training corpus to
+remove as many potential biases as possible, and second, by modifying model representations or outputs to
+reduce the risks. Outside of research, more comprehensive and improved treaties and norms for the use and
+modiﬁcation of language models should be established by the community.
+So far, there is no clear evidence that delta tuning mitigates or exacerbates the potential hazards of PLMs. It is
+likely that the delta tuning methods will still inherit the potential risks of the base language model. But the
+delta tuning methods seem to have considerable potential for correcting model bias. Under this circumstance,
+delta tuning is not only applied to efﬁciently adapt PLMs to downstream tasks but also could be utilized to
+speciﬁcally process risky information inside the models with a small number of parameters changed. In fact, it
+has been shown that it is possible to modify the factual errors made by the model in a computationally efﬁcient
+way (Mitchell et al., 2021), signaling that the fairness issue can be potentially addressed through delta tuning.
+At the same time, we have to worry that such a strategy can also be used to further contaminate the language
+models to produce undesirable predictions. Here, we strongly encourage the community to conduct further
+research to comprehensively explore the various effects that delta tuning may have on PLMs.
+When it comes to environmental issues, given that pre-training, ﬁne-tuning, and storage of PLMs is a resource-
+intensive process, delta tuning attempts to minimize this impact from the outset. After probing the memory
+(Figure 9) and time consumption (Figure 13) of delta tuning in our work, we ﬁnd that such methods could
+substantially reduce the computational cost. However, in the convergence analysis (Figure 6, 7, 8) we conclude
+that delta tuning methods tend to need more time to converge, although this phenomenon becomes insigniﬁcant
+as the model scales. In order to reduce unnecessary carbon emissions, we will open source all tools, code and
+checkpoints used in the experiment.
+Acknowledgments
+The authors would like to thank Junxian He for the constructive comments of the theoretical and empirical
+parts of the paper; Pengfei Liu for the valuable suggestions of the organization and presentation of the paper;
+Tianxiang Sun for the thoughtful suggestions of the criterion of delta tuning and experimental conﬁgurations;
+Chenglong Bao for the valuable suggestions about the optimization perspective of delta tuning; Xu Han,
+Huadong Wang, and Yufei Huang for their overall comments for the paper; Liwei Wang and Cong Fang for
+the discussion about the theoretical issues of delta tuning; Ruiqi Shao for helping us design the conceptual
+ﬁgure of delta tuning. Thanks to all the pioneering researchers who developed the structures, objectives, and
+delta tuning methods for pre-trained models. Ning Ding is supported by Baidu Scholarship.
+Contributions
+The contributions of all authors are listed as follows: Ning Ding, Yujia Qin and Zhiyuan Liu initiated and
+organized the research. The term “delta tuning” was coined by Shengding Hu and recognized by other authors
+for its vividness. Ning Ding drafted abstract, §1: INTRODUCTION and §3: DELTA TUNING, Yulin Chen and
+Ning Ding drafted §2: PRELIMINARIES. Shengding Hu, Xiaozhi Wang, and Yujia Qin added contents to
+§3.1: ADDITION and §3.3: REPARAMETERIZATION. Weilin Zhao, Ning Ding, Yulin Chen, and Shengding Hu
+manually annotated the randomly selected 1,000 papers and created Table 1, as well as Table 2. Fuchao Wei,
+Zonghan Yang, Ning Ding, Yujia Qin, Shengding Hu and Jianfei Chen discussed the scope and content of
+§4: THEORY. Fuchao Wei developed the optimization framework and drafted §4.1: OPTIMIZATION, Zonghan
+Yang and Yang Liu proposed the optimal control framework and drafted §4.2: OPTIMAL CONTROL. Ning
+Ding veriﬁed the formula derivation. Yujia Qin led the empirical study part. And Yujia Qin, Guang Yang,
+Yusheng Su, Weize Chen, Jing Yi, Chi-Min Chan, and Ning Ding drafted §5: EXPERIMENTS. Yujia Qin,
+Guang Yang, Weize Chen, Jing Yi, and Shengding Hu conducted the experiments for overall performance and
+combination (§5.1: PERFORMANCE, §5.2: COMBINATION). Yusheng Su and Chi-Min Chan conducted and
+wrote experiments for transferability and power of scale (§5.3: SCALE, §5.4: TRANSFERABILITY). Shengding
+Hu and Yujia Qin drafted §6: APPLICATIONS. Zhiyuan Liu, Hai-Tao Zheng, Yang Liu, Jie Tang, Juanzi
+Li, Maosong Sun advised the project, suggested the theoretical and empirical study and participated in the
+discussion. Ning Ding and Yujia Qin participated in all the sections and proofread the whole paper.
+33
+REFERENCES
+References
+Armen Aghajanyan, Sonal Gupta, and Luke Zettlemoyer. Intrinsic dimensionality explains the effectiveness of
+language model ﬁne-tuning. In Proceedings of the 59th Annual Meeting of the Association for Computational
+Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long
+Papers), pp. 7319–7328, Online, 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.
+acl-long.568. URL https://aclanthology.org/2021.acl-long.568.
+Tiago A. Almeida, José María G. Hidalgo, and Akebo Yamakami. Contributions to the study of sms spam
+ﬁltering: New collection and results. In Proceedings of the 11th ACM Symposium on Document Engineering,
+DocEng ’11, pp. 259–262, New York, NY, USA, 2011. Association for Computing Machinery. ISBN
+9781450308632. doi: 10.1145/2034691.2034742. URL https://doi.org/10.1145/2034691.
+2034742.
+Aida Amini, Saadia Gabriel, Shanchuan Lin, Rik Koncel-Kedziorski, Yejin Choi, and Hannaneh Hajishirzi.
+MathQA: Towards interpretable math word problem solving with operation-based formalisms. In Pro-
+ceedings of the 2019 Conference of the North American Chapter of the Association for Computational
+Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), pp. 2357–2367, Min-
+neapolis, Minnesota, 2019. Association for Computational Linguistics. doi: 10.18653/v1/N19-1245. URL
+https://aclanthology.org/N19-1245.
+Kiam Heong Ang, Gregory Chong, and Yun Li. Pid control system analysis, design, and technology. IEEE
+transactions on control systems technology, 13(4):559–576, 2005.
+Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E. Hinton. Layer normalization, 2016. URL https:
+//arxiv.org/abs/1607.06450.
+Roy Bar-Haim, Ido Dagan, Bill Dolan, Lisa Ferro, Danilo Giampiccolo, Bernardo Magnini, and
+Idan Szpektor.
+The second pascal recognising textual entailment challenge.
+In Proceedings of
+the second PASCAL challenges workshop on recognising textual entailment, volume 6, pp. 6–4.
+Venice, 2006. URL http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.
+60.8552&rep=rep1&type=pdf.
+Francesco Barbieri, Jose Camacho-Collados, Luis Espinosa Anke, and Leonardo Neves. TweetEval: Uni-
+ﬁed benchmark and comparative evaluation for tweet classiﬁcation. In Findings of the Association for
+Computational Linguistics: EMNLP 2020, pp. 1644–1650, Online, 2020. Association for Computational
+Linguistics. doi: 10.18653/v1/2020.ﬁndings-emnlp.148. URL https://aclanthology.org/2020.
+findings-emnlp.148.
+Yoshua Bengio, Réjean Ducharme, and Pascal Vincent. A neural probabilistic language model. Advances
+in Neural Information Processing Systems, 13, 2000. URL https://proceedings.neurips.cc/
+paper/2000/hash/728f206c2a01bf572b5940d7d9a8fa4c-Abstract.html.
+Jonathan Berant, Andrew Chou, Roy Frostig, and Percy Liang. Semantic parsing on Freebase from question-
+answer pairs. In Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing,
+pp. 1533–1544, Seattle, Washington, USA, 2013. Association for Computational Linguistics. URL https:
+//aclanthology.org/D13-1160.
+Rishi Bommasani, Drew A Hudson, Ehsan Adeli, Russ Altman, Simran Arora, Sydney von Arx, Michael S
+Bernstein, Jeannette Bohg, Antoine Bosselut, Emma Brunskill, et al. On the opportunities and risks of
+foundation models. arXiv preprint arXiv:2108.07258, 2021. URL https://arxiv.org/abs/2108.
+07258.
+Michael Boratko, Xiang Li, Tim O’Gorman, Rajarshi Das, Dan Le, and Andrew McCallum. ProtoQA:
+A question answering dataset for prototypical common-sense reasoning. In Proceedings of the 2020
+Conference on Empirical Methods in Natural Language Processing (EMNLP), pp. 1122–1136, Online,
+2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.emnlp-main.85. URL https:
+//aclanthology.org/2020.emnlp-main.85.
+Jan A. Botha, Manaal Faruqui, John Alex, Jason Baldridge, and Dipanjan Das. Learning to split and rephrase
+from Wikipedia edit history. In Proceedings of the 2018 Conference on Empirical Methods in Natural
+Language Processing, pp. 732–737, Brussels, Belgium, 2018. Association for Computational Linguistics.
+doi: 10.18653/v1/D18-1080. URL https://aclanthology.org/D18-1080.
+34
+REFERENCES
+Stephen P Boyd and Craig H Barratt. Linear controller design: limits of performance, volume 7. Citeseer,
+1991.
+Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind
+Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss,
+Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens
+Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess,
+Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei.
+Language models are few-shot learners.
+In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell,
+Maria-Florina Balcan, and Hsuan-Tien Lin (eds.), Advances in Neural Information Processing Systems
+33: Annual Conference on Neural Information Processing Systems 2020, NeurIPS 2020, December
+6-12, 2020, virtual, 2020.
+URL https://proceedings.neurips.cc/paper/2020/hash/
+1457c0d6bfcb4967418bfb8ac142f64a-Abstract.html.
+Daniel Cer, Mona Diab, Eneko Agirre, Iñigo Lopez-Gazpio, and Lucia Specia. SemEval-2017 task 1: Semantic
+textual similarity multilingual and crosslingual focused evaluation. In Proceedings of the 11th International
+Workshop on Semantic Evaluation (SemEval-2017), pp. 1–14, Vancouver, Canada, August 2017. Association
+for Computational Linguistics. doi: 10.18653/v1/S17-2001. URL https://aclanthology.org/
+S17-2001.
+Ilias Chalkidis, Manos Fergadiotis, and Ion Androutsopoulos. Multieurlex–a multi-lingual and multi-label
+legal document classiﬁcation dataset for zero-shot cross-lingual transfer. ArXiv preprint, abs/2109.00904,
+2021. URL https://arxiv.org/abs/2109.00904.
+Ankush Chatterjee, Kedhar Nath Narahari, Meghana Joshi, and Puneet Agrawal. SemEval-2019 task 3:
+EmoContext contextual emotion detection in text. In Proceedings of the 13th International Workshop on
+Semantic Evaluation, pp. 39–48, Minneapolis, Minnesota, USA, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/S19-2005. URL https://aclanthology.org/S19-2005.
+Zhuotong Chen, Qianxiao Li, and Zheng Zhang. Towards robust neural networks via close-loop control.
+In International Conference on Learning Representations, 2021. URL https://openreview.net/
+forum?id=2AL06y9cDE-.
+Ido Dagan, Oren Glickman, and Bernardo Magnini.
+The pascal recognising textual entailment chal-
+lenge.
+In Machine Learning Challenges Workshop, pp. 177–190. Springer, 2005.
+URL https:
+//link.springer.com/chapter/10.1007/11736790_9.
+Thomas Davidson, Dana Warmsley, Michael Macy, and Ingmar Weber. Automated hate speech detection and
+the problem of offensive language. ArXiv preprint, abs/1703.04009, 2017. URL https://arxiv.org/
+abs/1703.04009.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidirectional
+transformers for language understanding. In Proceedings of the 2019 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1
+(Long and Short Papers), pp. 4171–4186, Minneapolis, Minnesota, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/N19-1423. URL https://aclanthology.org/N19-1423.
+Shizhe Diao, Xuechun Li, Yong Lin, Zhichao Huang, and Tong Zhang. Black-box prompt learning for
+pre-trained language models. arXiv preprint arXiv:2201.08531, 2022. URL https://arxiv.org/
+abs/2201.08531.
+T. Diggelmann, Jordan L. Boyd-Graber, Jannis Bulian, Massimiliano Ciaramita, and Markus Leippold.
+Climate-fever: A dataset for veriﬁcation of real-world climate claims. ArXiv preprint, abs/2012.00614,
+2020. URL https://arxiv.org/abs/2012.00614.
+Ning Ding, Shengding Hu, Weilin Zhao, Yulin Chen, Zhiyuan Liu, Hai-Tao Zheng, and Maosong Sun.
+Openprompt: An open-source framework for prompt-learning. ArXiv preprint, abs/2111.01998, 2021. URL
+https://arxiv.org/abs/2111.01998.
+William B. Dolan and Chris Brockett. Automatically constructing a corpus of sentential paraphrases. In
+Proceedings of IWP Workshop, 2005. URL https://aclanthology.org/I05-5002.
+35
+REFERENCES
+Matthew Dunn, Levent Sagun, Mike Higgins, V. U. Güney, Volkan Cirik, and Kyunghyun Cho. Searchqa:
+A new q&a dataset augmented with context from a search engine. ArXiv preprint, abs/1704.05179, 2017.
+URL https://arxiv.org/abs/1704.05179.
+Stefan Elfwing, Eiji Uchibe, and Kenji Doya. Sigmoid-weighted linear units for neural network function
+approximation in reinforcement learning. Neural Networks, 107:3–11, 2018. URL https://www.
+sciencedirect.com/science/article/pii/S0893608017302976.
+Alexander Fabbri, Irene Li, Tianwei She, Suyi Li, and Dragomir Radev. Multi-news: A large-scale multi-
+document summarization dataset and abstractive hierarchical model. In Proceedings of the 57th Annual
+Meeting of the Association for Computational Linguistics, pp. 1074–1084, Florence, Italy, 2019. Association
+for Computational Linguistics. doi: 10.18653/v1/P19-1102. URL https://aclanthology.org/
+P19-1102.
+Angela Fan, Yacine Jernite, Ethan Perez, David Grangier, Jason Weston, and Michael Auli. ELI5: Long
+form question answering. In Proceedings of the 57th Annual Meeting of the Association for Computational
+Linguistics, pp. 3558–3567, Florence, Italy, 2019. Association for Computational Linguistics. doi: 10.
+18653/v1/P19-1346. URL https://aclanthology.org/P19-1346.
+Dan Friedman, Ben Dodge, and Danqi Chen. Single-dataset experts for multi-dataset question answering.
+ArXiv preprint, abs/2109.13880, 2021. URL https://arxiv.org/abs/2109.13880.
+Tianyu Gao, Adam Fisch, and Danqi Chen. Making pre-trained language models better few-shot learners. In
+Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th
+International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pp. 3816–3830,
+Online, 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.295. URL
+https://aclanthology.org/2021.acl-long.295.
+Danilo Giampiccolo, Bernardo Magnini, Ido Dagan, and Bill Dolan.
+The third PASCAL recogniz-
+ing textual entailment challenge.
+In Proceedings of the ACL-PASCAL Workshop on Textual Entail-
+ment and Paraphrasing, pp. 1–9, Prague, 2007. Association for Computational Linguistics.
+URL
+https://aclanthology.org/W07-1401.
+Bogdan Gliwa, Iwona Mochol, Maciej Biesek, and Aleksander Wawer. SAMSum corpus: A human-annotated
+dialogue dataset for abstractive summarization. In Proceedings of the 2nd Workshop on New Frontiers
+in Summarization, pp. 70–79, Hong Kong, China, 2019. Association for Computational Linguistics. doi:
+10.18653/v1/D19-5409. URL https://aclanthology.org/D19-5409.
+Andrew Gordon, Zornitsa Kozareva, and Melissa Roemmele. SemEval-2012 task 7: Choice of plausible
+alternatives: An evaluation of commonsense causal reasoning. In *SEM 2012: The First Joint Conference
+on Lexical and Computational Semantics – Volume 1: Proceedings of the main conference and the shared
+task, and Volume 2: Proceedings of the Sixth International Workshop on Semantic Evaluation (SemEval
+2012), pp. 394–398, Montréal, Canada, 2012. Association for Computational Linguistics. URL https:
+//aclanthology.org/S12-1052.
+Edward Grefenstette, Phil Blunsom, et al. A convolutional neural network for modelling sentences. In ACL,
+2014. URL https://arxiv.org/abs/1404.2188.
+Yuxian Gu, Xu Han, Zhiyuan Liu, and Minlie Huang. Ppt: Pre-trained prompt tuning for few-shot learning.
+ArXiv preprint, abs/2109.04332, 2021. URL https://arxiv.org/abs/2109.04332.
+Demi Guo, Alexander Rush, and Yoon Kim. Parameter-efﬁcient transfer learning with diff pruning. In
+Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th
+International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pp. 4884–4896,
+Online, 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.378. URL
+https://aclanthology.org/2021.acl-long.378.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin Hofmann-Apitius, and
+Luca Toldo. Development of a benchmark corpus to support the automatic extraction of drug-related adverse
+effects from medical case reports. Journal of Biomedical Informatics, 45(5):885–892, 2012. ISSN 1532-
+0464. doi: https://doi.org/10.1016/j.jbi.2012.04.008. URL https://www.sciencedirect.com/
+science/article/pii/S1532046412000615. Text Mining and Natural Language Processing in
+Pharmacogenomics.
+36
+REFERENCES
+Wenjuan Han, Bo Pang, and Ying Nian Wu. Robust transfer learning with pretrained language models through
+adapters. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and
+the 11th International Joint Conference on Natural Language Processing (Volume 2: Short Papers), pp.
+854–861, Online, 2021a. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-short.108.
+URL https://aclanthology.org/2021.acl-short.108.
+Xu Han, Zhengyan Zhang, Ning Ding, Yuxian Gu, Xiao Liu, Yuqi Huo, Jiezhong Qiu, Liang Zhang, Wentao
+Han, Minlie Huang, Qin Jin, Yanyan Lan, Yang Liu, Zhiyuan Liu, Zhiwu Lu, Xipeng Qiu, Ruihua Song,
+Jie Tang, Ji-Rong Wen, Jinhui Yuan, Wayne Xin Zhao, and Jun Zhu. Pre-trained models: Past, present
+and future. AI Open, 2021b. ISSN 2666-6510. doi: https://doi.org/10.1016/j.aiopen.2021.08.002. URL
+https://www.sciencedirect.com/science/article/pii/S2666651021000231.
+Junxian He, Chunting Zhou, Xuezhe Ma, Taylor Berg-Kirkpatrick, and Graham Neubig. Towards a uniﬁed
+view of parameter-efﬁcient transfer learning. In International Conference on Learning Representations,
+2022. URL https://openreview.net/forum?id=0RDcd5Axok.
+Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition.
+In 2016 IEEE Conference on Computer Vision and Pattern Recognition, CVPR 2016, Las Vegas, NV,
+USA, June 27-30, 2016, pp. 770–778. IEEE Computer Society, 2016. doi: 10.1109/CVPR.2016.90. URL
+https://doi.org/10.1109/CVPR.2016.90.
+Ruidan He, Linlin Liu, Hai Ye, Qingyu Tan, Bosheng Ding, Liying Cheng, Jiawei Low, Lidong Bing,
+and Luo Si. On the effectiveness of adapter-based tuning for pretrained language model adaptation. In
+Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th
+International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pp. 2208–2222,
+Online, 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.172. URL
+https://aclanthology.org/2021.acl-long.172.
+Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation, 9(8):1735–1780,
+1997. URL https://ieeexplore.ieee.org/abstract/document/6795963/.
+Johannes Hoffart, Mohamed Amir Yosef, Ilaria Bordino, Hagen Fürstenau, Manfred Pinkal, Marc Spaniol,
+Bilyana Taneva, Stefan Thater, and Gerhard Weikum. Robust disambiguation of named entities in text.
+In Proceedings of the 2011 Conference on Empirical Methods in Natural Language Processing, pp. 782–
+792, Edinburgh, Scotland, UK., 2011. Association for Computational Linguistics. URL https://
+aclanthology.org/D11-1072.
+Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski, Bruna Morrone, Quentin de Laroussilhe, Andrea
+Gesmundo, Mona Attariyan, and Sylvain Gelly. Parameter-efﬁcient transfer learning for NLP. In Kamalika
+Chaudhuri and Ruslan Salakhutdinov (eds.), Proceedings of the 36th International Conference on Machine
+Learning, ICML 2019, 9-15 June 2019, Long Beach, California, USA, volume 97 of Proceedings of Machine
+Learning Research, pp. 2790–2799. PMLR, 2019. URL http://proceedings.mlr.press/v97/
+houlsby19a.html.
+Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu
+Chen. Lora: Low-rank adaptation of large language models. ArXiv preprint, abs/2106.09685, 2021a. URL
+https://arxiv.org/abs/2106.09685.
+Shengding Hu, NNN, Huadong Wang, Zhiyuan Liu, Juan-Zi Li, and Maosong Sun. Knowledgeable prompt-
+tuning: Incorporating knowledge into prompt verbalizer for text classiﬁcation. ArXiv, abs/2108.02035,
+2021b. URL https://arxiv.org/abs/2108.02035.
+Lifu Huang, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. Cosmos QA: Machine reading compre-
+hension with contextual commonsense reasoning. In Proceedings of the 2019 Conference on Empirical
+Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language
+Processing (EMNLP-IJCNLP), pp. 2391–2401, Hong Kong, China, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/D19-1243. URL https://aclanthology.org/D19-1243.
+Kelvin Jiang, Dekun Wu, and Hui Jiang. FreebaseQA: A new factoid QA data set matching trivia-style
+question-answer pairs with Freebase. In Proceedings of the 2019 Conference of the North American Chapter
+of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and
+Short Papers), pp. 318–323, Minneapolis, Minnesota, 2019. Association for Computational Linguistics. doi:
+10.18653/v1/N19-1028. URL https://aclanthology.org/N19-1028.
+37
+REFERENCES
+Xisen Jin, Dejiao Zhang, Henghui Zhu, Wei Xiao, Shang-Wen Li, Xiaokai Wei, Andrew Arnold, and Xiang
+Ren. Lifelong pretraining: Continually adapting language models to emerging corpora. arXiv preprint
+arXiv:2110.08534, 2021. URL https://arxiv.org/abs/2110.08534.
+Rabeeh Karimi Mahabadi, Sebastian Ruder, Mostafa Dehghani, and James Henderson. Parameter-efﬁcient
+multi-task ﬁne-tuning for transformers via shared hypernetworks. In Proceedings of the 59th Annual
+Meeting of the Association for Computational Linguistics and the 11th International Joint Conference
+on Natural Language Processing (Volume 1: Long Papers), pp. 565–576, Online, 2021. Association for
+Computational Linguistics. doi: 10.18653/v1/2021.acl-long.47. URL https://aclanthology.org/
+2021.acl-long.47.
+Tushar Khot, Ashish Sabharwal, and Peter Clark. Scitail: A textual entailment dataset from science question
+answering. In Sheila A. McIlraith and Kilian Q. Weinberger (eds.), Proceedings of the Thirty-Second
+AAAI Conference on Artiﬁcial Intelligence, (AAAI-18), the 30th innovative Applications of Artiﬁcial
+Intelligence (IAAI-18), and the 8th AAAI Symposium on Educational Advances in Artiﬁcial Intelligence
+(EAAI-18), New Orleans, Louisiana, USA, February 2-7, 2018, pp. 5189–5197. AAAI Press, 2018a. URL
+https://www.aaai.org/ocs/index.php/AAAI/AAAI18/paper/view/17368.
+Tushar Khot, Ashish Sabharwal, and Peter Clark. SciTail: A textual entailment dataset from science question
+answering. In AAAI, 2018b. URL https://www.aaai.org/ocs/index.php/AAAI/AAAI18/
+paper/view/17368/0.
+Tushar Khot, Peter Clark, Michal Guerquin, Peter Jansen, and Ashish Sabharwal. QASC: A dataset for question
+answering via sentence composition. In The Thirty-Fourth AAAI Conference on Artiﬁcial Intelligence, AAAI
+2020, The Thirty-Second Innovative Applications of Artiﬁcial Intelligence Conference, IAAI 2020, The
+Tenth AAAI Symposium on Educational Advances in Artiﬁcial Intelligence, EAAI 2020, New York, NY, USA,
+February 7-12, 2020, pp. 8082–8090. AAAI Press, 2020. URL https://aaai.org/ojs/index.
+php/AAAI/article/view/6319.
+Yoon Kim. Convolutional neural networks for sentence classiﬁcation. In Proceedings of the 2014 Conference on
+Empirical Methods in Natural Language Processing (EMNLP), pp. 1746–1751, Doha, Qatar, October 2014.
+Association for Computational Linguistics. doi: 10.3115/v1/D14-1181. URL https://aclanthology.
+org/D14-1181.
+Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In Yoshua Bengio and Yann
+LeCun (eds.), 3rd International Conference on Learning Representations, ICLR 2015, San Diego, CA, USA,
+May 7-9, 2015, Conference Track Proceedings, 2015. URL http://arxiv.org/abs/1412.6980.
+Richard E Kopp. Pontryagin maximum principle. In Mathematics in Science and Engineering, volume 5, pp.
+255–279. Elsevier, 1962. doi: 10.1016/S0076-5392(08)62095-0.
+Guokun Lai, Qizhe Xie, Hanxiao Liu, Yiming Yang, and Eduard Hovy. RACE: Large-scale ReAding
+comprehension dataset from examinations. In Proceedings of the 2017 Conference on Empirical Methods in
+Natural Language Processing, pp. 785–794, Copenhagen, Denmark, 2017. Association for Computational
+Linguistics. doi: 10.18653/v1/D17-1082. URL https://aclanthology.org/D17-1082.
+Rémi Lebret, David Grangier, and Michael Auli. Neural text generation from structured data with application
+to the biography domain. In Proceedings of the 2016 Conference on Empirical Methods in Natural
+Language Processing, pp. 1203–1213, Austin, Texas, 2016. Association for Computational Linguistics. doi:
+10.18653/v1/D16-1128. URL https://aclanthology.org/D16-1128.
+Yann LeCun, Yoshua Bengio, and Geoffrey Hinton. Deep learning. nature, 521(7553):436–444, 2015.
+Jaejun Lee, Raphael Tang, and Jimmy Lin. What would elsa do? freezing layers during transformer ﬁne-tuning.
+ArXiv preprint, abs/1911.03090, 2019. URL https://arxiv.org/abs/1911.03090.
+Moshe Leshno, Vladimir Ya Lin, Allan Pinkus, and Shimon Schocken. Multilayer feedforward networks with
+a nonpolynomial activation function can approximate any function. Neural networks, 6(6):861–867, 1993.
+Brian Lester, Rami Al-Rfou, and Noah Constant. The power of scale for parameter-efﬁcient prompt tuning.
+ArXiv preprint, abs/2104.08691, 2021. URL https://arxiv.org/abs/2104.08691.
+38
+REFERENCES
+Hector J. Levesque, Ernest Davis, and Leora Morgenstern. The winograd schema challenge. In Proceedings
+of the Thirteenth International Conference on Principles of Knowledge Representation and Reasoning,
+KR’12, pp. 552–561. AAAI Press, 2012. ISBN 9781577355601. URL https://www.aaai.org/
+ocs/index.php/KR/KR12/paper/download/4492/4924.
+Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin
+Stoyanov, and Luke Zettlemoyer. BART: Denoising sequence-to-sequence pre-training for natural language
+generation, translation, and comprehension. In Proceedings of the 58th Annual Meeting of the Association for
+Computational Linguistics, pp. 7871–7880, Online, 2020. Association for Computational Linguistics. doi:
+10.18653/v1/2020.acl-main.703. URL https://aclanthology.org/2020.acl-main.703.
+Quentin Lhoest, Albert Villanova del Moral, Yacine Jernite, Abhishek Thakur, Patrick von Platen, Suraj
+Patil, Julien Chaumond, Mariama Drame, Julien Plu, Lewis Tunstall, Joe Davison, Mario Šaško, Gunjan
+Chhablani, Bhavitvya Malik, Simon Brandeis, Teven Le Scao, Victor Sanh, Canwen Xu, Nicolas Patry,
+Angelina McMillan-Major, Philipp Schmid, Sylvain Gugger, Clément Delangue, Théo Matussière, Lysandre
+Debut, Stas Bekman, Pierric Cistac, Thibault Goehringer, Victor Mustar, François Lagunas, Alexander Rush,
+and Thomas Wolf. Datasets: A community library for natural language processing. In Proceedings of the
+2021 Conference on Empirical Methods in Natural Language Processing: System Demonstrations, pp. 175–
+184, Online and Punta Cana, Dominican Republic, 2021. Association for Computational Linguistics. doi:
+10.18653/v1/2021.emnlp-demo.21. URL https://aclanthology.org/2021.emnlp-demo.21.
+Chunyuan Li, Heerad Farkhoor, Rosanne Liu, and Jason Yosinski. Measuring the intrinsic dimension of
+objective landscapes. arXiv preprint arXiv:1804.08838, 2018.
+Qianxiao Li, Long Chen, Cheng Tai, and Weinan E. Maximum Principle Based Algorithms for Deep Learning.
+J. Mach. Learn. Res., 18:165:1–165:29, 2017. URL http://jmlr.org/papers/v18/17-653.
+html.
+Xiang Lisa Li and Percy Liang. Preﬁx-tuning: Optimizing continuous prompts for generation. In Proceedings
+of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International
+Joint Conference on Natural Language Processing (Volume 1: Long Papers), pp. 4582–4597, Online,
+2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.acl-long.353. URL https:
+//aclanthology.org/2021.acl-long.353.
+Bill Yuchen Lin, Seyeon Lee, Rahul Khanna, and Xiang Ren. Birds have four legs?! NumerSense: Probing
+Numerical Commonsense Knowledge of Pre-Trained Language Models. In Proceedings of the 2020
+Conference on Empirical Methods in Natural Language Processing (EMNLP), pp. 6862–6868, Online,
+2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.emnlp-main.557. URL https:
+//aclanthology.org/2020.emnlp-main.557.
+Chin-Yew Lin. ROUGE: A package for automatic evaluation of summaries. In Text Summarization Branches
+Out, pp. 74–81, Barcelona, Spain, July 2004. Association for Computational Linguistics. URL https:
+//aclanthology.org/W04-1013.
+Wang Ling, Dani Yogatama, Chris Dyer, and Phil Blunsom. Program induction by rationale generation:
+Learning to solve and explain algebraic word problems. In Proceedings of the 55th Annual Meeting
+of the Association for Computational Linguistics (Volume 1: Long Papers), pp. 158–167, Vancouver,
+Canada, July 2017. Association for Computational Linguistics. doi: 10.18653/v1/P17-1015. URL https:
+//aclanthology.org/P17-1015.
+Pengfei Liu, Weizhe Yuan, Jinlan Fu, Zhengbao Jiang, Hiroaki Hayashi, and Graham Neubig. Pre-train,
+prompt, and predict: A systematic survey of prompting methods in natural language processing. ArXiv
+preprint, abs/2107.13586, 2021a. URL https://arxiv.org/abs/2107.13586.
+Xiao Liu, Kaixuan Ji, Yicheng Fu, Zhengxiao Du, Zhilin Yang, and Jie Tang. P-tuning v2: Prompt tuning can
+be comparable to ﬁne-tuning universally across scales and tasks. arXiv preprint arXiv:2110.07602, 2021b.
+URL https://arxiv.org/pdf/2110.07602.pdf.
+Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy, Mike Lewis, Luke
+Zettlemoyer, and Veselin Stoyanov. Roberta: A robustly optimized bert pretraining approach. ArXiv preprint,
+abs/1907.11692, 2019. URL https://arxiv.org/abs/1907.11692.
+39
+REFERENCES
+Yitao Liu, Chenxin An, and Xipeng Qiu.
+Y-tuning: An efﬁcient tuning paradigm for large-scale pre-
+trained models via label representation learning. arXiv preprint arXiv:2202.09817, 2022. URL https:
+//arxiv.org/pdf/2202.09817.pdf.
+Rabeeh Karimi Mahabadi, James Henderson, and Sebastian Ruder. Compacter: Efﬁcient low-rank hypercom-
+plex adapter layers. ArXiv preprint, abs/2106.04647, 2021a. URL https://arxiv.org/abs/2106.
+04647.
+Rabeeh Karimi Mahabadi, Sebastian Ruder, Mostafa Dehghani, and James Henderson. Parameter-efﬁcient
+multi-task ﬁne-tuning for transformers via shared hypernetworks. In ACL/IJCNLP, 2021b.
+Marco Marelli, Stefano Menini, Marco Baroni, Luisa Bentivogli, Raffaella Bernardi, and Roberto Zamparelli.
+A SICK cure for the evaluation of compositional distributional semantic models. In Proceedings of
+the Ninth International Conference on Language Resources and Evaluation (LREC’14), pp. 216–223,
+Reykjavik, Iceland, May 2014. European Language Resources Association (ELRA). URL http://www.
+lrec-conf.org/proceedings/lrec2014/pdf/363_Paper.pdf.
+Binny Mathew, Punyajoy Saha, Seid Muhie Yimam, Chris Biemann, Pawan Goyal, and Animesh Mukherjee.
+Hatexplain: A benchmark dataset for explainable hate speech detection. ArXiv preprint, abs/2012.10289,
+2020. URL https://arxiv.org/abs/2012.10289.
+Clara H. McCreery, Namit Katariya, Anitha Kannan, Manish Chablani, and Xavier Amatriain. Effective
+transfer learning for identifying similar questions: Matching user questions to COVID-19 faqs. In Rajesh
+Gupta, Yan Liu, Jiliang Tang, and B. Aditya Prakash (eds.), KDD ’20: The 26th ACM SIGKDD Conference
+on Knowledge Discovery and Data Mining, Virtual Event, CA, USA, August 23-27, 2020, pp. 3458–3465.
+ACM, 2020. URL https://dl.acm.org/doi/10.1145/3394486.3412861.
+Todor Mihaylov, Peter Clark, Tushar Khot, and Ashish Sabharwal. Can a suit of armor conduct electricity? a
+new dataset for open book question answering. In Proceedings of the 2018 Conference on Empirical Methods
+in Natural Language Processing, pp. 2381–2391, Brussels, Belgium, 2018. Association for Computational
+Linguistics. doi: 10.18653/v1/D18-1260. URL https://aclanthology.org/D18-1260.
+Eric Mitchell, Charles Lin, Antoine Bosselut, Chelsea Finn, and Christopher D Manning. Fast model editing
+at scale. arXiv preprint arXiv:2110.11309, 2021.
+Ioannis Mollas, Zoe Chrysopoulou, Stamatis Karlos, and Grigorios Tsoumakas. Ethos: an online hate speech
+detection dataset. ArXiv preprint, abs/2006.08328, 2020. URL https://arxiv.org/abs/2006.
+08328.
+Reiichiro Nakano, Jacob Hilton, Suchir Balaji, Jeff Wu, Long Ouyang, Christina Kim, Christopher Hesse,
+Shantanu Jain, Vineet Kosaraju, William Saunders, et al. Webgpt: Browser-assisted question-answering
+with human feedback. arXiv preprint arXiv:2112.09332, 2021.
+Shashi Narayan, Shay B. Cohen, and Mirella Lapata. Don’t give me the details, just the summary! topic-aware
+convolutional neural networks for extreme summarization. In Proceedings of the 2018 Conference on
+Empirical Methods in Natural Language Processing, pp. 1797–1807, Brussels, Belgium, 2018. Association
+for Computational Linguistics. doi: 10.18653/v1/D18-1206. URL https://aclanthology.org/
+D18-1206.
+Yixin Nie, Adina Williams, Emily Dinan, Mohit Bansal, Jason Weston, and Douwe Kiela. Adversarial NLI:
+A new benchmark for natural language understanding. In Proceedings of the 58th Annual Meeting of
+the Association for Computational Linguistics, pp. 4885–4901, Online, 2020. Association for Computa-
+tional Linguistics. doi: 10.18653/v1/2020.acl-main.441. URL https://aclanthology.org/2020.
+acl-main.441.
+Achraf
+Othman
+and
+Mohamed
+Jemni.
+English-asl
+gloss
+parallel
+corpus
+2012:
+Aslg-pc12.
+2012.
+URL
+https://www.achrafothman.net/aslsmt/
+English-ASL-Gloss-Parallel-Corpus-2012-ASLG-PC12.pdf.
+Bo Pang and Lillian Lee. Seeing stars: Exploiting class relationships for sentiment categorization with respect
+to rating scales. In Proceedings of the 43rd Annual Meeting of the Association for Computational Linguistics
+(ACL’05), pp. 115–124, Ann Arbor, Michigan, 2005. Association for Computational Linguistics. doi:
+10.3115/1219840.1219855. URL https://aclanthology.org/P05-1015.
+40
+REFERENCES
+Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. Film: Visual reasoning
+with a general conditioning layer. In Proceedings of the AAAI Conference on Artiﬁcial Intelligence,
+volume 32, 2018.
+Fabio Petroni, Tim Rocktäschel, Sebastian Riedel, Patrick Lewis, Anton Bakhtin, Yuxiang Wu, and Alexander
+Miller. Language models as knowledge bases? In Proceedings of the 2019 Conference on Empirical
+Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language
+Processing (EMNLP-IJCNLP), pp. 2463–2473, Hong Kong, China, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/D19-1250. URL https://aclanthology.org/D19-1250.
+Fabio Petroni, Patrick Lewis, Aleksandra Piktus, Tim Rocktäschel, Yuxiang Wu, Alexander H. Miller, and
+Sebastian Riedel. How context affects language models’ factual predictions. In Automated Knowledge Base
+Construction, 2020. URL https://openreview.net/forum?id=025X0zPfn.
+Jonas Pfeiffer, Andreas Rücklé, Clifton Poth, Aishwarya Kamath, Ivan Vuli´c, Sebastian Ruder, Kyunghyun
+Cho, and Iryna Gurevych. AdapterHub: A framework for adapting transformers. In Proceedings of the 2020
+Conference on Empirical Methods in Natural Language Processing: System Demonstrations, pp. 46–54,
+Online, 2020a. Association for Computational Linguistics. doi: 10.18653/v1/2020.emnlp-demos.7. URL
+https://aclanthology.org/2020.emnlp-demos.7.
+Jonas Pfeiffer, Ivan Vuli´c, Iryna Gurevych, and Sebastian Ruder. MAD-X: An Adapter-Based Framework
+for Multi-Task Cross-Lingual Transfer. In Proceedings of the 2020 Conference on Empirical Methods in
+Natural Language Processing (EMNLP), pp. 7654–7673, Online, 2020b. Association for Computational
+Linguistics. doi: 10.18653/v1/2020.emnlp-main.617. URL https://aclanthology.org/2020.
+emnlp-main.617.
+Jonas Pfeiffer, Aishwarya Kamath, Andreas Rücklé, Kyunghyun Cho, and Iryna Gurevych. AdapterFusion:
+Non-destructive task composition for transfer learning. In Proceedings of the 16th Conference of the
+European Chapter of the Association for Computational Linguistics: Main Volume, pp. 487–503, On-
+line, 2021. Association for Computational Linguistics. URL https://aclanthology.org/2021.
+eacl-main.39.
+Mohammad Taher Pilehvar and Jose Camacho-Collados. WiC: the word-in-context dataset for evaluating
+context-sensitive meaning representations. In Proceedings of the 2019 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1
+(Long and Short Papers), pp. 1267–1273, Minneapolis, Minnesota, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/N19-1128. URL https://aclanthology.org/N19-1128.
+Amir Pouran Ben Veyseh, Franck Dernoncourt, Quan Hung Tran, and Thien Huu Nguyen. What does this
+acronym mean? introducing a new dataset for acronym identiﬁcation and disambiguation. In Proceedings of
+the 28th International Conference on Computational Linguistics, pp. 3285–3301, Barcelona, Spain (Online),
+2020. International Committee on Computational Linguistics. doi: 10.18653/v1/2020.coling-main.292.
+URL https://aclanthology.org/2020.coling-main.292.
+Yujia Qin, Yankai Lin, Jing Yi, Jiajie Zhang, Xu Han, Zhengyan Zhang, Yusheng Su, Zhiyuan Liu, Peng
+Li, Maosong Sun, et al.
+Knowledge inheritance for pre-trained language models.
+arXiv preprint
+arXiv:2105.13880, 2021a.
+Yujia Qin, Xiaozhi Wang, Yusheng Su, Yankai Lin, Ning Ding, Zhiyuan Liu, Juanzi Li, Lei Hou, Peng Li,
+Maosong Sun, et al. Exploring low-dimensional intrinsic task subspace via prompt tuning. ArXiv preprint,
+abs/2110.07867, 2021b. URL https://arxiv.org/abs/2110.07867.
+Yujia Qin, Jiajie Zhang, Yankai Lin, Zhiyuan Liu, Peng Li, Maosong Sun, and Jie Zhou. Elle: Efﬁcient
+lifelong pre-training for emerging data. OpenReview preprint, 2021c. URL https://openreview.
+net/forum?id=UF7a5kIdzk.
+Alec Radford, Karthik Narasimhan, Tim Salimans, and Ilya Sutskever. Improving language understanding by
+generative pre-training. 2018.
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. Language models
+are unsupervised multitask learners. OpenAI blog, 1(8):9, 2019.
+41
+REFERENCES
+Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou,
+Wei Li, and Peter J Liu. Exploring the limits of transfer learning with a uniﬁed text-to-text transformer.
+ArXiv preprint, abs/1910.10683, 2019. URL https://arxiv.org/abs/1910.10683.
+Nazneen Fatema Rajani, Bryan McCann, Caiming Xiong, and Richard Socher. Explain yourself! leveraging
+language models for commonsense reasoning. In Proceedings of the 57th Annual Meeting of the Association
+for Computational Linguistics, pp. 4932–4942, Florence, Italy, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/P19-1487. URL https://aclanthology.org/P19-1487.
+Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and Percy Liang. SQuAD: 100,000+ questions for
+machine comprehension of text. In Proceedings of the 2016 Conference on Empirical Methods in Natural
+Language Processing, pp. 2383–2392, Austin, Texas, 2016. Association for Computational Linguistics. doi:
+10.18653/v1/D16-1264. URL https://aclanthology.org/D16-1264.
+Sylvestre-Alvise Rebufﬁ, Hakan Bilen, and Andrea Vedaldi. Learning multiple visual domains with residual
+adapters. Advances in neural information processing systems, 30, 2017.
+Andreas Rücklé, Gregor Geigle, Max Glockner, Tilman Beck, Jonas Pfeiffer, Nils Reimers, and Iryna Gurevych.
+AdapterDrop: On the efﬁciency of adapters in transformers. In Proceedings of EMNLP, pp. 7930–7946,
+2021. URL https://aclanthology.org/2021.emnlp-main.626.
+Amrita Saha, Rahul Aralikatte, Mitesh M. Khapra, and Karthik Sankaranarayanan. DuoRC: Towards complex
+language understanding with paraphrased reading comprehension. In Proceedings of the 56th Annual
+Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pp. 1683–1693,
+Melbourne, Australia, 2018. Association for Computational Linguistics. doi: 10.18653/v1/P18-1156. URL
+https://aclanthology.org/P18-1156.
+Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. Winogrande: An adversarial
+winograd schema challenge at scale. In The Thirty-Fourth AAAI Conference on Artiﬁcial Intelligence, AAAI
+2020, The Thirty-Second Innovative Applications of Artiﬁcial Intelligence Conference, IAAI 2020, The
+Tenth AAAI Symposium on Educational Advances in Artiﬁcial Intelligence, EAAI 2020, New York, NY, USA,
+February 7-12, 2020, pp. 8732–8740. AAAI Press, 2020. URL https://aaai.org/ojs/index.
+php/AAAI/article/view/6399.
+Teven Le Scao and Alexander M. Rush. How many data points is a prompt worth? In NAACL, 2021.
+Timo Schick and Hinrich Schütze. Exploiting cloze-questions for few-shot text classiﬁcation and natural
+language inference. In Proceedings of the 16th Conference of the European Chapter of the Association
+for Computational Linguistics: Main Volume, pp. 255–269, Online, 2021. Association for Computational
+Linguistics. URL https://aclanthology.org/2021.eacl-main.20.
+Lakshay Sharma, Laura Graesser, Nikita Nangia, and Utku Evci. Natural language understanding with the
+quora question pairs dataset. arXiv e-prints, 2019. URL https://arxiv.org/abs/1907.01041.
+Noam Shazeer and Mitchell Stern. Adafactor: Adaptive learning rates with sublinear memory cost. In
+Jennifer G. Dy and Andreas Krause (eds.), Proceedings of the 35th International Conference on Machine
+Learning, ICML 2018, Stockholmsmässan, Stockholm, Sweden, July 10-15, 2018, volume 80 of Proceedings
+of Machine Learning Research, pp. 4603–4611. PMLR, 2018. URL http://proceedings.mlr.
+press/v80/shazeer18a.html.
+Damien Sileo, Tim Van De Cruys, Camille Pradel, and Philippe Muller. Mining discourse markers for
+unsupervised sentence representation learning. In Proceedings of the 2019 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1
+(Long and Short Papers), pp. 3477–3486, Minneapolis, Minnesota, 2019. Association for Computational
+Linguistics. doi: 10.18653/v1/N19-1351. URL https://aclanthology.org/N19-1351.
+Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher D. Manning, Andrew Ng, and
+Christopher Potts.
+Recursive deep models for semantic compositionality over a sentiment treebank.
+In Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing, pp.
+1631–1642, Seattle, Washington, USA, 2013. Association for Computational Linguistics. URL https:
+//aclanthology.org/D13-1170.
+42
+REFERENCES
+Asa Cooper Stickland and Iain Murray. BERT and pals: Projected attention layers for efﬁcient adaptation
+in multi-task learning. In Kamalika Chaudhuri and Ruslan Salakhutdinov (eds.), Proceedings of the 36th
+International Conference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach, California,
+USA, volume 97 of Proceedings of Machine Learning Research, pp. 5986–5995. PMLR, 2019. URL
+http://proceedings.mlr.press/v97/stickland19a.html.
+Yusheng Su, Xiaozhi Wang, Yujia Qin, Chi-Min Chan, Yankai Lin, Zhiyuan Liu, Peng Li, Juanzi Li, Lei Hou,
+Maosong Sun, and Jie Zhou. On transferability of prompt tuning for natural language understanding. ArXiv
+preprint, abs/2111.06719, 2021. URL https://arxiv.org/abs/2111.06719.
+Tianxiang Sun, Xiangyang Liu, Xipeng Qiu, and Xuanjing Huang. Paradigm shift in natural language
+processing. ArXiv preprint, abs/2109.12575, 2021. URL https://arxiv.org/abs/2109.12575.
+Tianxiang Sun, Yunfan Shao, Hong Qian, Xuanjing Huang, and Xipeng Qiu. Black-box tuning for language-
+model-as-a-service. arXiv preprint arXiv:2201.03514, 2022. URL https://arxiv.org/abs/2201.
+03514.
+Oyvind Tafjord, Peter Clark, Matt Gardner, Wen-tau Yih, and Ashish Sabharwal. Quarel: A dataset and
+models for answering questions about qualitative relationships. Proceedings of the AAAI Conference
+on Artiﬁcial Intelligence, 33(01):7063–7071, Jul. 2019a. doi: 10.1609/aaai.v33i01.33017063. URL
+https://ojs.aaai.org/index.php/AAAI/article/view/4687.
+Oyvind Tafjord, Matt Gardner, Kevin Lin, and Peter Clark. QuaRTz: An open-domain dataset of qualitative
+relationship questions. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language
+Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP),
+pp. 5941–5946, Hong Kong, China, 2019b. Association for Computational Linguistics. doi: 10.18653/v1/
+D19-1608. URL https://aclanthology.org/D19-1608.
+Zhixing Tan, Xiangwen Zhang, Shuo Wang, and Yang Liu. MSP: Multi-stage prompting for making pre-trained
+language models better translators. arXiv preprint arXiv:2110.06609, 2021.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser,
+and Illia Polosukhin. Attention is all you need. In Isabelle Guyon, Ulrike von Luxburg, Samy Bengio,
+Hanna M. Wallach, Rob Fergus, S. V. N. Vishwanathan, and Roman Garnett (eds.), Advances in Neural Infor-
+mation Processing Systems 30: Annual Conference on Neural Information Processing Systems 2017, Decem-
+ber 4-9, 2017, Long Beach, CA, USA, pp. 5998–6008, 2017. URL https://proceedings.neurips.
+cc/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html.
+Tu Vu, Brian Lester, Noah Constant, Rami Al-Rfou, and Daniel Cer. Spot: Better frozen model adaptation
+through soft prompt transfer. ArXiv preprint, abs/2110.07904, 2021. URL https://arxiv.org/abs/
+2110.07904.
+Alex Wang, Amanpreet Singh, Julian Michael, Felix Hill, Omer Levy, and Samuel R. Bowman. GLUE: A multi-
+task benchmark and analysis platform for natural language understanding. In 7th International Conference
+on Learning Representations, ICLR 2019, New Orleans, LA, USA, May 6-9, 2019. OpenReview.net, 2019.
+URL https://openreview.net/forum?id=rJ4km2R5t7.
+William Yang Wang. “liar, liar pants on ﬁre”: A new benchmark dataset for fake news detection. In Proceedings
+of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers), pp.
+422–426, Vancouver, Canada, 2017. Association for Computational Linguistics. doi: 10.18653/v1/P17-2067.
+URL https://aclanthology.org/P17-2067.
+Alex Warstadt, Amanpreet Singh, and Samuel R. Bowman. Neural network acceptability judgments. Transac-
+tions of the Association for Computational Linguistics, 7:625–641, 2019. doi: 10.1162/tacl_a_00290. URL
+https://aclanthology.org/Q19-1040.
+Alex Warstadt, Alicia Parrish, Haokun Liu, Anhad Mohananey, Wei Peng, Sheng-Fu Wang, and Samuel R.
+Bowman. BLiMP: The benchmark of linguistic minimal pairs for English. Transactions of the Asso-
+ciation for Computational Linguistics, 8:377–392, 2020. doi: 10.1162/tacl_a_00321. URL https:
+//aclanthology.org/2020.tacl-1.25.
+Laura Weidinger, John Mellor, Maribeth Rauh, Conor Grifﬁn, Jonathan Uesato, Po-Sen Huang, Myra Cheng,
+Mia Glaese, Borja Balle, Atoosa Kasirzadeh, et al. Ethical and social risks of harm from language models.
+arXiv preprint arXiv:2112.04359, 2021.
+43
+REFERENCES
+Adina Williams, Nikita Nangia, and Samuel Bowman. A broad-coverage challenge corpus for sentence
+understanding through inference. In Proceedings of the 2018 Conference of the North American Chapter of
+the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long Papers),
+pp. 1112–1122, New Orleans, Louisiana, 2018. Association for Computational Linguistics. doi: 10.18653/
+v1/N18-1101. URL https://aclanthology.org/N18-1101.
+John Wright and Yi Ma. High-dimensional data analysis with low-dimensional models: Principles, computa-
+tion, and applications. 2021.
+Yi Yang, Wen-tau Yih, and Christopher Meek. WikiQA: A challenge dataset for open-domain question
+answering. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing,
+pp. 2013–2018, Lisbon, Portugal, 2015. Association for Computational Linguistics. doi: 10.18653/v1/
+D15-1237. URL https://aclanthology.org/D15-1237.
+Zonghan Yang and Yang Liu. On Robust Preﬁx-Tuning for Text Classiﬁcation. In International Conference on
+Learning Representations, 2022. URL https://openreview.net/forum?id=eBCmOocUejf.
+Qinyuan Ye, Bill Yuchen Lin, and Xiang Ren. CrossFit: A few-shot learning challenge for cross-task
+generalization in NLP. In Proceedings of the 2021 Conference on Empirical Methods in Natural Lan-
+guage Processing, pp. 7163–7189, Online and Punta Cana, Dominican Republic, 2021. Association for
+Computational Linguistics. URL https://aclanthology.org/2021.emnlp-main.572.
+Shaokai Ye, Kailu Wu, Mu Zhou, Yunfei Yang, Sia Huat Tan, Kaidi Xu, Jiebo Song, Chenglong Bao, and
+Kaisheng Ma. Light-weight calibrator: A separable component for unsupervised domain adaptation.
+In 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition, CVPR 2020, Seattle, WA,
+USA, June 13-19, 2020, pp. 13733–13742. IEEE, 2020. doi: 10.1109/CVPR42600.2020.01375. URL
+https://doi.org/10.1109/CVPR42600.2020.01375.
+Tao Yu, Rui Zhang, Kai Yang, Michihiro Yasunaga, Dongxu Wang, Zifan Li, James Ma, Irene Li, Qingning
+Yao, Shanelle Roman, Zilin Zhang, and Dragomir Radev. Spider: A large-scale human-labeled dataset for
+complex and cross-domain semantic parsing and text-to-SQL task. In Proceedings of the 2018 Conference on
+Empirical Methods in Natural Language Processing, pp. 3911–3921, Brussels, Belgium, 2018. Association
+for Computational Linguistics. doi: 10.18653/v1/D18-1425. URL https://aclanthology.org/
+D18-1425.
+Elad Ben Zaken, Shauli Ravfogel, and Yoav Goldberg. Bitﬁt: Simple parameter-efﬁcient ﬁne-tuning for
+transformer-based masked language-models. ArXiv preprint, abs/2106.10199, 2021. URL https://
+arxiv.org/abs/2106.10199.
+Rowan Zellers, Yonatan Bisk, Roy Schwartz, and Yejin Choi. SWAG: A large-scale adversarial dataset for
+grounded commonsense inference. In Proceedings of the 2018 Conference on Empirical Methods in Natural
+Language Processing, pp. 93–104, Brussels, Belgium, 2018. Association for Computational Linguistics.
+doi: 10.18653/v1/D18-1009. URL https://aclanthology.org/D18-1009.
+Rowan Zellers, Ari Holtzman, Yonatan Bisk, Ali Farhadi, and Yejin Choi. HellaSwag: Can a machine really
+ﬁnish your sentence? In Proceedings of the 57th Annual Meeting of the Association for Computational
+Linguistics, pp. 4791–4800, Florence, Italy, 2019. Association for Computational Linguistics. doi: 10.
+18653/v1/P19-1472. URL https://aclanthology.org/P19-1472.
+Dinghuai Zhang, Tianyuan Zhang, Yiping Lu, Zhanxing Zhu, and Bin Dong. You only propagate once:
+Accelerating adversarial training via maximal principle. In H. Wallach, H. Larochelle, A. Beygelzimer,
+F. d'Alché-Buc, E. Fox, and R. Garnett (eds.), Advances in Neural Information Processing Systems,
+volume 32. Curran Associates, Inc., 2019a. URL https://proceedings.neurips.cc/paper/
+2019/file/812b4ba287f5ee0bc9d43bbf5bbe87fb-Paper.pdf.
+Hao Zhang, Jae Ro, and Richard Sproat.
+Semi-supervised URL segmentation with recurrent neural
+networks pre-trained on knowledge graph entities. In Proceedings of the 28th International Confer-
+ence on Computational Linguistics, pp. 4667–4675, Barcelona, Spain (Online), 2020. International
+Committee on Computational Linguistics.
+doi: 10.18653/v1/2020.coling-main.411.
+URL https:
+//aclanthology.org/2020.coling-main.411.
+Sheng Zhang, X. Liu, J. Liu, Jianfeng Gao, Kevin Duh, and Benjamin Van Durme. Record: Bridging the gap
+between human and machine commonsense reading comprehension. ArXiv preprint, abs/1810.12885, 2018.
+URL https://arxiv.org/abs/1810.12885.
+44
+REFERENCES
+Yuan Zhang, Jason Baldridge, and Luheng He. PAWS: Paraphrase adversaries from word scrambling. In
+Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational
+Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers), pp. 1298–1308, Min-
+neapolis, Minnesota, 2019b. Association for Computational Linguistics. doi: 10.18653/v1/N19-1131. URL
+https://aclanthology.org/N19-1131.
+Mengjie Zhao, Tao Lin, Fei Mi, Martin Jaggi, and Hinrich Schütze. Masking as an efﬁcient alternative to
+ﬁnetuning for pretrained language models. In Proceedings of the 2020 Conference on Empirical Methods
+in Natural Language Processing (EMNLP), pp. 2226–2241, Online, 2020. Association for Computational
+Linguistics. doi: 10.18653/v1/2020.emnlp-main.174. URL https://aclanthology.org/2020.
+emnlp-main.174.
+45
+A
+Implementation Details
+A.1
+Performance and Convergence
+Among the NLP datasets downloaded from Hugginface datasets, for those datasets without publicly released
+test set, we evenly divide the original development sets into two halves as the new development set and test
+set; for those datasets without publicly released development set and test set, we divide the original training set
+with a ratio of 8 : 1 : 1 into the new training set, development set and test set.
+For PF, LR, AP and FT, we use AdamW (Kingma & Ba, 2015) as the optimizer, set the maximum training
+steps to 20, 000 with early stop, and save the checkpoint for evaluation on development set every 100 steps.
+After that, we evaluate the best checkpoint using the development set on the test set. We experiment on
+the combinations of different batch sizes ({16, 32}) and learning rates ({1 × 10−3, 1 × 10−4, 5 × 10−4}),
+and report the best performance. Since we found empirically that PT converges much slower than the
+other tuning methods, we set the maximum training step of PT to 100, 000 steps without early stop, and
+evaluate the performance on development set for every 1, 000 steps. Following Lester et al. (2021), we choose
+Adafactor (Shazeer & Stern, 2018) as the optimizer. All the experiments are conducted under the same
+environment.
+A.2
+Combinations of Delta Tuning Methods
+For prompt tuning, we prepend 10 tunable virtual tokens into the input text; for adapter, we set the reduction
+factor to 16; for BitFit, all the bias components in PLMs are optimized.
+Simultaneous Combination.
+For all delta tuning methods on RoBERTaLARGE, we choose AdamW (Kingma
+& Ba, 2015) as the optimizer, set the maximum training steps to 6, 000, and save the checkpoint for evaluation
+on development set every 200 steps. After that, we select the best checkpoint based on the development set,
+and evaluate it on the test set. For the full-data setting, we set the training batch size to 16 and experiment on
+the combinations of different learning rates ({1 × 10−2, 1 × 10−3, 1 × 10−4, 1 × 10−5}); for the few-shot
+setting, we set the training batch size to 4 and experiment on the combination of 4 different learning rates,
+which are listed in Table 8.
+For STS-B, which is a regression task, we convert it into a binary classiﬁcation problem. Speciﬁcally, assume
+that the original output value is bounded by [vl, vu] and the new labels are {yl, yu}, the original value is
+reformulated as:
+y = vl · p(yl|xin) + vu · p(yu|xin).
+During optimization, we minimize the KL-divergence between prediction distribution p(yu|xin) and the ground
+truth (y −vl)/(vu −vl).
+Sequential Combination.
+We choose AdamW (Kingma & Ba, 2015) as the optimizer, set the batch size to
+64 and the learning rate to 1 × 10−2 for prompt tuning, 1 × 10−4 for BitFit and 1 × 10−5 for adapter.
+Table 8: Learning rate setting of RoBERTaLARGE on 16-shot GLUE datasets.
+Prompt tuning
+%
+%
+%
+%
+!
+!
+!
+!
+BitFit
+%
+%
+!
+!
+%
+%
+!
+!
+Adapter
+%
+!
+%
+!
+%
+!
+%
+!
+Learning Rates
+1e-2
+-
+%
+%
+%
+!
+%
+%
+%
+3e-3
+-
+%
+!
+%
+!
+%
+%
+%
+1e-3
+-
+!
+!
+!
+!
+!
+!
+!
+3e-4
+-
+!
+!
+!
+!
+!
+!
+!
+1e-4
+-
+!
+!
+!
+%
+!
+!
+!
+3e-5
+-
+!
+%
+!
+%
+!
+!
+!
+46
+A.3
+The Power of Scale for Delta Tuning
+A.3
+The Power of Scale for Delta Tuning
+Table 9: The percentages of the tuned parameters (parameters participating optimizing in a PLM / all
+parameters in a PLM) during the training.
+SMALL
+BASE
+XXL
+Adapter
+1.70%
+1.20%
+0.28%
+LoRA
+0.73%
+0.64%
+0.26%
+Preﬁx-tuning
+0.50%
+0.47%
+0.11%
+Prompt Tuning
+0.06%
+0.03%
+0.01%
+Last Layer Tuning
+6.30%
+4.20%
+2.10%
+Selective Module Tuning
+2.10%
+4.20%
+2.40%
+Apart from the delta tuning methods (prompt tuning, adapter, LoRA and preﬁx-tuning) introduced in the
+previous sections, we additionally design two delta tuning methods, i.e., last layer tuning and selective module
+tuning, to investigate the power of scale for delta tuning. For last layer tuning, we only select the last layer
+of the encoder in T5 to optimize. For selective module tuning, we manually choose some modules (e.g., the
+feed-forward layer, query / key / value matrix in the attention layer, or a layer norm) in T5 to optimize. We
+set the training batch size to 64 for all delta tuning methods. For the different scales of T5, we use the same
+learning rates during training: 5 × 10−3 (prompt tuning), 5 × 10−4 (adapter), 5 × 10−5 (LoRA) 5 × 10−3
+(preﬁx-tuning), 5 × 10−5 (last layer tuning), and 5 × 10−5 (selective module tuning). The percentage of the
+tunable parameters for each method / model is listed in Table 9.
+A.4
+Task-level Transferability Evaluation
+In the cross-task transferability experiments, we utilize 12 tasks of 5 different types as follows:
+Sentiment Analysis.
+Given a sentence, a PLM identiﬁes the sentiment polarity in this sentence. We choose
+SST-2 (Socher et al., 2013), Amazon/Polarity, and Rotten Tomatoes (Pang & Lee, 2005) to
+analyze.
+Natural Language Inference.
+Given a premise and hypothesis pair, a PLM determines whether the hypoth-
+esis is entailed, contradict, or undetermined by the premise. We choose MNLI (Williams et al., 2018), SICK
+(Marelli et al., 2014), and SciTail (Khot et al., 2018b) to analyze.
+Paraphrase Identiﬁcation.
+Given a pair of sentences, a PLM judges whether they are semantically identical.
+We choose QQP (Sharma et al., 2019) and MRPC (Dolan & Brockett, 2005) to analyze.
+Question Answering.
+Given a question, a PLM answers the question based on context. We choose MathQA
+(Amini et al., 2019) and AQUA-RAT (Ling et al., 2017) to analyze.
+Summarization.
+Given an article, a PLM summarizes it. We choose Multi-News (Fabbri et al., 2019),
+and SAMSum (Gliwa et al., 2019) to analyze.
+Evaluation Metrics.
+For sentiment analysis, natural language inference, and paraphrase identiﬁcation
+tasks, we choose accuracy (Acc.) as their evaluation metric in the experiments. For question answering
+and summarization, we utilize F1 and ROUGE-L (Lin, 2004), respectively. Finally, we report their relative
+performance (transferring zero-shot performance / original performance) (%).
+B
+Tasks Evaluated in Experiments
+Table 10: The tasks evaluated in our experiments in Table 3. We refer to Ye et al. (2021) for task ontology.
+Ontology
+Task Name
+Reference
+cls/sentiment analysis
+glue-sst2
+Socher et al. 2013
+47
+rotten_tomatoes
+Pang & Lee 2005
+cls/emotion
+emo
+Chatterjee et al. 2019
+tweet_eval-hate
+Barbieri et al. 2020
+tweet_eval-irony
+Barbieri et al. 2020
+tweet_eval-offensive
+Barbieri et al. 2020
+tweet_eval-sentiment
+Barbieri et al. 2020
+tweet_eval-stance_abortion
+Barbieri et al. 2020
+tweet_eval-stance_atheism
+Barbieri et al. 2020
+tweet_eval-stance_climate
+Barbieri et al. 2020
+tweet_eval-stance_feminist
+Barbieri et al. 2020
+tweet_eval-stance_hillary
+Barbieri et al. 2020
+cls/hate speech detection
+ethos-disability
+Mollas et al. 2020
+ethos-gender
+Mollas et al. 2020
+ethos-national_origin
+Mollas et al. 2020
+ethos-religion
+Mollas et al. 2020
+hate_speech18
+Davidson et al. 2017
+hatexplain
+Mathew et al. 2020
+cls/NLI
+anli
+Nie et al. 2020
+glue-mnli
+Williams et al. 2018
+glue-qnli
+Rajpurkar et al. 2016
+glue-rte
+Dagan et al. 2005; Bar-Haim et al. 2006
+Giampiccolo et al. 2007
+scitail
+Khot et al. 2018a
+superglue-rte
+Dagan et al. 2005; Bar-Haim et al. 2006
+cls/fact checking
+climate_fever
+Diggelmann et al. 2020
+liar
+Wang 2017
+cls/paraphrase
+glue-qqp
+(link)
+medical_questions_pairs
+McCreery et al. 2020
+paws
+Zhang et al. 2019b
+cls/topic
+ag_news
+Gulli (link)
+cls/other
+ade_corpus_v2-classiﬁcation
+Gurulingappa et al. 2012
+discovery
+Sileo et al. 2019
+glue-cola
+Warstadt et al. 2019
+sms_spam
+Almeida et al. 2011
+superglue-wic
+Pilehvar & Camacho-Collados 2019
+superglue-wsc
+Levesque et al. 2012
+wiki_qa
+Yang et al. 2015
+qa/closed-book qa
+freebase_qa
+Jiang et al. 2019
+lama-conceptnet
+Petroni et al. 2019, 2020
+lama-google_re
+Petroni et al. 2019, 2020
+lama-squad
+Petroni et al. 2019, 2020
+lama-trex
+Petroni et al. 2019, 2020
+numer_sense
+Lin et al. 2020
+search_qa
+Dunn et al. 2017
+web_questions
+Berant et al. 2013
+qa/multiple-choice qa
+cosmos_qa
+Huang et al. 2019
+dream
+Saha et al. 2018
+hellaswag
+Zellers et al. 2019
+openbookqa
+Mihaylov et al. 2018
+qasc
+Khot et al. 2020
+quarel
+Tafjord et al. 2019a
+quartz-no_knowledge
+Tafjord et al. 2019b
+quartz-with_knowledge
+Tafjord et al. 2019b
+race-high
+Lai et al. 2017
+race-middle
+Lai et al. 2017
+superglue-copa
+Gordon et al. 2012
+swag
+Zellers et al. 2018
+wino_grande
+Sakaguchi et al. 2020
+qa/long-form qa
+eli5-askh
+Fan et al. 2019
+48
+eli5-asks
+Fan et al. 2019
+eli5-eli5
+Fan et al. 2019
+qa/MRC
+superglue-record
+Zhang et al. 2018
+cg/summarization
+multi_news
+Fabbri et al. 2019
+samsum
+Gliwa et al. 2019
+xsum
+Narayan et al. 2018
+cg/other
+spider
+Yu et al. 2018
+wiki_bio
+Lebret et al. 2016
+wiki_split
+Botha et al. 2018
+other/linguistic phenomenon
+blimp-anaphor_gender_agreement
+Warstadt et al. 2020
+blimp-ellipsis_n_bar_1
+Warstadt et al. 2020
+blimp-sentential_negation_npi_scope
+Warstadt et al. 2020
+other/generate
+explanation
+cos_e
+Rajani et al. 2019
+other/slot_ﬁlling
+ade_corpus_v2-dosage
+Gurulingappa et al. 2012
+ade_corpus_v2-effect
+Gurulingappa et al. 2012
+other/entity linking
+kilt_ay2
+Hoffart et al. 2011
+other/other
+acronym_identiﬁcation
+Pouran Ben Veyseh et al. 2020
+aslg_pc12
+Othman & Jemni 2012
+crawl_domain
+Zhang et al. 2020
+proto_qa
+Boratko et al. 2020
+49

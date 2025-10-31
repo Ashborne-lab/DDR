@@ -1,0 +1,1237 @@
+Extraction of Medication and Temporal Relation
+from Clinical Text using Neural Language Models
+Hangyu Tu
+Department of Computer Science
+University of Manchester
+Manchester, UK
+hangyu.tu@student.manchester.ac.uk
+Lifeng Han
+Department of Computer Science
+University of Manchester
+Manchester, UK
+lifeng.han@manchester.ac.uk
+Goran Nenadic
+Department of Computer Science
+University of Manchester
+Manchester, UK
+g.nenadic@manchester.ac.uk
+Abstract—Clinical texts, represented in electronic medical
+records (EMRs), contain rich medical information and are
+essential for disease prediction, personalised information recom-
+mendation, clinical decision support, and medication pattern min-
+ing and measurement. Relation extractions between medication
+mentions and temporal information can further help clinicians
+better understand the patients’ treatment history. To evaluate
+the performances of deep learning (DL) and large language
+models (LLMs) in medication extraction and temporal relations
+classification, we carry out an empirical investigation of MedTem
+project using several advanced learning structures including
+BiLSTM-CRF and CNN-BiLSTM for a clinical domain named
+entity recognition (NER), and BERT-CNN for temporal relation
+extraction (RE), in addition to the exploration of different
+word embedding techniques. Furthermore, we also designed a
+set of post-processing roles to generate structured output on
+medications and the temporal relation. Our experiments show
+that CNN-BiLSTM slightly wins the BiLSTM-CRF model on the
+i2b2-2009 clinical NER task yielding 75.67, 77.83, and 78.17 for
+precision, recall, and F1 scores using Macro Average. BERT-CNN
+model also produced reasonable evaluation scores 64.48, 67.17,
+and 65.03 for P/R/F1 using Macro Avg on the temporal relation
+extraction test set from i2b2-2012 challenges. Code and Tools
+from MedTem will be hosted at https://github.com/HECTA-UoM/
+MedTem
+Index Terms—Neural Language Models, Deep Learning Mod-
+els, Natural Language Processing, AI for Healthcare, Medication
+and Temporal Relation
+I. INTRODUCTION
+With the continuous growth of the need for medical text
+mining, extraction of temporal information has become a
+significant field of Natural Language Process (NLP) [1], e.g.
+when the disease was diagnosed, how long a patient should
+take some medicines. Due to its importance for many other
+NLP tasks, temporal information tagging and annotation from
+clinical texts have become an active research field (Figure 1
+for example). Clinical texts including electronic health records
+(EHRs) consist of medical history, diagnoses, medications,
+treatment plans, immunisation dates, allergies, radiology im-
+ages, and laboratory and test results, which contain a lot of
+useful information that can provide the opportunity to support
+medical research [2], [3]. These include the study of the side
+effects of medications (a.k.a adverse drug effects) taken over
+time, helping doctors make better decisions for patients, and
+finding the correlation between drug use and its outcomes, etc.
+[4], [5].
+In view of the importance of temporal information in clini-
+cal free texts, in order to extract it from unstructured data and
+convert it to structured features consisting of temporal relations
+(TLINKs) between events and time expressions, researchers
+have developed some techniques, tools, and workflows. Gener-
+ally, they can be divided into three main categories: rule-based
+approaches, machine learning and combined approaches. Most
+machine learning methods rely on feature-engineered super-
+vised learning to predict temporal relations between events,
+which require tagged datasets that cost a lot of effort and time
+of experts in the medical domain.
+With the development of various deep learning (DL) models
+nowadays, this work aims at an empirical investigation on how
+they perform on this specific challenge, i.e. medication and
+temporal relation extraction from clinical text.
+There are two major sub-tasks: 1) Medication Entity Recog-
+nition, which involves finding and identifying named drugs
+mentioned in unstructured text, the first step toward automat-
+ing the extraction of medications from EMRs. 2) Automatic
+Temporal Relation Extraction from free text EMRs. We ap-
+proach these two steps by applying several advanced DL
+methods including the BiLSTM+CRF, CNN-BiLSTM, and
+BERT-base-CNN models to train on the available data sets.
+Additionally, a SparkNLP tool (DateNormalizer) [6] is used
+to extract and normalise dates from relative date-time phrases.
+II. METHODOLOGICAL DESIGN
+Our designed methodology includes five main steps as
+shown in Figure 2, which are Data Pre-processing, Word
+Embedding, Modelling, Time Expression and Event Extrac-
+tion, and Temporal Relations and Medications Candidates
+Classification.
+A. Pre-Processing Details
+Clinical texts are mixed with different formats. The target
+of pre-processing is trying to format different data with
+certain rules and enrich texts with their potential features.
+Typically, Pre-processing follows 5 steps: Sentence Segmen-
+tation, Tokenisation, Parts of Speech (POS, which explains
+how a word is used in a sentence) Tagging, and Parsing.
+arXiv:2310.02229v2  [cs.CL]  8 Oct 2023
+Fig. 1. Original Text Example from EMRs
+For our work, GATE [7], cTAKES [8] and MedSpaCy (a
+new clinical text processing toolkit in Python) shows excellent
+power in building rule-based modules to retrieve extra features.
+Additionally, the library ‘spacy’ is valuable and powerful in
+linking mentions to the associated verb.
+B. Word Embeddings
+Word embedding techniques play a role in capturing the
+meaning, semantic relationship, and context of different words
+while creating word representations [9]. A word embedding is
+a technique used to generate a dense vector representation of
+words that include context words about their own. In addition
+to one-hot embedding that results in sparse matrix embedding,
+there are enhanced versions of simple bag-of-words models,
+such as word counts and frequency counters, that essentially
+represent sparse vectors.
+1) One-hot Encoding: A popular encoding technique is
+called “one-hot encoding”. In NLP, if a dictionary or sequence
+has N fields, each field can be represented by an n-dimensional
+one-hot vector. One-hot encoding can convert classified data
+into a unified digital format, which is convenient for machine
+learning algorithms to process and calculate since computers
+cannot understand non-numeric data. And the fixed dimension
+vector is convenient for the machine learning algorithm to
+calculate the linear algebra. Data that don’t relate to one
+another can benefit from one-hot encoding.
+2) Bag-of-words embedding: A bag-of-words model (BoW)
+is a way of extracting features from the text for use in
+modelling, such as with machine learning algorithms, which
+is a popular way of representing documents [10]. Throughout
+the realm of information retrieval, the BoW model is used
+in information retrieval on the assumption that a text may be
+reduced to a collection of words without regard to its actual
+order within the document, its grammar, or its syntax. Each
+word’s presence in the document is autonomous and unrelated
+to the incidence of other terms. In other words, each word at
+each place in the document is individually selected without
+regard to the document’s semantics.
+3) GloVe Embedding: GloVe stands for “Global Vectors”
+[11]. Compared to Word2vec, which only keeps local statistic
+information, the advantage of GloVe is that it captures both
+global statistics and local statistics of a corpus, and it is
+an unsupervised learning pre-trained model that represents
+words in sentences. It has the ability to extract semantic
+relationships. The main idea of the Glove method is that
+“semantic relationships between words can be extracted from
+the co-occurrence matrix” [12]. Given a document having a
+sentence of n words, the co-occurrence matrix X will be a
+n*n matrix.
+C. Deployed Learning Models
+1) BiLSTM: In machine learning fields, the problem that
+the model cannot get the previous moment information due to
+the vanishing gradient is also called the long-term dependence
+problem. In order to solve this problem, many researchers have
+tried to improve the Recurrent Neural Network (RNN) model,
+including BRNN [13], GRU [14], and LSTM [15], etc., among
+which the LSTM model is the most widely used one.
+LSTM is an improved RNN structure that can effectively
+avoid the long-term dependence problem that the traditional
+RNNs cannot solve. In the later work, many people adjusted
+and popularised the model, and the modern, widely used
+LSTM structure came into being. LSTM network has the same
+chain structure as traditional RNNs, but the repeating module
+has a different design. The RNN model only has a single
+layer of repeated modules. In contrast, the LSTM network
+has four interacting neural network layers, which makes the
+LSTM model more complex and sacrifices a certain amount
+of computational time, but the model output becomes better.
+The standard LSTM model mainly includes three groups of
+adaptive element multiplication gates, namely, the input gate,
+forgetting gate, and output gate.
+In actual text processing applications, the text is charac-
+terised by sequential feature correlation, and words in the
+current moment are not only affected by words in the past
+moment but also by words in the future moment. In order
+to make the model contain contextual information at the
+same time, researchers put forward a bidirectional LSTM
+model (BiLSTM) [16], [17]. BiLSTM contains two LSTM
+layers, which train the forward and backward sequences,
+respectively, and both LSTM layers are connected to the output
+layer. This forward-backward two-layer LSTM structure can
+provide historical information and future information to the
+output layer at the same time, which can not only retain the
+advantages of LSTM to solve long-term dependence but also
+take into account the context information and effectively deal
+with sequence problems.
+2) CRF model: Conditional random fields (CRFs) [18]
+are a type of statistical modelling methodology frequently
+employed in pattern recognition and machine learning, as
+well as for structured prediction, which is a widely-applied
+modelling strategy for many NLP tasks [19], [20]. Data having
+an underlying graph structure can be better modelled using
+CRFs, a graphical model that can take advantage of structural
+dependencies between outputs. In contrast to classifiers, which
+make label predictions for isolated data without considering
+their “neighbouring” samples, CRFs are able to account for
+context [21]–[23]. In order to accomplish this goal, the pre-
+Fig. 2. Methodology Illustration on Overall Tasks of MedTem
+dictions are modelled in the form of a graphical model, which
+depicts the existence of relations between the predictions. The
+choice of the graph to implement is context-specific. In NLP
+fields, for instance, “linear chain” CRFs are prevalent because
+each prediction depends only on its immediate neighbours.
+Connecting neighbouring and/or analogous regions ensures
+that all regions within a picture are predicted in the same way
+by the graph.
+3) CNN model: In deep learning (DL), a classic convo-
+lutional neural network (CNN) is a class of artificial neural
+networks (ANN), most commonly applied to analyse visual
+imagery [24]. A CNN model mainly consists of these layers:
+input layer, convolution layer, relu layer, pooling layer and full
+connection layer. One of CNN’s most alluring quality is its
+ability to make use of spatial or temporal correlation in data.
+CNN is divided into multiple learning phases, each of which
+is made up of a combination of convolutional layers, nonlinear
+processing units, and subsampling layers [25]. In a CNN,
+each layer of the network uses a set of convolutional kernels
+to perform many transformations. The convolution process
+simplifies extracting useful features from spatially correlated
+data points. We will use CNN to learn the character relations
+within word tokens for our task.
+4) BERT model: Brief for “Bidirectional Encoder Rep-
+resentations from Transformers”, BERT [26] is founded on
+Transformer structure [27], a cutting-edge DL model in which
+all output elements are related to all input elements and the
+weights between them are dynamically computed based on
+their connections. BERT is unique in that it can be used
+with text that is read either from left to right or right to left.
+With this characteristic, BERT was originally taught for two
+NLP tasks: Next Sentence Prediction and Masked Language
+Modelling. The input for BERT is comprised of Token Em-
+beddings, Segment Embeddings, and Position Embeddings,
+followed by pre-training. BERT enables effective dynamic
+feature encoding of polysemous words. In other words, the
+same word might produce a variety of word vector outputs
+depending on the language environment. Additionally, the pre-
+trained model’s embedding layer transfers the knowledge from
+the corpus to make the word vectors more generic, greatly
+enhancing the model’s accuracy.
+D. Time Expressions and Events Named Entity Recognition
+The goal of NER task is to mark up temporal infor-
+mation present in clinical text in order to enable reason-
+ing on relevant events (medications) for each patient. In
+this work, a commonly used format in entity tagging “In-
+side–outside–beginning (IOB)” [28], is used, which is ex-
+plained below:
+TABLE I
+EXTRACTION RESULT EXAMPLE
+ID
+Event
+Statues
+Start
+Stop
+134529565 Methotrexate
+ON
+May 2019
+February 2020
+134529566 Methotrexate
+OFF
+February 2020
+Unknown
+1) the B-prefix indicates that the tag is at the beginning
+of a chunk that follows another chunk without O tags
+between the two chunks.
+2) the I-prefix indicates that the tag is inside a chunk.
+3) the O-prefix indicates that the token belongs to no chunk.
+In this step, a BiLSTM+CRF model and a CNN-BiLSTM
+model are deployed to achieve the goal and a comparison of
+performance is taken to demonstrate the difference, advan-
+tages, and disadvantages between them.
+E. Temporal Relations and Medication Candidates Classifica-
+tion
+Relation extraction is the task of predicting attributes and
+relations for entities in a sentence. Extracted relations usually
+occur between two or more entities of a particular type (e.g.
+Medication, Dosage) and fall into several semantic categories.
+In this work, these relations that are discussed are between
+medications and corresponding dates. For instance, in the
+example text from Figure 1, there are medication “Methotrex-
+ate” that happened between “May 2019” and“February 2020”.
+Generally, there are eight types of temporal relations, includ-
+ing before, after, simultaneous, overlap, begun by, ended by,
+during, and before overlap suggested by [29]. However, only
+the types of before, after, and overlap meet our task. A BERT-
+based model with CNN as an additional learning layer is
+implemented for this step.
+F. Post-processing
+After the phrases of entity recognition and relation ex-
+traction, to make the result more robust and representative,
+this post-processing step is to convert results to a structured
+table or CSV shape. However, in the previous 2012 i2b2 NLP
+challenge on temporal relation extraction, post-processing was
+considered a set of classification routines for the EVENTs
+only, and the TIMEx catergory remained unclassified [30].
+In this work, we apply an open resource tool SparkNLP1,
+combined with our medication entity recognition and temporal
+relation extraction system to generate more informative results
+and a structured representation table e.g. the example Table
+II-F generated from the example text in Figure 1.
+III. EXPERIMENTAL EVALUATIONS
+A. Dataset and Evaluation Metrics
+In this work, the i2b2 challenge track 2009 and 2012
+datasets were used. The objective is to gather details about
+every drug that the patient is known to take for each patient
+report that is given. Partners Healthcare’s discharge summaries
+1https://github.com/JohnSnowLabs/spark-nlp
+TABLE II
+TAGS USED IN THE I2B2 2009 DATASET.
+Tag
+Meaning
+Example
+m
+medication
+Percocet
+do
+dosage
+3.2mg
+f
+frequency
+twice a day
+mo
+mode (/route of administration)
+Mode: “nm” (not “Tablet”)
+du
+duration
+10-day course
+r
+reasons
+Dizziness
+will be the input for the medication challenge [29]. These
+files are loosely organised. Many drugs are covered in the
+narrative text in addition to being listed by name in lists of
+pharmaceuticals. According to statistical analysis, it contains
+447 EMRs, with 252 annotated, which could be used to
+train and test the model. While the data from the i2b2-2012
+temporal relations challenge has similar content as the chal-
+lenge track of 2009 does, it has a different format, additional
+entity categories, and temporal relations between events. It
+consists of 760 files including 190 TXT files (texts), 190
+XML.EXTENT files (annotation and position in original text),
+XML files (annotation and text) and TLINK files (relations)
+[31]. The data sets are divided into 70%, 15% and 15% for
+training, validation, and testing, respectively on both these two
+i2b2 challenges. The entity tags used in the i2b2 challenge
+track 2009 and 2012 have some differences which are shown
+in Table II and Table III.
+The evaluation metrics we used are Precision, Recall, F1
+score, and Accuracy based on exact matching. Considering that
+there are multiple categories of labels, two different kinds of
+evaluation criteria are applied: 1) macro average evaluation,
+the function to compute precision, recall and F1-score, for each
+label and returns the average without considering the propor-
+tion for each label in the dataset; and 2) weighted average
+evaluation, the function to compute precision, recall and F1-
+score for each label, and returns the average considering the
+proportion for each label in the dataset.
+B. Model-I: BiLSTM-CRF for NER Task
+Combined with the DL model BiLSTM and graph model
+CRF, we carried out the NER task of electronic diseases using
+BiLSTM-CRF. The specific steps carried out are as follows:
+1) Apply the Glove or bag-of-word model to obtain words’
+semantic representation.
+2) Conduct sequence learning using the BiLSTM network,
+which effectively avoids the gradient disappearance and
+explosion of other DL models.
+3) Restrict the sequence relationship between tags by using
+CRFs.
+Using one-hot word embedding, the evaluation scores on
+2009 and 2012 data sets are shown in Table V and VI with
+the explanations of each tag in Table II and III. The model
+parameters for 2012 data is listed in Table IV. The model
+learning parameters for 2009 data is the same except for Max
+Epochs which is set to be 10, and the number of total trainable
+parameters is 1,292,188 instead of 506,138. The learning
+TABLE III
+TAGS USED IN THE I2B2 2012 DATASET.
+Tag
+Meaning
+Example
+CLINICAL DEPT
+clinical department
+emergency room
+EVIDENTIAL
+events that have an ‘evidential’ nature
+CT shows
+TEST
+clinical tests
+CT
+PROBLEM
+symptoms
+sickness
+TREATMENT
+medications, surgeries and other procedures
+Levaquin
+OCCURRENCE
+the default value for other event types
+He was readmitted for
+TABLE IV
+MODEL PARAMETERS OF BILSTM+CRF FOR THE 2012 DATASET
+parameter
+value
+DENSE EMBEDDING
+50
+LSTM UNITS
+50
+LSTM DROPOUT
+0.2
+DENSE UNITS
+100
+BATCH SIZE
+256
+MAX EPOCHS
+30
+LEARNING RATE
+0.0001
+Total Param
+506,138
+TABLE V
+NER EVALUATION ON THE 2009 DATASET WITH BILSTM-CRF.
+category
+Number / %
+Number
+precision
+recall
+f1-score
+support
+PADDING
+99.99
+1.00
+1.00
+111422
+B-do
+81.88
+70.52
+75.78
+519
+I-do
+84.09
+74.66
+79.10
+446
+B-m
+81.35
+66.51
+73.19
+1069
+I-m
+87.60
+70.42
+78.07
+622
+B-f
+83.50
+77.48
+80.37
+444
+I-f
+75.44
+61.43
+51.81
+166
+B-du
+61.11
+15.28
+24.44
+72
+I-du
+44.44
+17.78
+25.40
+135
+B-r
+39.80
+20.42
+26.99
+191
+I-r
+41.67
+10.64
+16.95
+141
+B-mo
+83.05
+78.61
+80.77
+374
+I-mo
+0.00
+0.00
+0.00
+20
+o
+95.87
+98.50
+97.17
+32429
+accuracy
+98.63
+148050
+macro avg
+68.56
+53.76
+58.55
+148050
+weighted avg
+98.46
+98.63
+98.50
+148050
+curves on Accuracy and Loss using 2009 and 2012 data are
+displayed in Figure 3 and 4, which have similar patterns.
+As mentioned, evaluation metrics were based on exact-
+matching criteria, and with this setting, the BiLSTM+CRF
+model achieves a 98.50 weighted average F1 and 58.55 of
+Macro average F1 on 2009 data. Apparently, combined with
+the evaluation scores of each subcategory, it can be seen that
+the amount of entities of each category varies significantly
+due to the uneven data distribution, which leads to the scores
+between entity categories varying wildly.
+As demonstrated in Table V, the BiLSTM+CRF model has
+better prediction performances on class “B-mo”, “B-f”, “I-do”,
+“I-m”, “B-do” in addition to “o” with 0.75+ F1. and “B-m” in
+the 2009 dataset. The classes that have under 0.50 F1 scores
+also have much fewer supporting labels, less than 200. Similar
+patterns can be observed in the experiments on 2012 data set,
+i.e. higher number of supporting labels produce high F1 scores.
+TABLE VI
+NER EVALUATION ON THE 2012 DATASET WITH BILSTM-CRF.
+category
+Number / %
+Number
+precision
+recall
+f1-score
+support
+PADDING
+1.00
+99.99
+99.99
+63867
+B-CLINICAL DEPT
+68.85
+32.81
+0.44
+128
+I-CLINICAL DEPT
+80.43
+54.95
+65.29
+202
+B-EVIDENTIAL
+1.00
+4.11
+7.89
+73
+I-EVIDENTIAL
+0.00
+0.00
+0.00
+6
+B-OCCURRENCE
+61.69
+44.39
+51.63
+410
+I-OCCURRENCE
+34.69
+7.46
+12.27
+228
+B-PROBLEM
+59.10
+56.64
+57.85
+602
+I-PROBLEM
+75.67
+61.92
+68.11
+864
+B-TREATMENT
+66.80
+68.31
+67.55
+486
+I-TREATMENT
+65.87
+67.63
+66.74
+448
+B-TEST
+58.48
+54.18
+56.25
+299
+I-TEST
+64.42
+63.23
+63.82
+378
+O
+87.82
+95.83
+91.65
+75.82
+accuracy
+97.11
+75573
+macro avg
+65.99
+50.82
+53.82
+75573
+weighted avg
+96.89
+97.11
+96.88
+75573
+However, there are some kind of exceptions, for instance,
+“I-r” and “B-du” have the supporting labels (141, 72) but
+their corresponding Macro Avg scores are (16.95, 24.44).
+In addition, the results based on precision, recall, and F1-
+score are very different. For most sub-classes, the model has
+higher precision than recall values which means it returns
+fewer results, but most of its predicted labels are correct
+when compared to the gold labels. Namely, the percentage
+of Negative labels is lower.
+In order to explore the impacts of different embedding
+inputs for the BiLSTM+CRF model, we trained the model with
+Glove (glove.6B.50d), word2vector, in addition to one-hot
+encoding, and the average and standard deviations of metrics
+are recorded. Table VII demonstrates the performance of each
+model on the same dataset using Macro average F1 score.
+Glove embedding achieved 72.48% of precision, 52.58% of re-
+call, and 60.86% of f1-score, respectively which increased by
+around 2% than one-hot embedding. For word2vec embedding,
+this model achieved exact 73.62% precision, 60.34% of recall,
+and 61.48% of f1-score achieving a further improvement of
+1.14% in precision, 7.76% in recall and 0.62% than Glove
+embedding.
+C. Model-II: CNN-BiLSTM for NER
+The Convolutional Neural Network (CNN) used in this
+approach draws inspiration from [32] hybrid model, which
+uses bidirectional LSTMs to learn both character and word-
+level information. As a result, our model employs word
+Fig. 3. BiLSTM-CRF Model Training Process on i2b2-2009 Dataset
+TABLE VII
+MACRO AVG RESULTS OF DIFFERENT EMBEDDINGS ON THE 2009 TEST
+SET USING BILSTM+CRF.
+embedding
+precision
+recall
+f1-score
+one-hot
+68.56
+53.76
+58.55
+Glove
+72.48
+52.58
+60.86
+word2vec
+73.62
+60.34
+61.48
+TABLE VIII
+MACRO AVG RESULTS OF EXPERIMENTS ON THE 2009 TEST DATASET
+WITH CNN-BILSTM.
+model
+precision
+recall
+f1-score
+CNN-BiLSTM
+75.67
+77.83
+78.17
+embeddings, in addition to other human-created word features
+and character-level information retrieved using a convolutional
+neural network. All of these features are sent into a BiLSTM
+for each word token. Following the tutorial by [33], we adapted
+the code from [32], to implement the CNN-BiLSTM model
+for NER task on the 2009 dataset.
+The idea of this model is to perform NER prediction by
+CONCAT of both character-level and word-level features and
+their combined input knowledge into BiLSTM learning. This
+enables the model to make better use of character-level fea-
+tures such as prefixes and suffixes, which can reduce the work
+of manual feature construction. The character-level features are
+obtained by a CNN model which has been approved as a great
+success in the NER task and POS tagging task [34], [35]. Per-
+character feature vectors, such as character embeddings and
+character kinds, are concatenated with a max layer to produce
+a new feature vector, which is then used to train a model for
+recognising words.
+The BiLSTM layer forms the core of the network and has
+the following three inputs: character-level patterns identified
+by CNN, word-level input from GloVe embeddings, and casing
+input (word case changes). One of the critical tasks here
+is feature fusion as mentioned by [32]. Additional features
+can be applied for example, words can be divided into six
+categories, including all uppercase letters, all lowercase letters,
+all numbers, some numbers, and so on. The model includes
+the following 7 layers of network structure and their functions.
+1) Character embedding layer, which maps the input of
+characters to 30 dimensional embedding.
+2) Dropout layer (0.5), which mitigates the effect of over-
+fitting
+3) 1D convolutional layer, which transforms the character
+dimension size into 1
+4) Word
+embedding
+layer,
+which
+maps
+the
+words
+into 50 dimensional embedding vectors with Glove
+(glove.6B.50d)
+5) Concatenation
+layer,
+which
+combines
+processed
+character-level, word-level and casing data into a vector
+of 80 dimensions
+6) BiLSTM layer: using the merged word vector sequence
+as input, the spatial semantic modelling of the preceding
+and subsequent text information was carried out, and
+the bidirectional semantic dependence of word vectors
+was captured. The high-level feature expression of the
+context information of medical records was further con-
+structed
+Fig. 4. BiLSTM-CRF Model Training Process on i2b2-2012 Dataset
+TABLE IX
+MODEL PARAMETERS OF CNN-BILSTM FOR THE I2B2 2009 DATA
+parameter
+value
+DENSE EMBEDDING
+30
+DROPOUT
+0.5
+WORDS EMBEDDING
+50
+DROPOUT RECURRENT
+0.25
+LSTM STATE SIZE
+200
+CONV SIZE
+3
+LEARNING RATE
+0.0105
+OPTIMIZER
+Nadam()
+7) Dense output layer, which applies softmax function for
+prediction.
+The model parameters of CNN-BiLSTM is displayed in
+Table IX with codes adapted from ‘github.com/kamalkraj’2.
+This CNN-BiLSTM model was set for training for 30 Epoch
+but convergence after 14 Epoch. Table VIII presents the
+performance macro average precision, recall and f1-score of
+this model which is better than the scores from the BiLSTM-
+CRF model. The most increase comes from recall score from
+52.58 to 77.83 using both Glove embedding, leading to the F1
+score increase from 60.86 to 78.17.
+D. Model-III: BERT-CNN for Temporal Relation Extraction
+Although the [CLS] tags in BERT output can achieve
+reasonable classification results, the rich semantic knowledge
+contained in BERT is not fully utilised. Therefore, in this
+work, inspired by [36], the CNN model is fused to expand
+2https://github.com/kamalkraj/Named-Entity-Recognition-with\protect\
+discretionary{\char\hyphenchar\font}{}{}Bidirectional-LSTM-CNNs
+TABLE X
+MODEL PARAMETERS OF BERT+CNN
+parameter
+value
+BERT MODEL
+Bio −BERTbase
+DROPOUT
+0.5
+EPOCH
+5
+DROPOUT
+0.1
+MAX SENTENCE LENGTH
+512
+HIDDEN SIZE
+768
+LEARNING RATE
+1e-05
+BERT learning. Code adapted from open source projects of
+UmlsBERT3 and “MedicalRelationExtraction”4, we trained
+this BERT+CNN model based on the parameters on the i2b2
+challenge 2012 dataset. The parameters in BERT-CNN model
+are set as in Table X and the model structure is presented
+in Figure 5. After the BERT model receives the processed
+text, the content of the EMRs text is represented by a vector
+through the two-layer Transformer mechanism of the BERT
+model. The model produces a vectorised representation of
+comprehensive semantic information fused by each token
+vector, sentence vector, and feature vector in the EMRs and
+then feeds the output of the model to the CNN layer. In this
+work, three different convolutional kernels are used to capture
+different feature information. After the fully connected layer
+is connected by word vector mapping, the CNN model further
+extracts the semantic information of the dialogue text.
+Data Sampling and Evaluation: In order to mitigate the
+influence of the training dataset imbalance of each sub-class,
+3https://github.com/gmichalo/UmlsBERT
+4https://github.com/chentao1999/MedicalRelationExtraction
+Fig. 5. The Architecture of BERT-CNN Model Re-Implemented
+TABLE XI
+TEMPORAL RE EVALUATION ON THE 2012 SAMPLED TRAINING DATASET
+USING BERT-CNN.
+category
+Number / %
+Number
+precision
+recall
+f1-score
+support
+AFTER
+96.23
+97.74
+96.86
+3000
+OVERLAP
+93.71
+95.85
+94.80
+3000
+BEFORE
+97.13
+93.24
+95.06
+3000
+accuracy
+95.60
+9000
+macro avg
+95.60
+95.60
+95.60
+9000
+weighted avg
+95.60
+95.60
+95.60
+9000
+we down-sampled the dataset to 3000 samples for each class
+(AFTER, OVERLAP and BEFORE). Table XI gives the result
+of the prediction on the training dataset. Table XII shows
+the result of BERTbase + CNN model performance for the
+relation extraction (RE) task on the i2b2-2012 test data. This
+model achieves a macro avg. 64.48% of precision, 67.17% of
+recall, and 65.03% of F1-score.
+As the prediction shows, with BERT-base as a word
+vector extraction or directly as a classification model, the
+BERT+CNN model can achieve a relatively good classification
+result, indicating that the pre-trained model BERT-base can
+extract the semantic information well of dialogue text. Al-
+though the BERT+CNN model has reasonable performance for
+relation extraction, over-fitting on the training dataset is still
+inevitable, especially for sub-class AFTER and OVERLAP,
+which show 61.71% and 26.37% lower than the prediction
+results on the training dataset, respectively. There is still the
+correlation between the number of test data samples and
+prediction precision which is that the more supporting samples,
+TABLE XII
+TEMPORAL RE EVALUATION ON THE 2012 TEST DATASET USING
+BERT-CNN
+category
+Number / %
+Number
+precision
+recall
+f1-score
+support
+AFTER
+34.52
+49.00
+40.52
+1122
+OVERLAP
+67.34
+77.23
+71.94
+4078
+BEFORE
+91.62
+75.28
+82.64
+6000
+accuracy
+73.32
+11200
+macro avg
+64.48
+67.17
+65.03
+11200
+weighted avg
+77.03
+73.34
+74.47
+11200
+the better the prediction performance, which is similar to our
+NER findings.
+E. Post-Processing
+In order to apply the prediction results of the NER task for
+medication recognition and the RE task for temporal relation
+extraction between medication event and date on medication
+usage status, we design a set of rules that determine whether a
+medication is in use. We take the date of Admission and Dis-
+charge as a time-frame and take the relation between the time-
+frame and medication into consideration. The dataset texts
+come from de-identified discharge summaries (HOSPITAL
+COURSE), which give the treatment information of patients
+during hospital time. The temporal relation on medication is
+categorised into several situations for ‘in use’ and ‘not’ as
+below.
+1) If the relation between Admission Date and a medication
+AFTER and the relation between Discharge Date and
+the medication is BEFORE or OVERLAP, it means the
+medication is in use.
+2) If the relation between Admission Date and a medication
+OVERLAP and the relation between Discharge Date and
+the medication is OVERLAP, it means the medication
+is in use.
+3) If the relation between a date except for Admission and
+Discharge Date which is between them and a medication
+is OVERLAP and the relation between Discharge Date
+and the medication is BEFORE or OVERLAP, it means
+the medication is in use.
+4) Otherwise it is not.
+With this set of rules, we manually checked the classifi-
+cation results, showing that nearly three out of ten can be
+classified correctly.
+IV. RELATED WORK
+NER and RE belong to the information extraction (IE) task,
+which has been developed using different methods, from rule-
+based ones, to machine learning and deep learning models. The
+rule-based methods require expertise in designing hand-crafted
+rules suitable for specific tasks and domains. While these
+methods worked out in some situations, it is often difficult
+for other researchers to adopt the existing rules into a new
+experiment [37]. Remarkable work in this category includes
+[38]–[40] on temporal expression extractions, and [30], [41]
+on medical terminology mining.
+Earlier stage ML models on TLINKS detection and clinical
+events and concepts extraction include [42]–[45] where CNNs
+and RNNs were explored. The combined model of BiLSTM-
+CRF was also investigated by some existing work reported
+in [46]–[48] and in language-specific experiments such as
+Chinese EMRs by [37]. Similar structures including BiLSTM-
+CNN-CRF and BiLSTM-CRF were investigated in general
+domain NER and POS tagging by [49], [50].
+Based on these previous findings, our work takes one step
+further and investigated various combinations of these state-
+of-the-art neural learning models on clinical domain NER and
+Temporal modelling.
+V. CONCLUSIONS AND FUTURE WORK
+We carried out empirical study on medication extraction
+and temporal relation classification using three hybrid machine
+learning models BiLSTM-CRF, CNN-BiLSTM, and BERT-
+CNN. By combining these two tasks and a set of rules
+we designed, we aim to generate a simple structured output
+indicating if certain medications are in use during the ex-
+tracted timeframe. While the experimental work demonstrated
+promising results, we plan to further improve the model perfor-
+mances from different aspects, which include the integration
+of domain-specific pertained BERT model such as Med-BERT
+[51], more text features, data-set augmentation especially
+for low frequency labels e.g. using synthetic data [52], and
+system optimisation using different learning structures. We
+also investigate the prompt-based engineering based on LLMs
+for MedTem2.0 project [53].
+LIMITATIONS
+The main sources of our experimental data are the i2b2
+Challenge 2009 and 2012, which are considerable corpora
+leading to a lack of computation resources to do more experi-
+ments for fine-tuning the best model settings and parameters.
+Moreover, the proportion of data (those annotated) on the re-
+lationship between medications and their corresponding dates
+is inadequate, which can not provide sufficient information
+for MEDICATION-DATE relation extraction. Therefore, the
+performance of information extraction generated by the rules
+created for patients’ medication usage status falls short of ideal
+standards, which requires further improvement.
+ETHICAL STATEMENT
+There are no ethical concerns in this work since the data sets
+we used from n2c2 challenges are anonymised and ethically
+approved by the shared task organisers.
+ACKNOWLEDGEMENTS
+LH and GN are grateful to grant support EP/V047949/1
+“Integrating hospital outpatient letters into the healthcare data
+space” (funder: UKRI/EPSRC).
+REFERENCES
+[1] K.-Y. Su, i. Tsujii, J.-H. Lee, and O. Yee Kwong, “Lecture Notes in
+Artificial Intelligence 3248 Subseries of Lecture Notes in Computer
+Science,” Tech. Rep., 2004.
+[2] L. Han, I. Sorokina, S. Gladkoff, G. Nenadic et al., “Investigating
+massive multilingual pre-trained machine translation models for clinical
+domain via transfer learning,” in Proceedings of the 5th Clinical Natural
+Language Processing Workshop, 2023, pp. 31–40.
+[3] Y. Zhou, Y. Yan, R. Han, J. H. Caufield, K.-W. Chang, Y. Sun, P. Ping,
+and W. Wang, “Clinical temporal relation extraction with probabilistic
+soft logic regularization and global inference,” in Proceedings of the
+AAAI Conference on Artificial Intelligence, vol. 35, no. 16, 2021, pp.
+14 647–14 655.
+[4] M. Fredriksen, A. A. Dahl, E. W. Martinsen, O. Klungsøyr, J. Haavik,
+and D. E. Peleikis, “Effectiveness of one-year pharmacological treatment
+of adult attention-deficit/hyperactivity disorder (ADHD): An open-label
+prospective study of time in treatment, dose, side-effects and comorbid-
+ity,” European Neuropsychopharmacology, vol. 24, no. 12, pp. 1873–
+1884, 12 2014.
+[5] H. Alrdahi, L. Han, H. ˇSuvalov, and G. Nenadic, “Medmine: Examining
+pre-trained language models on medication mining,” arXiv preprint
+arXiv:2308.03629, 2023.
+[6] V. Kocaman and D. Talby, “Spark nlp: natural language understanding
+at scale,” Software Impacts, vol. 8, p. 100058, 2021.
+[7] B. K. Cunningham H, Maynard D, “GATE: an Architecture for Devel-
+opment of Robust HLT Applicas,” no. 2, 2002.
+[8] G. K. Savova, J. J. Masanz, P. V. Ogren, J. Zheng, S. Sohn, K. C. Kipper-
+Schuler, and C. G. Chute, “Mayo clinical text analysis and knowledge
+extraction system (ctakes): architecture, component evaluation and ap-
+plications,” Journal of the American Medical Informatics Association,
+vol. 17, no. 5, pp. 507–513, 2010.
+[9] D.-H. Pham and A.-C. Le, “Exploiting multiple word embeddings
+and one-hot character vectors for aspect-based sentiment analysis,”
+International Journal of Approximate Reasoning, vol. 103, pp. 1–10,
+2018.
+[10] Y. Shao, S. Taylor, N. Marshall, C. Morioka, and Q. Zeng-Treitler,
+“Clinical text classification with word embedding features vs. bag-of-
+words features,” in 2018 IEEE International Conference on Big Data
+(Big Data).
+IEEE, 2018, pp. 2874–2878.
+[11] J. Pennington, R. Socher, and C. D. Manning, “Glove: Global vectors
+for word representation,” in Proceedings of the 2014 conference on
+empirical methods in natural language processing (EMNLP), 2014, pp.
+1532–1543.
+[12] J. A. Bullinaria and J. P. Levy, “Extracting semantic representations
+from word co-occurrence statistics: A computational study,” Behavior
+research methods, vol. 39, no. 3, pp. 510–526, 2007.
+[13] E. Arisoy, A. Sethy, B. Ramabhadran, and S. Chen, “Bidirectional recur-
+rent neural network language models for automatic speech recognition,”
+in 2015 IEEE International Conference on Acoustics, Speech and Signal
+Processing (ICASSP).
+IEEE, 2015, pp. 5421–5425.
+[14] Y. Tang, Y. Huang, Z. Wu, H. Meng, M. Xu, and L. Cai, “Question de-
+tection from acoustic features using recurrent neural network with gated
+recurrent unit,” in 2016 IEEE International Conference on Acoustics,
+Speech and Signal Processing (ICASSP).
+IEEE, 2016, pp. 6125–6129.
+[15] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural
+computation, vol. 9, no. 8, pp. 1735–1780, 1997.
+[16] S. Zhang, D. Zheng, X. Hu, and M. Yang, “Bidirectional long short-
+term memory networks for relation classification,” in Proceedings of the
+29th Pacific Asia conference on language, information and computation,
+2015, pp. 73–78.
+[17] P. Zhou, W. Shi, J. Tian, Z. Qi, B. Li, H. Hao, and B. Xu, “Attention-
+based bidirectional long short-term memory networks for relation clas-
+sification,” in Proceedings of the 54th annual meeting of the association
+for computational linguistics (volume 2: Short papers), 2016, pp. 207–
+212.
+[18] J. Lafferty, A. McCallum, and F. C. Pereira, “Conditional random fields:
+Probabilistic models for segmenting and labeling sequence data,” 2001.
+[19] A. L. F. Han, D. F. Wong, and L. S. Chao, “Chinese named
+entity recognition with conditional random fields in the light of
+chinese
+characteristics,”
+in
+Language
+Processing
+and
+Intelligent
+Information Systems, M. A. Kłopotek, J. Koronacki, M. Marciniak,
+A. Mykowiecka, and S. T. Wierzcho´n, Eds.
+Berlin, Heidelberg:
+Springer Berlin Heidelberg, 2013, pp. 57–68. [Online]. Available:
+https://doi.org/10.1007/978-3-642-38634-3 8
+[20] A. L.-F. Han, X. Zeng, D. F. Wong, and L. S. Chao, “Chinese named
+entity recognition with graph-based semi-supervised learning model,”
+in Proceedings of the Eighth SIGHAN Workshop on Chinese Language
+Processing, 2015, pp. 15–20.
+[21] A. Maldonado, L. Han, E. Moreau, A. Alsulaimani, K. D. Chowdhury,
+C. Vogel, and Q. Liu, “Detection of verbal multi-word expressions
+via conditional random fields with syntactic dependency features
+and semantic re-ranking,” in Proceedings of the 13th Workshop on
+Multiword Expressions (MWE 2017).
+Valencia, Spain: Association
+for Computational Linguistics, Apr. 2017, pp. 114–120. [Online].
+Available: https://aclanthology.org/W17-1715
+[22] E. Moreau, A. Alsulaimani, A. Maldonado, L. Han, C. Vogel, and
+K. Dutta Chowdhury, “Semantic reranking of CRF label sequences for
+verbal multiword expression identification,” in Multiword expressions at
+length and in depth: Extended papers from the MWE 2017 workshop.
+Language Science Press, 2018, pp. 177 – 207. [Online]. Available:
+https://hal.archives-ouvertes.fr/hal-01930987
+[23] Y. Wu, L. Han, V. Antonini, and G. Nenadic, “On cross-domain
+pre-trained language models for clinical text mining: How do they
+perform on data-constrained fine-tuning?” in arXiv:2210.12770 [cs.CL],
+2022. [Online]. Available: https://doi.org/10.48550/arXiv.2210.12770
+[24] S. Albawi, T. A. Mohammed, and S. Al-Zawi, “Understanding of a
+convolutional neural network,” in 2017 international conference on
+engineering and technology (ICET).
+Ieee, 2017, pp. 1–6.
+[25] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning. MIT Press,
+2016, http://www.deeplearningbook.org.
+[26] J. Devlin, M.-W. Chang, K. Lee, and K. Toutanova, “Bert: Pre-training
+of deep bidirectional transformers for language understanding,” arXiv
+preprint arXiv:1810.04805, 2018.
+[27] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+L. Kaiser, and I. Polosukhin, “Attention is all you need,” in Conference
+on Neural Information Processing System, 2017, pp. 6000–6010.
+[28] L. A. Ramshaw and M. P. Marcus, “Text chunking using transformation-
+based learning,” in Natural language processing using very large cor-
+pora.
+Springer, 1999, pp. 157–176.
+[29] W.
+Sun,
+A.
+Rumshisky,
+O.
+Uzuner,
+P.
+Szolovits,
+and
+J.
+Pustejovsky,
+“The
+2012
+i2b2
+temporal
+relations
+challenge
+annotation guidelines,” Manuscript, Available at https://www. i2b2.
+org/NLP/TemporalRelations/Call. php, 2012.
+[30] Y.-K. Lin, H. Chen, and R. A. Brown, “MedTime: A temporal infor-
+mation extraction system for clinical narratives,” Journal of biomedical
+informatics, vol. 46, no. 6, pp. S20–S28, 2013.
+[31] H. Gurulingappa, A. M. Rajput, A. Roberts, J. Fluck, M. Hofmann-
+Apitius, and L. Toldo, “Development of a benchmark corpus to support
+the automatic extraction of drug-related adverse effects from medical
+case reports,” Journal of biomedical informatics, vol. 45, no. 5, pp.
+885–892, 2012.
+[32] J. P. Chiu and E. Nichols, “Named entity recognition with bidirectional
+lstm-cnns,” Transactions of the association for computational linguistics,
+vol. 4, pp. 357–370, 2016.
+[33] M. Hofer, “Deep learning for named entity recognition #2: Implementing
+the state-of-the-art bidirectional lstm + cnn model for conll 2003,”
+https://towardsdatascience.com/deep-learning-for-named-entity-\
+recognition-2-implementing-the-state-\
+of-the-art-bidirectional-lstm-4603491087f1/, 2018.
+[34] S. Chotirat and P. Meesad, “Part-of-speech tagging enhancement to
+natural language processing for thai wh-question classification with deep
+learning,” Heliyon, vol. 7, no. 10, p. e08216, 2021.
+[35] M. Labeau, K. L¨oser, and A. Allauzen, “Non-lexical neural architecture
+for fine-grained pos tagging,” in Proceedings of the 2015 Conference on
+Empirical Methods in Natural Language Processing, 2015, pp. 232–237.
+[36] G. Michalopoulos, Y. Wang, H. Kaka, H. Chen, and A. Wong, “Umls-
+bert: Clinical domain knowledge augmentation of contextual embed-
+dings using the unified medical language system metathesaurus,” arXiv
+preprint arXiv:2010.10391, 2020.
+[37] B. Ji, R. Liu, S. Li, J. Yu, Q. Wu, Y. Tan, and J. Wu, “A hybrid approach
+for named entity recognition in chinese electronic medical record,” BMC
+medical informatics and decision making, vol. 19, no. 2, pp. 149–158,
+2019.
+[38] R. M. Reeves, F. R. Ong, M. E. Matheny, J. C. Denny, D. Aronsky,
+G. T. Gobbel, D. Montella, T. Speroff, and S. H. Brown, “Detecting
+temporal expressions in medical narratives,” International journal of
+medical informatics (Shannon, Ireland), vol. 82, no. 2, pp. 118–127,
+2012.
+[39] J. Str¨otgen and M. Gertz, “Multilingual and cross-domain temporal
+tagging,” Language Resources and Evaluation, vol. 47, no. 2, pp. 269–
+298, 6 2013.
+[40] T. Hao, X. Pan, Z. Gu, Y. Qu, and H. Weng, “A pattern learning-
+based method for temporal expression extraction and normalization from
+multi-lingual heterogeneous clinical texts,” BMC medical informatics
+and decision making, vol. 18, no. Suppl 1, pp. 22–22, 2018.
+[41] K. Roberts, B. Rink, and S. M. Harabagiu, “A flexible framework
+for recognizing events, temporal expressions, and temporal relations in
+clinical text,” Journal of the American Medical Informatics Association
+: JAMIA, vol. 20, no. 5, pp. 867–875, 2013.
+[42] Y.-C. Chang, H.-J. Dai, J. C.-Y. Wu, J.-M. Chen, R. T.-H. Tsai, and
+W.-L. Hsu, “TEMPTING system: A hybrid method of rule and machine
+learning for temporal relation extraction in patient discharge summaries,”
+Journal of biomedical informatics, vol. 46, no. 6, pp. S54–S62, 2013.
+[43] Y. Xu, Y. Wang, T. Liu, J. Tsujii, and E. I.-C. Chang, “An end-to-end
+system to identify temporal relation in discharge summaries: 2012 i2b2
+challenge,” Journal of the American Medical Informatics Association :
+JAMIA, vol. 20, no. 5, pp. 849–858, 2013.
+[44] Y. Wu, M. Jiang, J. Lei, and H. Xu, “Named entity recognition in chinese
+clinical text using deep neural network,” Studies in health technology
+and informatics, vol. 216, p. 624, 2015.
+[45] Y. Wu, M. Jiang, J. Xu, D. Zhi, and H. Xu, “Clinical named entity
+recognition using deep learning models,” in AMIA Annual Symposium
+Proceedings, vol. 2017.
+American Medical Informatics Association,
+2017, p. 1812.
+[46] Y.-M. Kim and T.-H. Lee, “Korean clinical entity recognition from
+diagnosis text using bert,” BMC Medical Informatics and Decision
+Making, vol. 20, no. 7, pp. 1–9, 2020.
+[47] J. Lee, W. Yoon, S. Kim, D. Kim, S. Kim, C. H. So, and J. Kang,
+“Biobert: a pre-trained biomedical language representation model for
+biomedical text mining,” Bioinformatics, vol. 36, no. 4, pp. 1234–1240,
+2020.
+[48] S. Jiang, S. Zhao, K. Hou, Y. Liu, L. Zhang et al., “A bert-bilstm-crf
+model for chinese electronic medical records named entity recognition,”
+in 2019 12th International Conference on Intelligent Computation
+Technology and Automation (ICICTA).
+IEEE, 2019, pp. 166–169.
+[49] X. Ma and E. Hovy, “End-to-end sequence labeling via bi-directional
+LSTM-CNNs-CRF,” in Proceedings of the 54th Annual Meeting of the
+Association for Computational Linguistics (Volume 1: Long Papers).
+Berlin, Germany: Association for Computational Linguistics, Aug. 2016,
+pp. 1064–1074. [Online]. Available: https://aclanthology.org/P16-1101
+[50] G. Lample, M. Ballesteros, S. Subramanian, K. Kawakami, and C. Dyer,
+“Neural architectures for named entity recognition,” in Proceedings of
+the 2016 Conference of the North American Chapter of the Association
+for Computational Linguistics: Human Language Technologies.
+San
+Diego, California: Association for Computational Linguistics, Jun. 2016,
+pp. 260–270. [Online]. Available: https://aclanthology.org/N16-1030
+[51] L. Rasmy, Y. Xiang, Z. Xie, C. Tao, and D. Zhi, “Med-bert: pretrained
+contextualized embeddings on large-scale structured electronic health
+records for disease prediction,” NPJ digital medicine, vol. 4, no. 1, pp.
+1–13, 2021.
+[52] S. Belkadi, N. Micheletti, L. Han, W. Del-Pinto, and G. Nenadic,
+“Conditional transformer generates faithful medical instructions,” open-
+review.net, 2023.
+[53] Y. Cui, L. Han, and G. Nenadic, “Medtem2. 0: Prompt-based tem-
+poral classification of treatment events from discharge summaries,”
+in Proceedings of the 61st Annual Meeting of the Association for
+Computational Linguistics (Volume 4: Student Research Workshop),
+2023, pp. 160–183.

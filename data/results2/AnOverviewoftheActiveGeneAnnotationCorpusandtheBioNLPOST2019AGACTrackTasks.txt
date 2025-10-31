@@ -1,0 +1,2034 @@
+Proceedings of the 5th Workshop on BioNLP Open Shared Tasks, pages 62–71
+Hong Kong, China, November 4, 2019. c⃝2019 Association for Computational Linguistics
+62
+1
+000
+001
+002
+003
+004
+005
+006
+007
+008
+009
+010
+011
+012
+013
+014
+015
+016
+017
+018
+019
+020
+021
+022
+023
+024
+025
+026
+027
+028
+029
+030
+031
+032
+033
+034
+035
+036
+037
+038
+039
+040
+041
+042
+043
+044
+045
+046
+047
+048
+049
+050
+051
+052
+053
+054
+055
+056
+057
+058
+059
+060
+061
+062
+063
+064
+065
+066
+067
+068
+069
+070
+071
+072
+073
+074
+075
+076
+077
+078
+079
+080
+081
+082
+083
+084
+085
+086
+087
+088
+089
+090
+091
+092
+093
+094
+095
+096
+097
+098
+099
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+An Overview of the Active Gene Annotation Corpus and the BioNLP OST
+2019 AGAC Track Tasks
+Yuxing Wang, Kaiyin Zhou, Mina Gachloo and Jingbo Xia*
+Hubei Key Lab of Agricultural Bioinformatics, College of Informatics,
+Huazhong Agricultural University, 430070, Wuhan, China
+Mailto: xiajingbo.math@gmail.com
+Abstract
+The active gene annotation corpus (AGAC)
+was developed to support knowledge discov-
+ery for drug repurposing.
+The AGAC track
+of the BioNLP Open Shared Tasks 2019 was
+organized, to facilitate cross-disciplinary col-
+laboration across BioNLP and Pharmacoin-
+formatics communities, for drug repurposing.
+The AGAC track consists of three subtasks: 1)
+named entity recognition, 2) thematic relation
+extraction, and 3) loss of function (LOF) / gain
+of function (GOF) topic classiﬁcation.
+The
+AGAC track was participated by ﬁve teams, of
+which the performance is compared and ana-
+lyzed. The results revealed a substantial room
+for improvement in the design of the task,
+which we analyzed in terms of “imbalanced
+data”, “selective annotation” and “latent topic
+annotation”.
+Keywords: corpus annotation, shared task,
+gene mutation, drug repurposing
+1
+Introduction
+Biomedical
+natural
+language
+processing
+(BioNLP) has long been recognized as effec-
+tive method to accelerate drug-related knowledge
+discovery (Vazquez et al., 2011; Gachloo et al.,
+2019). Particularly, PubMed is regarded as a main
+source for knowledge discovery as it stored a vast
+amount of reports on scientiﬁc discovery, and the
+size keeps constantly growing (Hunter and Cohen,
+2006; Cohen et al., 2016). Various corpora used
+texts from PubMed.
+Examples include GENIA
+(Kim et al., 2003), CRAFT (Cohen et al., 2017),
+and BioCreative task corpora (Li et al., 2016), to
+name just a few.
+The growing interest in developing corpus an-
+notation also has led to the development of pub-
+lic annotation platform in the BioNLP commu-
+nity. An example of recent progress is PubAnno-
+tation (Kim and Wang, 2012; Kim et al., 2019),
+which offers a versatile platform for corpus con-
+struction, annotation, sharing the data, and offer-
+ing them as open shared tasks (https://2019.
+bionlp-ost.org/tasks).
+In the context of drug-related knowledge dis-
+covery, various corpora were developed. Exam-
+ples include annotated corpora for adverse drug
+reactions (ADR) (Roberts et al., 2017; Demner-
+Fushman et al., 2018; Karimi et al., 2015; Ginn
+et al., 2014; Gurulingappa et al., 2012), and those
+for drug-drug interactions (DDI) (Herrero-Zazo
+et al., 2013). However, as far as the authors know,
+there has been no work of corpus annotation (ex-
+cept AGAC-related ones) for drug repurposing.
+Drug repurposing (AKA drug repositioning) is to
+ﬁnd new indications of approved drugs, which is
+now recognized as an important mean for investi-
+gating novel drug efﬁciency in the pharmaceutical
+industry.
+This paper presents the Active Gene Annota-
+tion Corpus (AGAC) corpus and a shared task (the
+AGAC track of BioNLP Open Shared Tasks 2019)
+based on it. The design of AGAC is highly mo-
+tivated by the LOF-agonist/GOF-antagonist hy-
+pothesis proposed by Wang and Zhang (Wang and
+Zhang, 2013), which states:
+For a given disease caused by driven
+gene with Loss of function (LOF) or
+Gain of function (GOF), an targeted an-
+tagonist/agonist is a candidate drug.
+The hypothesis was well supported by experi-
+ments, which encouraged large scale automatic
+knowledge curation.
+Actually, the hypothesis represented the ideas of
+tracking the phenotypic information of gene and
+it shared the similar motivation of phenome-wide
+association studies (PheWAS) (Rastegar-Mojarad
+et al., 2015). In PheWAS, the international clas-
+siﬁcation of diseases (ICD) codes was assigned as
+63
+2
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+141
+142
+143
+144
+145
+146
+147
+148
+149
+150
+151
+152
+153
+154
+155
+156
+157
+158
+159
+160
+161
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+183
+184
+185
+186
+187
+188
+189
+190
+191
+192
+193
+194
+195
+196
+197
+198
+199
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+the form of the phenotype to candidate single nu-
+cleotide polymorphisms (SNPs) so as to investi-
+gate the relevance of phenotypes and gene muta-
+tion.
+AGAC is a corpus annotated by human experts,
+with an aim at capturing function changes of mu-
+tated genes in a pathogenic context. The design
+of the corpus and the guidelines were published in
+2017 (Wang et al., 2018), and a case study of us-
+ing such an annotated corpus for drug repurposing
+was successfully performed in 2019, unveiling po-
+tential associations of variations with a wide spec-
+trum of human diseases (Zhou et al., 2019). Since
+then, the whole annotation work took 20 months,
+with involvement of four annotators.
+Using the corpus the AGAC track of BioNLP
+Open Shared Tasks 2019 was organized, which
+was participated by 5 teams.
+In this paper,
+both the AGAC corpus and AGAC track are
+introduced, and the performance of the par-
+ticipants are presented.
+The full information
+of the AGAC track is available at the web-
+site, https://sites.google.com/view/
+bionlp-ost19-agac-track.
+2
+The AGAC corpus and shared task
+2.1
+Corpus preparation
+We collected abstracts by Mesh terms “Mu-
+tation/physiopathology” and “Genetic Disease”.
+AGAC is annotated for eleven types of named en-
+tities, which categorized into bio-concepts, regula-
+tion types, and other entities, and for two types of
+thematic relations between them. All the types of
+named entities and thematic relations are deﬁned
+in the AGAC ontology (see Figure 1).
+While the full description of the named entity
+types can be found in the AGAC guideline book
+(Wang et al., 2018), brieﬂy speaking, it is designed
+to include the entities which are relevant to genetic
+variations and forthcoming phenotype changes at
+molecular and cellular levels, with a focus on trac-
+ing the biological semantics of LOF and GOF mu-
+tations.
+Since AGAC aims to annotate mutations and
+the subsequent bio-processes caused by the mu-
+tations, the two thematic role types, themeOf
+and causeOf, of which the original use are in-
+troduced by the GENIA event annotation (Kim
+et al., 2008), are adopted to represent relations be-
+tween AGAC entities. Note that here the use of
+the themeOf and causeOf relations are a little
+bit different from their use in linguistic analysis,
+in the sense that they are not conﬁned to be used
+only around verbs. In AGAC, the thematic rela-
+tions may be used to connect two named entities,
+both in noun forms. Below is the semantics of the
+two thematic relations:
+• ThemeOf: a theme of an event (or a regula-
+tory named entities) is the object which un-
+dergoes a change of its state due to the event.
+• CauseOf: a cause of an event (or a regula-
+tory named entities) is the object which leads
+the event to happen.
+In order to help understanding of the semantics
+of the AGAC entities, they are mapped to corre-
+sponding MeSH terms (Lipscomb, 2000) when-
+ever possible (see Figure 1).
+In addition to the annotations for named entities
+and relations, each abstract in AGAC is annotated
+with a statement of a LOF/GOF-classiﬁed gene-
+disease association. The statement is expressed by
+a triple: a gene, the type of function change (GOF
+or LOF), and a disease. For example, if an abstract
+reports an association between a mutation of SHP-
+2, which causes a GOF type of function change,
+and leukemia, the abstract is annotated with the
+triple, SHP-2; GOF; leukemia. Note that it is the
+most straightforward form of knowledge piece to
+apply the LOF-agonist/GOF-antagonist hypothe-
+sis to discovery of candidate chemicals for dis-
+eases, which is the primary application scenario
+of AGAC.
+2.2
+Statistics and characteristics of AGAC
+corpus
+AGAC corpus is annotated by four annotators:
+a main annotator and three fellow annotators.
+To evaluate the quality of the annotations, inter-
+annotator agreement (IAA) was measured in an
+asymmetric way: the performance of the main an-
+notator was assumed as the “oracle”, to which the
+performance of each fellow annotator was com-
+pared. The IAAs of the three annotators were 0.68,
+0.78 and 0.70, respectively, in F-score.
+To serve as the training and test data sets of the
+AGAC shared task, the corpus was randomly di-
+vided into halves: 250 abstracts for each of the
+training and the test data sets. The basic statis-
+tics of the abstracts, sentences, and annotations are
+shown in Table 1.
+64
+3
+200
+201
+202
+203
+204
+205
+206
+207
+208
+209
+210
+211
+212
+213
+214
+215
+216
+217
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+233
+234
+235
+236
+237
+238
+239
+240
+241
+242
+243
+244
+245
+246
+247
+248
+249
+250
+251
+252
+253
+254
+255
+256
+257
+258
+259
+260
+261
+262
+263
+264
+265
+266
+267
+268
+269
+270
+271
+272
+273
+274
+275
+276
+277
+278
+279
+280
+281
+282
+283
+284
+285
+286
+287
+288
+289
+290
+291
+292
+293
+294
+295
+296
+297
+298
+299
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Figure 1: AGAC ontology.
+Table 1: Statistics of annotations in total, training and test sets
+Total
+Training set
+Test set
+# of Abstracts
+500
+250
+250
+# of Sentences
+5,080
+2,534
+2,546
+# of Named entities
+5,741
+3,317
+2,424
+Bio-concept Named Entities
+2,274
+1,428
+846
+Var (Variation)
+1,304
+735
+569
+MPA (Molecular Physiological Activity)
+618
+418
+200
+Interaction
+35
+28
+7
+Pathway
+38
+24
+14
+CPA (Cell Physiological Activity)
+279
+223
+56
+Regulatory Named Entities
+1,514
+905
+609
+Regulation
+613
+215
+398
+Positive Regulation
+406
+323
+83
+Negative Regulation
+495
+367
+128
+Other Entities
+1,953
+984
+969
+Disease
+751
+336
+415
+Gene
+1,004
+529
+475
+Protein
+150
+90
+60
+Enzyme
+48
+29
+19
+# of Thematic roles
+4,677
+2,729
+1,948
+ThemeOf
+2,986
+1,698
+1,288
+ThemeOf (Intra/inter sentential)
+(2910/76)
+(1657/41)
+(1253/35)
+CauseOf
+1,691
+1,031
+660
+CauseOf (Intra/inter sentential)
+(1581/110)
+(961/70)
+(620/40)
+65
+4
+300
+301
+302
+303
+304
+305
+306
+307
+308
+309
+310
+311
+312
+313
+314
+315
+316
+317
+318
+319
+320
+321
+322
+323
+324
+325
+326
+327
+328
+329
+330
+331
+332
+333
+334
+335
+336
+337
+338
+339
+340
+341
+342
+343
+344
+345
+346
+347
+348
+349
+350
+351
+352
+353
+354
+355
+356
+357
+358
+359
+360
+361
+362
+363
+364
+365
+366
+367
+368
+369
+370
+371
+372
+373
+374
+375
+376
+377
+378
+379
+380
+381
+382
+383
+384
+385
+386
+387
+388
+389
+390
+391
+392
+393
+394
+395
+396
+397
+398
+399
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+The AGAC corpus is characterized in three
+terms: imbalanced data, selective annotation, and
+latent topic annotation.
+i) Imbalanced Data: The statistics in Table 1
+clearly shows that the entity distribution is
+imbalanced over the entity types, e.g. 1,304
+Var vs. 35 Interaction annotations, and
+across the training and test data sets, e.g.,
+481 vs. 200 MPA annotations in the training
+and test data sets, respectively. In the mean
+time, the distribution of several named en-
+tities shows imbalance between training set
+and test set.
+For instance, there are 418
+MPA in training set, while the amount is 200
+in test set.
+Similarly, the amount ratio of
+Interaction and Pathway is 28:7 and
+24:14. As in the thematic roles, the amount
+of CauseOf in training set is mostly doubled
+than that in test set.
+ii) Selective Annotation:
+According to the
+AGAC guidelines (Wang et al., 2018), anno-
+tations are made only to the sentences which
+carry sufﬁcient information to mine a gene-
+disease association with LOF/GOF speciﬁ-
+cation, i.e., a sentence is annotated only if
+it contains speciﬁc gene, mutation, disease
+mentions. In other words, the named entities
+appearing in a sentence are not annotated if
+the sentence misses any of the required enti-
+ties. Later, it has turned out to be a tricky fea-
+ture, which makes the NER task based on the
+corpus a much more complicated one com-
+pared to typical NER tasks (See Section 5).
+iii) Latent Topic Annotation: The annotation
+of each abstract with a LOF/GOF-classiﬁed
+gene-disease association may be regarded as
+a kind of latent topic annotation, in the sense
+that the LOF/GOF context of a gene-disease
+association may not be directly visible from
+the text.
+This feature makes the AGAC
+annotation unique: the annotation is really
+geared toward knowledge discovery for drug
+repurposing based on the LOF-agonist/GOF-
+antagonist hypothesis.
+Note that the ago-
+nist or antagonist information of a chem-
+ical is available in various databases like
+Drugbank (Wishart et al., 2017) or Ther-
+apeutic Target Database (TTD) (Li et al.,
+2017), which means, if mining of LOF/GOF-
+classiﬁed gene-disease association is possible
+in a large scale, mining of drug candidates for
+diseases also will be possible in a large scale.
+2.3
+Task Deﬁnition of AGAC Track
+AGAC track consists of three tasks:
+Task 1:
+named entity recognition, Task 2: thematic re-
+lation extraction, and Task 3: mutation-disease
+knowledge discovery. While participants were al-
+lowed to choose the tasks they would participate,
+due to the dependency between the tasks, it was
+expected that participating all the three tasks might
+maximize the chance of high performance: Task 2
+requires the result of Task 1, and Task 3 may be
+beneﬁted from the result of Task 1 and 3. Below
+is the details of the three tasks:
+Task 1.
+NER:
+To recognize named entities
+appearing in given texts, and to assign them
+their entity class,
+based on the AGAC on-
+tology.
+Figure 2 shows an example, where
+four spans, “protein”, “Truncating”, “DNMs”,
+and “SHROOM3” are annotated as Protein,
+Negative Regulation, Variation, and
+Gene, respectively. The participants are required
+to produce the result in the PubAnnotation JSON
+format.
+Note that while compound nouns are
+Figure 2: Annotation example for Task 1.
+common, there is no discontinuous or overlapping
+spans annotated as named entities, in AGAC.
+Task 2.
+Thematic relation identiﬁcation:
+To identify the thematic relation, ThemeOf,
+CauseOf, between named entities.
+Figure 3
+shows an example, where two ThemeOf rela-
+tions, Protein →Negative regulation
+and Gene →Variation, and one CauseOf
+relation,
+Negative regulation
+→
+Variation, are annotated.
+Note that the
+relation annotations are added on top of the NER
+annotations. Note also that relations may be intra-
+or inter-sentential, and in AGAC, 3.98% of the
+relations are inter-sentential.
+Task 3. Mutation-disease knowledge discovery:
+To extract the triples of a gene, a function change,
+66
+5
+400
+401
+402
+403
+404
+405
+406
+407
+408
+409
+410
+411
+412
+413
+414
+415
+416
+417
+418
+419
+420
+421
+422
+423
+424
+425
+426
+427
+428
+429
+430
+431
+432
+433
+434
+435
+436
+437
+438
+439
+440
+441
+442
+443
+444
+445
+446
+447
+448
+449
+450
+451
+452
+453
+454
+455
+456
+457
+458
+459
+460
+461
+462
+463
+464
+465
+466
+467
+468
+469
+470
+471
+472
+473
+474
+475
+476
+477
+478
+479
+480
+481
+482
+483
+484
+485
+486
+487
+488
+489
+490
+491
+492
+493
+494
+495
+496
+497
+498
+499
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Figure 3: Annotation example for Task 2
+and a disease.
+A function change is classiﬁed
+into four classes: Loss of Function(LOF), Gain
+of Function(GOF), Regulation(REG), and Com-
+plex(COM). Figure 4 shows an example, where
+the PubMed abstract, 25805808, is annotated with
+the triple, SHROOM3; LOF; Neural tube defects.
+Participants are requried to produce a text ﬁle
+where a quadraple (a PubMed Id, plus a triple)
+takes one line. Note that while this task is inde-
+Figure 4: Annotation example for Task 3
+pendent from Task 1 and 2, syntactically, it may
+be beneﬁted from the results of the two tasks, se-
+mantically.
+For better understanding, let us pick a sen-
+tence, “Mutations in SHP-2 phosphates that
+cause hyperactivation of its catalytic activity
+have been identiﬁed in human leukemia, partic-
+ularly juvenile myelomonocytic leukemia.” From
+a biological view, hyperactivation of catalytic
+activity is clearly a description of Gain-of-
+Function. Henceforth, this sentence carries clear
+semantic information that, a gene “SHP-2” af-
+ter mutation plays a GOF function related to
+the disease “juvenile myelomonocytic leukemia”.
+Therefore, the Task 3 requires the triple from
+this sentence,
+i.e.,
+SHP-2;GOF;juvenile
+myelomonocytic leukemia.
+In another sentence, “Lynch syndrome (LS)
+caused by mutations in DNA mismatch re-
+pair genes MLH1.”, it describes the association
+between disease “Lynch syndrome” and gene
+“MLH1”, but the phrase “caused by” means no
+loss or gain, hence the triple from this sentence
+should be MLH1;REG;Lynch syndrome.
+In a COM example, “Here, we describe a
+fourth case of a human with a de novo KCNJ6
+(GIRK2) mutation, who presented with clinical
+ﬁndings of severe hyperkinetic movement disor-
+der and developmental delay. Heterologous ex-
+pression of the mutant GIRK2 channel alone
+produced an aberrant basal inward current that
+lacked G protein activation, lost K+ selectivity
+and gained Ca2+ permeability.” , the descrip-
+tion “lost K+ selectivity and gained Ca2+ per-
+meability” shows both LOF and GOF, therefore
+the function change can not be labeled as LOF or
+GOF but COM, GIRK2;COM;hyperkinetic
+movement disorder.
+2.4
+Sample data for task 1, 2, and 3
+Figure 5 shows a sample text of AGAC corpus, the
+format of which is JSON. The bold term “target”
+is the address of the annotated text. “sourcedb” is
+where the text original from, all the text in AGAC
+corpus are from PubMed. “sourceid” is pmid of
+the text. “text” contains the raw abstract.
+1) “denotations” for Task 1:
+“denotations” contains the named entity anno-
+tations corresponding to Task 1. Each named
+entity annotation has an “id”; a “span”: its po-
+sition in the abstract; an “obj”: the named en-
+tity it belongs to.
+2) “relations” for Task 2:
+“relations” contains the thematic roles between
+the named entities, which corresponds to Task
+2. Each relation contains an “id”; a “pred”: the
+thematic roles; “subj” and “obj”: the named en-
+tity “id” that the relation associates, and the di-
+rection of the relation is from “subj” to “obj”.
+Note that Task 2 requires the result of Task 1.
+3) Triples for Task 3:
+25805808;SHROOM3;LOF;Neural tube de-
+fects Triples showed above is the result of
+Task 3, which is required to be extracted
+from the sample text.
+So, for the result
+template during evaluation, the standard for-
+mat of triples is: pmid;gene;function
+change;disease.
+The visualization of part of this sample text is
+shown in Figure 5, which is presented by the an-
+notation platform PubAnnotation.
+67
+6
+500
+501
+502
+503
+504
+505
+506
+507
+508
+509
+510
+511
+512
+513
+514
+515
+516
+517
+518
+519
+520
+521
+522
+523
+524
+525
+526
+527
+528
+529
+530
+531
+532
+533
+534
+535
+536
+537
+538
+539
+540
+541
+542
+543
+544
+545
+546
+547
+548
+549
+550
+551
+552
+553
+554
+555
+556
+557
+558
+559
+560
+561
+562
+563
+564
+565
+566
+567
+568
+569
+570
+571
+572
+573
+574
+575
+576
+577
+578
+579
+580
+581
+582
+583
+584
+585
+586
+587
+588
+589
+590
+591
+592
+593
+594
+595
+596
+597
+598
+599
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Figure 5: Sample data for Task 1, 2 and 3
+3
+Evaluation methods
+The performance of the participants was evalu-
+ated in standard precision, recall, and F-score.
+For Task 1 and 2, the PubAnnotation Evalua-
+tor1 tool was used, with a parameter setting for
+strict span matching (soft match characters = 0 &
+soft match words = 0). For task 2, for a predicted
+relation to be counted as a true positive, the two
+entities participating in the relation have to be cor-
+rectly predicted, together with the type of the re-
+lation. Note that the evaluation criteria applied to
+Task 1 and 2 are very strict.
+For Task 3, a custom evaluation tool was pro-
+vided by the organizers Unlike Task 1 and 2, for
+Task 3, a relaxed matching criteria was applied:
+a “Function-Classiﬁed Gene-Disease Assciation”
+(FCGDA) statement is counted as correct one if
+the function classiﬁcation (LOF or GOF) is cor-
+rectly recognized. The motivation of using the re-
+laxed matching criteria was that it was fairly a new
+type of task, making a highly challenging one, and
+and that prediction of the LOF/GOF context was
+of the primary interest.
+4
+Results and observations
+Overall, ﬁve teams participated in the tasks of the
+AGAC track: three teams in both Task 1 and 2, one
+team only in Task 1, and one team (through a late
+submission) only in Task 3. The results of Task 1,
+2, and 3 are presented in Table 2, 3, 4, respectively.
+1https://github.com/pubannotation/
+pubannotation_evaluator
+Looking into the methods used by the par-
+ticipants, it is observed that, although the num-
+ber of participants is not so high, various meth-
+ods are well mixed: a probabilistic sequence la-
+beling model, e.g., CRF (Lafferty et al., 2001)),
+a kernel-based linear classiﬁcation model, e.g.,
+SVM, modern neural network models, e.g., CNN
+(Lawrence et al., 1997) and Bi-LSTM (Hochre-
+iter and Schmidhuber, 1997; Sundermeyer et al.,
+2012),We collected abstracts by Mesh terms “Mu-
+tation/physiopathology” and “Genetic Disease”.
+and also a joint learning. It is also observed that
+use of BERT (Devlin et al., 2018), a pre-trained
+language representation model, was popular.
+4.1
+Task 1
+In Task 1, DX-HITSZ used “JFB-NER” model
+which was a joint learning model with parameters
+ﬁne tuned bioBert. Zheng-UMASS used a hierar-
+chical multi-task learning model for both Named
+entity recognition and Relation Extraction. In this
+model 12 entities were decomposed into three sub-
+tasks: (1) Var, MPA,CPA,Enzyme for part one (2)
+Gene, Pathway, Protein, Disease for part two (3)
+PosReg, Interaction, NegReg, Reg for part three.
+Besides, they used Bert embedding, customized
+embedding, and Char level embedding to repre-
+sent inputs sentences.
+Then, the bi-LSTM en-
+coders were used as encoders for each of the sub-
+tasks. YaXXX-SiXXX/LMX used Bi-LSTM CRF
+with linguistic features and ensemble 3 best mod-
+els on 3 data splits. Finally, DJDL-HZAU used
+traditional CRF method and combined with some
+68
+7
+600
+601
+602
+603
+604
+605
+606
+607
+608
+609
+610
+611
+612
+613
+614
+615
+616
+617
+618
+619
+620
+621
+622
+623
+624
+625
+626
+627
+628
+629
+630
+631
+632
+633
+634
+635
+636
+637
+638
+639
+640
+641
+642
+643
+644
+645
+646
+647
+648
+649
+650
+651
+652
+653
+654
+655
+656
+657
+658
+659
+660
+661
+662
+663
+664
+665
+666
+667
+668
+669
+670
+671
+672
+673
+674
+675
+676
+677
+678
+679
+680
+681
+682
+683
+684
+685
+686
+687
+688
+689
+690
+691
+692
+693
+694
+695
+696
+697
+698
+699
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Table 2: Participants Performance of Task 1
+Participants
+Precision
+Recall
+F-score
+Main NLP techniques
+1st
+DX-HITSZ
+0.63
+0.56
+0.60
+Bert, joint learning
+*
+Baseline
+0.50
+0.51
+0.50
+Bert, joint learning
+2nd
+Zheng-UMASS
+0.36
+0.59
+0.45
+Bert, CNN, Bi-LSTM
+3rd
+YaXXX-SiXXX/LMX
+0.55
+0.28
+0.37
+CRF, Bi-LSTM
+4th
+DJDL-HZAU
+0.16
+0.25
+0.20
+CRF
+*: Baseline.
+Table 3: Participants Performance of Task 2
+Participants
+Precision
+Recall
+F-score
+Main NLP techniques
+1st
+Zheng-UMASS
+0.40
+0.31
+0.35
+Bert, CNN, Bi-LSTM
+2nd
+DX-HITSZ
+0.61
+0.16
+0.25
+Bert, joint learning
+3rd
+YaXXX-SiXXX/LMX
+0.05
+0.02
+0.03
+SVM
+Table 4: Participants Performance of Task 3
+Participants
+Precision
+Recall
+F-score
+Main NLP techniques
+*
+Baseline
+0.72
+0.59
+0.65
+Bert, joint learning
+L
+Ashok-BenevolentAI
+0.26
+0.20
+0.23
+Bert
+*: Baseline
+L: Late submission.
+linguistic features.
+4.2
+Task 2
+In Task 2, Zheng-UMASS used a hierarchical
+multi-task learning model for both Named entity
+recognition and Relation Extraction. In relation
+extraction part the model shared the same encod-
+ing layers with Named entity recognition part.
+DX-HITSZ used a simple ﬁne tuned bioBert, re-
+fer as ”SB-RE”. The F-score they obtained is 0.35
+and 0.25, respectively.
+Furthermore, YaXXX-
+SiXXX/LMX converted the task 2 into a classiﬁ-
+cation model and used the traditional support vec-
+tor machine to obtain a F-score of 0.03.
+4.3
+Task 3
+In Task 3, Ashok-BenevolentAI used BERT as
+well to extract “gene
+function change
+disease
+triples. They encoded the pair of mentions and
+their textual context as two consecutive sequences
+and then used a single linear layer to classify their
+relation into ﬁve classes.
+It is noted that none
+of the results in Task 1 and Task 2 were jointly
+learned in this model.
+As the task organizer, AGAC team provided
+baseline method for Task 1 and 3. We used BERT
+to learn semantic structure of the sentences, and
+use joint learning for output sequence labeling in
+Task 1 and triple recognition in Task 3.
+4.4
+Summary
+To sum up, the best performance for Task 1 was
+0.6 in F-score, which was obtained by DX-HITSZ.
+It outperformed the reference method provided by
+the organizers by 0.10 in F-score. For task 2, the
+base performance was 0.35, which was acheived
+by Zheng-UMASS.
+The best performance for
+Task 1 and 2 are quite low compared to other
+NER and RE tasks. We attribute the reason to the
+strict evaluation criteria and the selective annota-
+tion characteristics of the AGAC corpus, the latter
+of which is discussed in Section 5. For Task 3,
+while the reference performance provided by the
+organizers achieved a moderate performance, 0.65
+in F-score, the only participant achieved a much
+lower performance, 0.26. We attribute the reason
+to the fact that the team did not use the results of
+Task 1 and 2 which we expected critical to perform
+69
+8
+700
+701
+702
+703
+704
+705
+706
+707
+708
+709
+710
+711
+712
+713
+714
+715
+716
+717
+718
+719
+720
+721
+722
+723
+724
+725
+726
+727
+728
+729
+730
+731
+732
+733
+734
+735
+736
+737
+738
+739
+740
+741
+742
+743
+744
+745
+746
+747
+748
+749
+750
+751
+752
+753
+754
+755
+756
+757
+758
+759
+760
+761
+762
+763
+764
+765
+766
+767
+768
+769
+770
+771
+772
+773
+774
+775
+776
+777
+778
+779
+780
+781
+782
+783
+784
+785
+786
+787
+788
+789
+790
+791
+792
+793
+794
+795
+796
+797
+798
+799
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Task 3.
+5
+Discussion and Conclusion
+In this section, the “selective annotation” and
+“latent topic annotation” features of AGAC are
+reviewed and future research directions are dis-
+cussed.
+5.1
+Selective annotation makes NER
+challenging
+As suggested in the previous discussion, state-
+of-art methods in NLP community, like BERT
+and joint learning, are frequently tested in AGAC
+track. Comprehensive investigation of the perfor-
+mance results show the effectiveness and disad-
+vantages of these method.
+Unlike normal sequence labelling task, AGAC
+track requires the artiﬁcial intelligence method to
+perform NER only when the sentence exactly ﬁt
+the GOF/LOF topic. Here, “selective annotation”
+attribute refers that only the core named entities
+or phrase within a sentence which carries clear
+function change semantics is annotated.
+Actu-
+ally, the design with this attribute stem from real
+scenario of the drug knowledge discovery where
+curators need to trace and extract exact relevant
+function change information of a mutated gene
+among texts.
+Unfortunately, this attribute also
+make AGAC track a fairly challenging task to ful-
+ﬁll.
+The performances comparison in AGAC track
+shows that the modern NLP strategies like BERT
+propel the traditional sequence labeling task to
+the full strength.
+Both the team won the ﬁrst
+position and the baseline method use BERT and
+joint learning model. As a conclusion, sophisti-
+cated language representative model is an effec-
+tive way to handle sequence labeling in AGAC re-
+search. In addition, LOF/GOF recognition with-
+out using results of Task 1 and 2 failed to out-
+perform the baseline method which make good
+use of the named entities in AGAC. It hints that
+joint learning model is a proper integrated tasks
+solution for NER, thematic role recognition and
+LOF/GOF triplet recognition.
+In all, the “Selective annotation” attribution
+make AGAC track more challenging than tradi-
+tional sequence labeling task. Just mocking the
+human annotator who make annotation with sufﬁ-
+cient LOF or GOF semantics consideration, a suc-
+cessful model should discern the full semantics
+when correctly performing the labeling.
+Hope-
+fully, the performance of the AGAC track will be
+enhanced by a design of a more intellectual learn-
+ing model, which is capable of capturing both the
+sequence labeling and the triple information, and
+therefore making tactical adjustment.
+5.2
+The potential of latent topic annotation
+The purpose of AGAC track for drug repurpos-
+ing requires comprehensive cooperation among
+BioNLP and Bioinformatics communities, even in
+general, NLP and Biology communities. Though
+none of the participants attempts to solve Task 3
+due to the domain gap of computer science and
+life science, a cross disciplinary cooperation is still
+promising, especially in the era of Multi-Omics
+data (Groen et al., 2016).
+“Latent topic annotation” attribute refers to
+comprehensive integration of drug related knowl-
+edge and deep cooperation in a cross-disciplinary
+manner. As mentioned in the introduction, the bi-
+ological idea of the AGAC design is consistent
+with the mainstream phenotype mining strategy as
+PheWAS (Rastegar-Mojarad et al., 2015). In ad-
+dition, the literature review as well suggests that
+BioNLP and computational method shed light to
+drug-related knowledge discovery (Gachloo et al.,
+2019).
+In our early attempt of AGAC applica-
+tion (Zhou et al., 2019), a PubMed-wide GOF and
+LOF recognition is successfully achieved by using
+AGAC as training data. Speciﬁcally, AGAC cor-
+pus offers abundant semantic information in the
+function change recognition, and helps to evaluate
+the GOF/LOF topic of a Pubmed abstract.
+All of the above facts hint that well formed
+knowledge structure in AGAC is capable of en-
+suring nice application of function change inves-
+tigation, and good commanding of the domain
+knowledge is the key point to propel the research
+of drug repurposing.
+Henceforth, it is promis-
+ing to develop deep cooperation among BioNLP
+and Bioinformatics communities based on the out-
+come of AGAC track competition.
+6
+Data Availability
+The
+AGAC
+corpus
+is
+developed
+and
+made
+available
+in
+the
+PubAnnotation
+plat-
+form,
+which
+is
+technically
+supported
+by
+Database Center for Life Science (DBCLS),
+Japan.
+Link to retrieve the data:
+http:
+//pubannotation.org/projects/
+70
+9
+800
+801
+802
+803
+804
+805
+806
+807
+808
+809
+810
+811
+812
+813
+814
+815
+816
+817
+818
+819
+820
+821
+822
+823
+824
+825
+826
+827
+828
+829
+830
+831
+832
+833
+834
+835
+836
+837
+838
+839
+840
+841
+842
+843
+844
+845
+846
+847
+848
+849
+850
+851
+852
+853
+854
+855
+856
+857
+858
+859
+860
+861
+862
+863
+864
+865
+866
+867
+868
+869
+870
+871
+872
+873
+874
+875
+876
+877
+878
+879
+880
+881
+882
+883
+884
+885
+886
+887
+888
+889
+890
+891
+892
+893
+894
+895
+896
+897
+898
+899
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+AGAC_test/annotations.tgz.
+7
+Acknowledgement
+This work is funded by the Fundamental Re-
+search Funds for the Central Universities of
+China (Project No.
+2662018PY096) and Hubei
+Province Funds for Natural Science (Project
+No.2019CFB552) .
+The authors would also like to express their
+gratitude for Jin-Dong Kim and Kevin Breton-
+nel Cohen for many instructive discussion in
+the corpus design and BioNLP open shared task
+setting; Yuxing Ren and Shanghui Nie for ef-
+forts in corpus annotation; Hong-yu Zhang and
+Xuan Qin for discussion on the “LOF/atagonist-
+GOF/antagonist” hypothesis; Yao Xinzhi for his
+participation in guideline design; Sheng Zhang, Qi
+luo and Panzhong Lu for the discussion and cod-
+ing of AGAC applications.
+References
+Kevin Bretonnel Cohen, Karin Verspoor, Kar¨en Fort,
+Christopher Funk, Michael Bada, Martha Palmer,
+and Lawrence E Hunter. 2017. The Colorado richly
+annotated full text (CRAFT) corpus: multi-model
+annotation in the biomedical domain.
+In Hand-
+book of Linguistic Annotation, pages 1379–1394.
+Springer.
+Kevin Bretonnel Cohen,
+Jingbo Xia,
+Christophe
+Roeder, and Lawrence E Hunter. 2016.
+Re-
+producibility
+in
+natural
+language
+processing:
+a case study of two R libraries for mining
+PubMed/MEDLINE.
+In LREC... International
+Conference on Language Resources & Evalua-
+tion:[proceedings]. International Conference on
+Language Resources and Evaluation, volume 2016,
+page 6. NIH Public Access.
+Dina Demner-Fushman, Sonya E Shooshan, Laritza
+Rodriguez, Alan R Aronson, Francois Lang, Willie
+Rogers, Kirk Roberts, and Joseph Tonning. 2018.
+A dataset of 200 structured product labels anno-
+tated for adverse drug reactions.
+Scientiﬁc data,
+5:180001.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2018. Bert: Pre-training of deep
+bidirectional transformers for language understand-
+ing. arXiv preprint arXiv:1810.04805.
+Mina Gachloo, Yuxing Wang, and Jingbo Xia. 2019. A
+review of drug knowledge discovery using BioNLP
+and tensor or matrix decomposition. Genomics &
+Informatics, 17(2).
+Rachel Ginn, Pranoti Pimpalkhute, Azadeh Nikfarjam,
+Apurv Patki, Karen OConnor, Abeed Sarker, Karen
+Smith, and Graciela Gonzalez. 2014. Mining twit-
+ter for adverse drug reaction mentions: a corpus
+and classiﬁcation benchmark.
+In Proceedings of
+the fourth workshop on building and evaluating re-
+sources for health and biomedical text processing,
+pages 1–8. Citeseer.
+Nathalie Groen, Murat Guvendiren, Herschel Rabitz,
+William J Welsh, Joachim Kohn, and Jan De Boer.
+2016. Stepping into the omics era: opportunities and
+challenges for biomaterials science and engineering.
+Acta biomaterialia, 34:133–142.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus
+Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. 2012.
+Development of a bench-
+mark corpus to support the automatic extrac-
+tion of drug-related adverse effects from medical
+case reports.
+Journal of biomedical informatics,
+45(5):885–892.
+Mar´ıa Herrero-Zazo, Isabel Segura-Bedmar, Paloma
+Mart´ınez, and Thierry Declerck. 2013.
+The DDI
+corpus: An annotated corpus with pharmacological
+substances and drug–drug interactions. Journal of
+biomedical informatics, 46(5):914–920.
+Sepp Hochreiter and J¨urgen Schmidhuber. 1997.
+Long short-term memory.
+Neural computation,
+9(8):1735–1780.
+Lawrence Hunter and Kevin Bretonnel Cohen. 2006.
+Biomedical language processing:
+what’s beyond
+pubmed? Molecular cell, 21(5):589–594.
+Sarvnaz Karimi, Alejandro Metke-Jimenez, Madonna
+Kemp, and Chen Wang. 2015. Cadec: A corpus of
+adverse drug event annotations. Journal of biomed-
+ical informatics, 55:73–81.
+Jin-Dong Kim, Tomoko Ohta, Yuka Tateisi, and Ju-
+nichi Tsujii. 2003. Genia corpus-a semantically an-
+notated corpus for bio-text mining. Bioinformatics,
+19(suppl 1):i180–i182.
+Jin-Dong Kim, Tomoko Ohta, and Jun’ichi Tsujii.
+2008.
+Corpus annotation for mining biomedical
+events from literature. BMC Bioinformatics, 9.
+Jin-Dong Kim and Yue Wang. 2012.
+PubAnnota-
+tion: a persistent and sharable corpus and annota-
+tion repository. In Proceedings of the 2012 Work-
+shop on Biomedical Natural Language Processing,
+pages 202–205. Association for Computational Lin-
+guistics.
+Jin-Dong Kim, Yue Wang, Toyofumi Fujiwara, Shujiro
+Okuda, Tiffany J Callahan, and Kevin Bretonnel Co-
+hen. 2019. Open agile text mining for bioinformat-
+ics: the pubannotation ecosystem. Bioinformatics.
+John Lafferty, Andrew McCallum, and Fernando CN
+Pereira. 2001.
+Conditional random ﬁelds: Prob-
+abilistic models for segmenting and labeling se-
+quence data.
+71
+10
+900
+901
+902
+903
+904
+905
+906
+907
+908
+909
+910
+911
+912
+913
+914
+915
+916
+917
+918
+919
+920
+921
+922
+923
+924
+925
+926
+927
+928
+929
+930
+931
+932
+933
+934
+935
+936
+937
+938
+939
+940
+941
+942
+943
+944
+945
+946
+947
+948
+949
+950
+951
+952
+953
+954
+955
+956
+957
+958
+959
+960
+961
+962
+963
+964
+965
+966
+967
+968
+969
+970
+971
+972
+973
+974
+975
+976
+977
+978
+979
+980
+981
+982
+983
+984
+985
+986
+987
+988
+989
+990
+991
+992
+993
+994
+995
+996
+997
+998
+999
+Conﬁdential Review Copy. DO NOT DISTRIBUTE.
+Steve Lawrence, C Lee Giles, Ah Chung Tsoi, and An-
+drew D Back. 1997. Face recognition: A convolu-
+tional neural-network approach. IEEE transactions
+on neural networks, 8(1):98–113.
+Jiao Li, Yueping Sun, Robin J Johnson, Daniela Sci-
+aky, Chih-Hsuan Wei, Robert Leaman, Allan Peter
+Davis, Carolyn J Mattingly, Thomas C Wiegers, and
+Zhiyong Lu. 2016. BioCreative V CDR task corpus:
+a resource for chemical disease relation extraction.
+Database, 2016.
+Ying Hong Li, Chun Yan Yu, Xiao Xu Li, Peng
+Zhang, Jing Tang, Qingxia Yang, Tingting Fu, Xi-
+aoyu Zhang, Xuejiao Cui, Gao Tu, et al. 2017.
+Therapeutic target database update 2018: enriched
+resource for facilitating bench-to-clinic research
+of targeted therapeutics.
+Nucleic acids research,
+46(D1):D1121–D1127.
+Carolyn E Lipscomb. 2000. Medical subject headings
+(mesh). Bulletin of the Medical Library Association,
+88(3):265.
+Majid Rastegar-Mojarad, Zhan Ye, Jill M Kolesar,
+Scott J Hebbring, and Simon M Lin. 2015. Opportu-
+nities for drug repositioning from phenome-wide as-
+sociation studies. Nature biotechnology, 33(4):342.
+Kirk Roberts, Dina Demner-Fushman, and Joseph M
+Tonning. 2017. Overview of the tac 2017 adverse
+reaction extraction from drug labels track. In TAC.
+Martin Sundermeyer, Ralf Schl¨uter, and Hermann Ney.
+2012. Lstm neural networks for language modeling.
+In Thirteenth annual conference of the international
+speech communication association.
+Miguel Vazquez, Martin Krallinger, Florian Leitner,
+and Alfonso Valencia. 2011. Text mining for drugs
+and chemical compounds: methods, tools and appli-
+cations. Molecular Informatics, 30(6-7):506–519.
+Yuxing Wang, Xinzhi Yao, Kaiyin Zhou, Xuan Qin,
+Jin-Dng Kim, Kevin B Cohen, and Jingbo Xia.
+2018.
+Guideline design of an active gene anno-
+tation corpus for the purpose of drug repurpos-
+ing.
+In 2018 11th International Congress on Im-
+age and Signal Processing, BioMedical Engineering
+and Informatics(CISP-BMEI 2018), Oct, 2018, Bei-
+jing.(2018, accepted).
+Zhong-Yi Wang and Hong-Yu Zhang. 2013.
+Ratio-
+nal drug repositioning by medical genetics. Nature
+biotechnology, 31(12):1080.
+David S Wishart, Yannick D Feunang, An C Guo,
+Elvis J Lo, Ana Marcu, Jason R Grant, Tanvir Sajed,
+Daniel Johnson, Carin Li, Zinat Sayeeda, et al.
+2017. Drugbank 5.0: a major update to the drug-
+bank database for 2018.
+Nucleic acids research,
+46(D1):D1074–D1082.
+Kaiyin Zhou, Yuxing Wang, Sheng Zhang, Mina
+Gachloo, Jin-Dong Kim, Qi Luo, Kevin Bretonnel
+Cohen, and Jingbo Xia. 2019. Gof/lof knowledge
+inference with tensor decomposition in support of
+high order link discovery for gene, mutation and dis-
+ease. Math Biosci Eng, 16(16):1376–1391.

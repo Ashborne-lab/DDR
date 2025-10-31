@@ -1,0 +1,926 @@
+TERMinator: A system for scientiﬁc texts processing
+Elena Bruches
+A.P. Ershov Institute of Informatics Systems / Russia
+Novosibirsk State University / Russia
+bruches@bk.ru
+Olga Tikhobaeva
+Novosibirsk State University / Russia
+o.tikhobaeva@g.nsu.ru
+Yana Dementyeva
+Novosibirsk State University / Russia
+y.dementeva@g.nsu.ru
+Tatiana Batura
+A.P. Ershov Institute of Informatics Systems / Russia
+tbatura@iis.nsk.su
+Abstract
+This paper is devoted to the extraction of en-
+tities and semantic relations between them
+from scientiﬁc texts, where we consider sci-
+entiﬁc terms as entities.
+In this paper, we
+present a dataset that includes annotations for
+two tasks and develop a system called TER-
+Minator for the study of the inﬂuence of lan-
+guage models on term recognition and com-
+parison of different approaches for relation
+extraction. Experiments show that language
+models pre-trained on the target language are
+not always show the best performance. Also
+adding some heuristic approaches may im-
+prove the overall quality of the particular task.
+The developed tool and the annotated corpus
+are publicly available at https://github.com/iis-
+research-team/terminator and may be useful
+for other researchers.
+1
+Introduction
+Nowadays the amount of scientiﬁc publications is
+constantly growing. In this regard, the processing
+of scientiﬁc texts becomes especially relevant in
+relation to rapidly developing scientiﬁc ﬁelds, for
+example, computer science. Information extrac-
+tion from scientiﬁc texts can be useful in domain-
+speciﬁc areas, for completion of knowledge graphs,
+in search and question-answering systems. This
+paper describes the study on entity recognition and
+relation extraction from scientiﬁc texts on computer
+science in Russian.
+Currently, there are a number of datasets with
+annotations of entities and relations in a general
+domain (Doddington et al., 2004; Roth and Yih,
+2004; Loukachevitch et al., 2021), biomedical do-
+main (Kim et al., 2003; Gurulingappa et al., 2012;
+Li et al., 2016), or even multi-domains (Terryn
+et al., 2020). Still it is more difﬁcult to ﬁnd a pub-
+licly available dataset such as SciERC (Luan et al.,
+2018) for scientiﬁc ﬁelds other than biomedical,
+and especially in languages other than English.
+Despite that the named entity recognition task
+is well studied, it still faces multiple challenges
+(Li et al., 2022a), namely, NER in domain-speciﬁc
+areas (Weber et al., 2021), NER from noisy data
+(Derczynski et al., 2017), code-mixed data (Fe-
+tahu et al., 2021), and detection of ﬁne-grained and
+nested named entities (Kim and Kim, 2021; Ring-
+land et al., 2019; Loukachevitch et al., 2021). This
+is caused by several issues: deﬁning boundaries of
+compound terms; recognition of whether a lexical
+unit is part of a compound term; identiﬁcation of
+a lexical unit as a term depending on the context
+and topic of the text in which this lexical unit is
+used etc. The relation extraction task also remains
+an unsolved problem, as it often requires the use
+of knowledge outside the text (for example, from
+knowledge bases or obtained in another way), and
+also due to the lack of a large amount of labeled
+data in different languages.
+Selection of the most appropriate language
+model, which is able to provide the best quality
+for extraction of terms and relations from scientiﬁc
+texts is one of the relevant issues. Our experimen-
+tal results not only show the usefulness of the pro-
+posed dataset, but also provide baselines for further
+research.
+We make the following contributions:
+• Provide a new dataset for both tasks (term
+recognition and relation extraction) for Rus-
+sian scientiﬁc texts and develop a TERMinator
+tool for further research experiments.
+• Study of inﬂuence of language models (with-
+out additional information, with heuristics and
+dictionaries) on term extraction.
+• Compare three approaches for relation extrac-
+tion (based on lexical patterns, classiﬁcation
+with a CLS-vector, and combination of them).
+arXiv:2209.14854v1  [cs.CL]  29 Sep 2022
+2
+Related Work
+Entity recognition and relation extraction are the
+main tasks in information extraction. There are
+various approaches to solve them.
+A traditional approach includes two stages: ex-
+tracting n-grams which potentially may be terms,
+and then classiﬁcation whether this n-gram is a
+term or not. In (Stankovi´c et al., 2016) authors
+proposed to use dictionaries and morphological
+and syntax information. There are some works
+which use pre-deﬁned ontologies for terms extrac-
+tion (Ivanisenko et al., 2020). Another idea is to
+solve this task as a sequence labeling (Kucza et al.,
+2018). It allows to implement terms extraction
+in one stage and take into account syntax and se-
+mantic information from the context. For terms
+extraction the main challenge is to identify the ex-
+act term boundaries. In (Zhu and Li, 2022) authors
+proposed to use boundary smoothing as a regular-
+ization technique to overcome this problem.
+Relation extraction is usually considered as a
+classiﬁcation problem: for two given terms one
+needs to determine whether there is a semantic re-
+lation between them or not, and if they are related
+then to deﬁne its type. Some works describe the use
+of knowledge bases for relation extraction (Li et al.,
+2019; Baldini Soares et al., 2019). With the spread
+of transformers-based architectures, different pre-
+trained language models are used to solve this task
+(Shi and Lin, 2019). Some researchers try to make
+use of incorporating external data sources in the
+model, for example the list of hand-written syntax
+patterns (Tao et al., 2019), information about sen-
+tence syntax tree (Ningthoujam et al., 2019; Nayak
+and Ng, 2019).
+Recently, special attention has been paid to sys-
+tems which solve terms recognition and relation
+extraction jointly. The authors propose an archi-
+tecture that sequentially extracts entities and rela-
+tionships between them, but in end-to-end settings
+(Eberts and Ulges, 2020; Ji et al., 2020; Huang
+et al., 2019; Miwa and Bansal, 2016). Another idea
+is to train a model with two outputs: one output
+is for term extraction, and the other is for relation
+extraction (Xue et al., 2019). However such ap-
+proaches require quite a lot of annotated data to
+ﬁnd hidden regularities.
+3
+Data Preparation
+For the experiments we create an annotated dataset,
+which consists of abstracts of scientiﬁc papers on
+Information Technology in Russian.
+As entities we consider nouns or noun groups,
+which are terms in this particular domain. Terms
+that we recognize as entities may consist of one or
+several tokens (“software”, “non-preemptive multi-
+tasking”), abbreviations (“CPU”, “DLL”), names
+of programming languages (“Python”, “C++”) and
+libraries (“Pytorch”, “SpaCy”), hyphenated con-
+cepts containing Latin characters (”n-gram”, ”web-
+service”). Thereby we consider all possible chains
+of tokens that can be terms, except for those that
+are recursive or overlap. The entities are marked in
+the BIO format: each token is assigned a B-TERM
+tag if it is the initial tag for an entity, I-TERM if it
+is inside a term, or O if it is outside any entity.
+Statistics for our dataset is presented in Table 1.
+Unit
+train
+test
+texts
+136
+80
+tokens
+12 809
+11 157
+terms
+2 028
+2 027
+relations
+356
+620
+Table 1: Dataset statistics
+The list of relations is selected based on the
+following criteria. At ﬁrst, a relation should be
+monosemantic (for example, we don’t consider a
+semantic relation <Entity-Destination> because it
+has indirect meaning as well). Secondly, a relation
+should link scientiﬁc terms (for example, in rela-
+tion <Communication-Topic> (an act of communi-
+cation is about topic) the actants are not scientiﬁc
+terms). Thus, six semantic relations were selected.
+Types of relations in a corpus, their meanings and
+distribution by train and test sets are presented in
+Table 2.
+Relation type
+Meaning
+train
+test
+CAUSE
+x is the cause of y
+19
+19
+ISA
+x is y
+96
+93
+PART_OF
+x is part of y
+23
+87
+SYNONYMS
+x is the same as y
+35
+22
+TOOL
+x allows to create/etc. y
+54
+38
+USAGE
+x is used for/in y
+126
+330
+Table 2: Types of relations
+Here
+is
+a
+sample
+sentence
+where
+two
+terms
+and
+the
+relation
+between
+them
+are
+highlighted:
+Pokazany preimushchestva prime-
+neniya <e1>mul’timedijnyh tekhnologij</e1> v
+<e2>uchebnom processe</e2> i effektivnost’ ih
+ispol’zovaniya vo vremya lekcij i seminarov. (The
+advantages of using multimedia technologies in
+the educational process and the effectiveness of
+their use during lectures and seminars are shown.).
+The relation between e1 and e2 is USAGE.
+The dataset is available for other researchers1.
+4
+Inﬂuence of language models on term
+extraction
+4.1
+Models without additional information
+The experimental methodology is as follows: texts
+are fed as input; during the vectorization procedure,
+each text is divided into spans (in our case these are
+BPE tokens), each of which is assigned to a vector.
+Initially, the model learns to match tokens with
+labels by using the training data; then based on the
+revealed regularities the model makes predictions
+on the validation data. In this way, the metrics are
+ﬁxed after each training epoch. The output is a set
+of labels associated by the system with each word
+from the input text.
+We experimented with two models: multilingual
+BERT (Devlin et al., 2018) and BERT pre-trained
+on Russian texts (Kuratov and Arkhipov, 2019).
+In the ﬁrst stage of the experiment each pre-
+trained language model was ﬁne-tuned on the train
+set described above. The optimal learning rate
+was chosen as 10−6, and the batch size was 12.
+Such values prevent overﬁtting and obtain the best
+results. At this stage, the metrics show that on
+partial match both models give the same perfor-
+mance, while in exact match the model pre-trained
+on Russian-language texts gives better scores.
+Then we extended a train set by adding 212 texts
+with a pseudo labeling method. We collected a dic-
+tionary (list of scientiﬁc terms) in a semi-automatic
+way:
+• We extracted 2-, 3- and 4-grams from the sci-
+entiﬁc papers and manually ﬁltered phrases,
+which potentially can be terms.
+• We extracted all titles of articles from
+Wikipedia, which are included in a subgraph
+of category “Science”, and then manually se-
+lected words and phrases, which potentially
+can be terms.
+Thus we obtained a list of 17 252 terms, which
+we used for pseudo labeling. This technique is
+useful for rapidly changing areas of knowledge,
+when it is difﬁcult to have dictionaries of terms and
+keep them up to date.
+1https://github.com/iis-research-team/ruserrc-dataset
+Due to the less detailed checking of the markup
+of the corpus, even with its comparatively large
+size, the metrics received with the models trained
+on it turned out to be lower than those of the same
+models trained on the manual annotated texts.
+4.2
+Models with heuristics
+Experimentally we found out that in order to im-
+prove the quality of term extraction, we need to
+improve the deﬁnition of term boundaries. The
+task of deﬁning terms’ boundaries is more chal-
+lenging than classifying a token as a “term” type.
+To improve the recognition of term boundaries, we
+apply some heuristics to handle such cases as re-
+moving a preposition as a ﬁrst token of a term and
+some others. From the results shown in Table 3, it
+can be seen that the heuristics improve the quality
+of term extraction on the exact match.
+4.3
+Models with heuristics and dictionaries
+It the third stage, the system extracts terms not only
+with the trained model, but also with the use of
+the dictionary described above. Heuristics are also
+applied.
+Table 3 shows that the ruBERT model ﬁne-tuned
+on the manually annotated train set extracts the
+terms in half of the cases, which is the best re-
+sult of a exact match. On the pseudo-labeled train
+set, this combined method gives good results for
+the multilingual BERT both for exact and partial
+matches.
+Both models solve the task of term recognition
+with a high quality, which can be seen from the
+good results on a partial match. The best result on
+an exact match pertains to the RuBERT model sup-
+ported by a dictionary and heuristics. The results
+of the models on the exact match are expectedly
+lower than the results on a partial match, which
+again draws our attention to the task of deﬁning
+terms’ boundaries in texts.
+The markup quality signiﬁcantly affects the qual-
+ity, as we can note from a comparison of the re-
+sults of the ﬁrst and second stages of the experi-
+ment (see Sections 4.1, 4.2). Fine-tuning on the
+manually-annotated training set gives better per-
+formance than ﬁne-tuning on the pseudo-labeled
+training set, even though its size is larger than the
+size of the manually-annotated one. It is hard to
+compare results with other researchers as this is the
+ﬁrst corpora for scientiﬁc texts in Russian as far
+as we know. But for the similar dataset in English
+Train set
+Model
+F-M P
+F-M R
+F-M F1
+P-M P
+P-M R
+P-M F1
+Manually
+labeled
+mBERT
+0.40
+0.46
+0.43
+0.89
+0.88
+0.88
+mBERT + h
+0.49
+0.45
+0.47
+0.86
+0.86
+0.86
+mBERT + d + h
+0.47
+0.50
+0.48
+0.86
+0.87
+0.87
+ruBERT
+0.48
+0.50
+0.49
+0.89
+0.88
+0.88
+ruBERT + h
+0.52
+0.47
+0.49
+0.89
+0.88
+0.88
+ruBERT + d + h
+0.49
+0.51
+0.50
+0.86
+0.87
+0.87
+Pseudo
+labeled
+mBERT
+0.33
+0.34
+0.34
+0.80
+0.75
+0.75
+mBERT + h
+0.42
+0.38
+0.40
+0.80
+0.79
+0.79
+mBERT + d + h
+0.41
+0.39
+0.40
+0.80
+0.80
+0.80
+ruBERT
+0.32
+0.32
+0.33
+0.78
+0.76
+0.75
+ruBERT + h
+0.40
+0.37
+0.38
+0.79
+0.79
+0.79
+ruBERT + h + d
+0.38
+0.39
+0.38
+0.79
+0.74
+0.76
+Table 3: Metrics for full match (F-M) and partial match (P-M) terms extraction; d is for dictionary, h is for
+heuristics.
+SciERC (Luan et al., 2018) the authors (Eberts and
+Ulges, 2020) reported F1-measure to be 0.70.
+We observed that for the term extraction task
+the model mistakes in recognizing the exact term
+boundaries. Another problem arises when a term
+is divided by other words or signs in the sentence,
+for example, "Morphological and syntax analysis".
+Probably, it should be solved at a post-processing
+stage.
+5
+Comparison of approaches for relation
+extraction
+5.1
+Using lexical patterns
+At ﬁrst, we applied an approach for relation identi-
+ﬁcation based on lexical patterns. It consists in the
+following: for texts with tagged terms, we extract
+a context between each pair of terms, lemmatize
+it, and compare it with the lexical patterns. If they
+match, these two terms are connected by this rela-
+tion. The length of the context should not exceed
+six words. This value was obtained experimentally
+by changing it and comparing the quality of the
+model. The obtained metrics for this approach are
+shown in Table 4. We used 111 patterns; exam-
+ples of patters and their distribution by relations
+are presented in Table 5.
+Relation type
+Precision
+Recall
+F1
+CAUSE
+0.07
+0.05
+0.06
+ISA
+0.18
+0.19
+0.19
+PART_OF
+0.17
+0.14
+0.15
+SYNONYMS
+0.23
+0.82
+0.35
+TOOL
+0.06
+0.08
+0.07
+USAGE
+0.21
+0.39
+0.27
+NO-RELATION
+0.96
+0.92
+0.94
+macro-average
+0.27
+0.37
+0.29
+Table 4: Metrics for lexical pattern’s approach
+5.2
+Classiﬁcation task with a CLS-vector
+The second approach we used for the relation ex-
+traction is similar to R-BERT, and is used by other
+authors (Hosseini et al., 2022; Aldahdooh et al.,
+2021; Li et al., 2022b). We consider the task of
+relation extraction as a classiﬁcation task (with 7
+classes of relations: CAUSE, ISA, PART-OF, SYN-
+ONYMS, TOOL, USAGE, NO-RELATION). We
+take the vector of a special token CLS (it is con-
+sidered as a vector of the input text) and the vector
+of two terms (connected by the relation). These
+three vectors are concatenated and the resulting
+vector is fed to the classiﬁer (Wu and He, 2019).
+We tried to use three different language models:
+mBERT, ruBERT (Kuratov and Arkhipov, 2019)
+and cointegrated/rubert-tiny2.
+In addition, some features of the training are
+noteworthy. Firstly, to train the models, we used
+the corpus of Russian texts without dividing it into
+training and validation sets, and the most appropri-
+ate number of epochs was selected experimentally,
+because there are very few examples for some re-
+lations, and therefore the validation set would be
+unrepresentative to determine the quality of the
+model. Secondly, to reduce the imbalance between
+the number of examples in the classes, we added
+only 50% of the randomly selected pairs of terms to
+the training set, excluding those with the distance
+between tokens more than 10.
+Finally, we implemented an ensemble which in-
+cludes both approaches: model and lexical patterns.
+All metrics are presented in Table 6. F1-score for
+all types of relations for combined approach are
+presented in Table 7. For comparison, the state-of-
+the-art result achieved on SciERC with the SpERT
+(using SciBERT) method is 50.84% for relation
+extraction (Eberts and Ulges, 2020). Our results
+Relation
+type
+Examples of patterns (transliteration)
+Examples of patterns (translation)
+N
+CAUSE
+Uvelichivsheesya potreblenie raﬁnirovannyh pro-
+duktov pitaniya yavlyaetsya prichinoj mnozh-
+estva takih zabolevanij.
+Increased consumption of reﬁned foods is the
+cause of many diseases.
+23
+ISA
+Odnim iz samyh tochnyh i effektivnyh sposobov
+upravleniya zhestami yavlyaetsya upravlenie ak-
+tivnost’yu myshc.
+One of the most accurate and effective ways to
+control gestures is to control muscle activity.
+13
+PART_OF
+Process referirovaniya sostoit iz pyati osnovnyh
+shagov.
+The referencing process consists of ﬁve main
+steps.
+5
+SYNONYMS
+Stat’ya
+posvyashchena
+issledovaniyu
+ver-
+tikal’nogo poleta robota s mashushchim krylom,
+takzhe nazyvaemogo ornitopterom.
+The article is devoted to the study of the vertical
+ﬂight of a robot with a ﬂap wing, also called an
+ornithopter.
+5
+TOOL
+V stat’e predstavlen opyt razrabotki informa-
+cionnoj sistemy, avtomatiziruyushchej process
+raspredeleniya studentov po bazam praktik.
+The article presents the experience of develop-
+ment of the information system, which auto-
+mates the process of distribution of students by
+the bases of practice.
+29
+USAGE
+V nastoyashchee vremya aktivno razvivaetsya
+napravlenie, svyazannoe s proektirovaniem ne-
+jronnyh setej dlya ispol’zovaniya v mobil’nyh us-
+trojstvah.
+Currently, the development of neural networks
+for use on mobile devices is growing rapidly.
+36
+Table 5: Examples of lexical patterns
+may also be related to insufﬁcient data, as Russian
+is morphologically rich, which additionally compli-
+cates the work of the language model. Moreover,
+error analysis of relation extraction revealed that
+relations are often present implicitly between terms
+and one can recognize them if one only knows
+these particular terms. Quite many terms in IT
+texts are abstract (for example, "program imple-
+mentation", "testing", etc.) and it can be difﬁcult
+to deﬁne, whether there is any semantic relation
+between them or not. We plan to study this aspects
+in the future.
+Model
+Precision
+Recall
+F1
+mBERT
+0.26
+0.32
+0.26
+ruBERT
+0.26
+0.34
+0.27
+rubert-tiny2
+0.22
+0.23
+0.22
+mBERT + p
+0.26
+0.41
+0.29
+ruBERT + p
+0.29
+0.35
+0.28
+rubert-tiny2 + p
+0.29
+0.24
+0.24
+Table 6: Metrics for different language models and
+combined approach; p is for patterns
+Relation type
+mBERT
+ruBERT
+ruBERT-tiny2
+CAUSE
+0.06
+0.09
+0.10
+ISA
+0.30
+0.28
+0.14
+PART_OF
+0.14
+0.04
+0.00
+SYNONYMS
+0.32
+0.33
+0.38
+TOOL
+0.04
+0.07
+0.00
+USAGE
+0.27
+0.22
+0.11
+NO-RELATION
+0.93
+0.95
+0.94
+macro-average
+0.29
+0.28
+0.24
+Table 7: F1-score for all types of relations for combined
+approach
+6
+Conclusion
+In this paper, we built a new dataset and study
+several methods for term recognition and relation
+extraction from computer science texts in Russian.
+We conducted several experiments with different
+pre-trained language models for both tasks. The re-
+sults of our experiments show that language models
+pre-trained on the target language are not always
+show the best performance. Also adding some
+heuristic approaches may improve the overall qual-
+ity for the particular task.
+References
+Jehad Aldahdooh, Ziaurrehman Tanoli, and Jing Tang.
+2021.
+R-bert-cnn:
+Drug-target interactions ex-
+traction from biomedical literature.
+In Proceed-
+ings of the BioCreative VII Challenge Evaluation
+Workshop, pages 102–106.
+BioCreative VII chal-
+lenge and workshop ; Conference date: 08-11-2021
+Through 10-11-2021.
+Livio Baldini Soares, Nicholas FitzGerald, Jeffrey
+Ling, and Tom Kwiatkowski. 2019. Matching the
+blanks: Distributional similarity for relation learn-
+ing.
+In Proceedings of the 57th Annual Meeting
+of the Association for Computational Linguistics,
+pages 2895–2905, Florence, Italy. Association for
+Computational Linguistics.
+Leon Derczynski, Eric Nichols, Marieke van Erp, and
+Nut Limsopatham. 2017. Results of the wnut2017
+shared task on novel and emerging entity recogni-
+tion. In Proceedings of the 3rd Workshop on Noisy
+User-generated Text, pages 140–147.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and
+Kristina Toutanova. 2018. Bert: Pre-training of deep
+bidirectional transformers for language understand-
+ing. In Proceedings of the 2019 Conference of the
+North American Chapter of the Association for Com-
+putational Linguistics: Human Language Technolo-
+gies, volume 15, pages 4171–4186. Association for
+Computational Linguistics Minneapolis, Minnesota.
+George Doddington, Alexis Mitchell, Mark Przybocki,
+Lance Ramshaw, Stephanie Strassel, and Ralph
+Weischedel. 2004. The automatic content extraction
+(ACE) program – tasks, data, and evaluation.
+In
+Proceedings of the Fourth International Conference
+on Language Resources and Evaluation (LREC’04),
+Lisbon, Portugal. European Language Resources As-
+sociation (ELRA).
+Markus Eberts and Adrian Ulges. 2020. Span-based
+joint entity and relation extraction with transformer
+pre-training. In Proceedings of the 24th European
+Conference on Artiﬁcial Intelligence, Santiago de
+Compostela, Spain.
+Besnik Fetahu, Anjie Fang, Oleg Rokhlenko, and
+Shervin Malmasi. 2021.
+Gazetteer Enhanced
+Named Entity Recognition for Code-Mixed Web
+Queries. In Proceedings of the 44th International
+ACM SIGIR Conference on Research and Develop-
+ment in Information Retrieval, pages 1677–1681.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus
+Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. 2012. Development of a benchmark
+corpus to support the automatic extraction of drug-
+related adverse effects from medical case reports. J.
+of Biomedical Informatics, 45(5):885–892.
+Pedram Hosseini, David A. Broniatowski, and Mona
+Diab. 2022. Knowledge-augmented language mod-
+els for cause-effect relation classiﬁcation.
+In Pro-
+ceedings of the First Workshop on Commonsense
+Representation and Reasoning (CSRR 2022), pages
+43–48, Dublin, Ireland. Association for Computa-
+tional Linguistics.
+Weipeng Huang, Xingyi Cheng, Taifeng Wang, and
+Wei Chu. 2019. Bert-based multi-head selection for
+joint entity-relation extraction. In Natural Language
+Processing and Chinese Computing: 8th CCF In-
+ternational Conference, NLPCC 2019, Dunhuang,
+China, October 9–14, 2019, Proceedings, Part II,
+page 713–723, Berlin, Heidelberg. Springer-Verlag.
+Timofey V. Ivanisenko, Olga V. Saik, Pavel S. De-
+menkov, Nikita V. Ivanisenko, Alexander N. Savos-
+tianov, and Vladimir A. Ivanisenko. 2020. Anddi-
+gest: a new web-based module of andsystem for
+the search of knowledge in the scientiﬁc literature.
+BMC Bioinformatics, 21(Suppl 11):228.
+Bin Ji, Jie Yu, Shasha Li, Jun Ma, Qingbo Wu, Yusong
+Tan, and Huijun Liu. 2020. Span-based joint entity
+and relation extraction with attention-based span-
+speciﬁc and contextual semantic representations. In
+Proceedings of the 28th International Conference on
+Computational Linguistics, pages 88–99, Barcelona,
+Spain (Online). International Committee on Compu-
+tational Linguistics.
+Hongjin Kim and Harksoo Kim. 2021. Fine-grained
+named entity recognition using a multi-stacked fea-
+ture fusion and dual-stacked output in korean. Ap-
+plied Sciences, 11(22):10795.
+Jin-Dong Kim, Tomoko Ohta, Yuka Tateisi, and
+Jun’ichi Tsujii. 2003. Genia corpus—a semantically
+annotated corpus for bio-textmining. Bioinformat-
+ics, 19(suppl_1):i180–i182.
+Maren Kucza, Jan Niehues, Thomas Zenkel, Alex
+Waibel, and Sebastian Stuker. 2018. Term extraction
+via neural sequence labeling a comparative evalua-
+tion of strategies using recurrent neural networks. In
+Proceedings of Interspeech 2018, pages 2072–2076,
+Hyderabad, India.
+Yuri Kuratov and Mikhail Arkhipov. 2019.
+Adapta-
+tion of deep bidirectional multilingual transformers
+for russian language. In Computational Linguistics
+and Intellectual Technologies: Proceedings of the
+International Conference “Dialogue 2019”, volume
+arXiv preprint arXiv:1905.07213, pages 333–339.
+Jiao Li, Yueping Sun, Robin J. Johnson, Daniela Sci-
+aky, Chih-Hsuan Wei, Robert Leaman, Allan Peter
+Davis, Carolyn J. Mattingly, Thomas C. Wiegers,
+and Zhiyong Lu. 2016.
+BioCreative V CDR task
+corpus: a resource for chemical disease relation ex-
+traction. Database, 2016. Baw068.
+Jing Li, Aixin Sun, Jianglei Han, and Chenliang Li.
+2022a. A survey on deep learning for named entity
+recognition. IEEE Transactions on Knowledge and
+Data Engineering, 34:50–70.
+Peng-Hsuan Li, Ting-Fu Chen, Jheng-Ying Yu, Shang-
+Hung Shih, Chan-Hung Su, Yin-Hung Lin, Huai-
+Kuang Tsai, Hsueh-Fen Juan, Chien-Yu Chen, and
+Jia-Hsin Huang. 2022b. pubmedKB: an interactive
+web server for exploring biomedical entity relations
+in the biomedical literature. Nucleic Acids Research,
+50(W1):W616–W622.
+Pengfei Li, Kezhi Mao, Xuefeng Yang, and Qi Li. 2019.
+Improving
+relation
+extraction
+with
+knowledge-
+attention. In Proceedings of the 2019 Conference on
+Empirical Methods in Natural Language Processing
+and the 9th International Joint Conference on Natu-
+ral Language Processing (EMNLP-IJCNLP), pages
+229–239, Hong Kong, China. Association for Com-
+putational Linguistics.
+Natalia Loukachevitch, Ekaterina Artemova, Tatiana
+Batura, Pavel Braslavski, Ilia Denisov, Vladimir
+Ivanov, Suresh Manandhar, Alexander Pugachev,
+and Elena Tutubalina. 2021.
+Nerel:
+A russian
+dataset with nested named entities, relations and
+events. In Proceedings of Recent Advances in Natu-
+ral Language Processing, page 876–885.
+Yi Luan, Luheng He, Mari Ostendorf, and Hannaneh
+Hajishirzi. 2018.
+Multi-task identiﬁcation of enti-
+ties, relations, and coreference for scientiﬁc knowl-
+edge graph construction. In Proceedings of the 2018
+Conference on Empirical Methods in Natural Lan-
+guage Processing, pages 3219–3232, Brussels, Bel-
+gium. Association for Computational Linguistics.
+Makoto Miwa and Mohit Bansal. 2016. End-to-end re-
+lation extraction using LSTMs on sequences and tree
+structures. In Proceedings of the 54th Annual Meet-
+ing of the Association for Computational Linguistics
+(Volume 1: Long Papers), pages 1105–1116, Berlin,
+Germany. Association for Computational Linguis-
+tics.
+Tapas Nayak and Hwee Tou Ng. 2019. Effective atten-
+tion modeling for neural relation extraction. In Pro-
+ceedings of the 23rd Conference on Computational
+Natural Language Learning (CoNLL), pages 603–
+612, Hong Kong, China. Association for Computa-
+tional Linguistics.
+Dhanachandra Ningthoujam, Shweta Yadav, Pushpak
+Bhattacharyya, and Asif Ekbal. 2019.
+Relation
+extraction between the clinical entities based on
+the shortest dependency path based lstm.
+ArXiv,
+arXiv:1903.09941. Version 1.
+Nicky Ringland, Xiang Dai, Ben Hachey, Sarvnaz
+Karimi, Cecile Paris, and James R Curran. 2019.
+NNE: A dataset for nested named entity recognition
+in english newswire. In Proceedings of the 57th An-
+nual Meeting of the Association for Computational
+Linguistics, pages 5176–5181.
+Dan Roth and Wen-tau Yih. 2004. A linear program-
+ming formulation for global inference in natural lan-
+guage tasks. In Proceedings of the Eighth Confer-
+ence on Computational Natural Language Learn-
+ing (CoNLL-2004) at HLT-NAACL 2004, pages 1–8,
+Boston, Massachusetts, USA. Association for Com-
+putational Linguistics.
+Peng Shi and Jimmy Lin. 2019.
+Simple bert mod-
+els for relation extraction and semantic role labeling.
+ArXiv, arXiv:1904.05255. Version 1.
+Ranka Stankovi´c, Cvetana Krstev, Ivan Obradovi´c, Bil-
+jana Lazi´c, and Aleksandra Trtovac. 2016.
+Rule-
+based automatic multi-word term extraction and
+lemmatization.
+In Proceedings of the Tenth Inter-
+national Conference on Language Resources and
+Evaluation (LREC’16), pages 507–514, Portorož,
+Slovenia. European Language Resources Associa-
+tion (ELRA).
+Qiongxing Tao, Xiangfeng Luo, and Hao Wang. 2019.
+Enhancing relation extraction using syntactic indica-
+tors and sentential contexts. In Proceedings of the
+International Conference on Tools with Artiﬁcial In-
+telligence (ICTAI), pages 574–580, Piscataway, NJ.
+Ayla Rigouts Terryn, Veronique Hoste, and Els Lefever.
+2020. In no uncertain terms: a dataset for mono-
+lingual and multilingual automatic term extraction
+from comparable corpora. Language Resources and
+Evaluation, 54:385–418.
+Leon Weber, Mario Sänger, Jannes Münchmeyer,
+Maryam Habibi, Ulf Leser, and Alan Akbik. 2021.
+Hunﬂair:
+an easy-to-use tool for state-of-the-art
+biomedical named entity recognition. Bioinformat-
+ics, 37(17):2792–2794.
+Shanchan Wu and Yifan He. 2019.
+Enriching pre-
+trained language model with entity information for
+relation classiﬁcation. In Proceedings of the 28th
+ACM International Conference on Information and
+Knowledge Management, pages 2361–2364. ACM.
+Kui Xue, Yangming Zhou, Zhiyuan Ma, Tong Ruan,
+Huanhuan Zhang, and Ping He. 2019. Fine-tuning
+bert for joint entity and relation extraction in chi-
+nese medical text.
+In Proceedings of the 2019
+IEEE International Conference on Bioinformatics
+and Biomedicine (BIBM), pages 892–897.
+Enwei Zhu and Jinpeng Li. 2022. Boundary smoothing
+for named entity recognition. In Proceedings of the
+60th Annual Meeting of the Association for Compu-
+tational Linguistics (Volume 1: Long Papers), pages
+7096–7108. Association for Computational Linguis-
+tics.

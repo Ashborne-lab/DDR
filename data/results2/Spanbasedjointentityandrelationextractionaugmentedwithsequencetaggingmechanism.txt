@@ -1,0 +1,1869 @@
+SCIENCE CHINA
+Information Sciences
+. RESEARCH PAPER .
+Span-based joint entity and relation extraction
+augmented with sequence tagging mechanism
+Bin JI†, Shasha LI†, Hao XU*, Jie YU, Jun MA, Huijun LIU* & Jing YANG
+College of Computer, National University of Defense Technology, Changsha 410073, China
+Abstract
+Span-based joint extraction simultaneously conducts named entity recognition (NER) and re-
+lation extraction (RE) in text span form.
+However, since previous span-based models rely on span-level
+classiﬁcations, they cannot beneﬁt from token-level label information, which has been proven advantageous
+for the task. In this paper, we propose a Sequence Tagging augmented Span-based Network (STSN), a
+span-based joint model that can make use of token-level label information. In STSN, we construct a core
+neural architecture by deep stacking multiple attention layers, each of which consists of three basic attention
+units. On the one hand, the core architecture enables our model to learn token-level label information via the
+sequence tagging mechanism and then uses the information in the span-based joint extraction; on the other
+hand, it establishes a bi-directional information interaction between NER and RE. Experimental results on
+three benchmark datasets show that STSN consistently outperforms the strongest baselines in terms of F1,
+creating new state-of-the-art results.
+Keywords
+joint extraction, named entity recognition, relation extraction, span, sequence tagging mecha-
+nism
+Citation
+1
+Introduction
+The joint entity and relation extraction task extracts both entities and semantic relations between entities
+from raw texts. It acts as a stepping stone for a variety of downstream NLP tasks [1], such as question
+answering. According to the classiﬁcation methods, we divide the existing models for the task into two
+categories: sequence tagging-based models [2–5] and span-based models [6–10]. The former is based on
+the sequence tagging mechanism and performs token-level classiﬁcations. The latter is based on the span-
+based paradigm and performs span-level classiﬁcations. Since the sequence tagging mechanism and the
+span-based paradigm are considered to be distinct methodologies, existing joint extraction models permit
+the use of just one of them. Speciﬁcally, the span-based paradigm consists of three typical steps: it ﬁrst
+splits raw texts into text spans (a.k.a. candidate entities), such as the “Jack” and “Harvard University”
+in Figure 1; it then constructs ordered span pairs (a.k.a. candidate relation tuples), such as the <“Jack”,
+“Harvard University”> and <“Harvard University”, “Jack”>; and ﬁnally, it jointly classiﬁes spans and
+span pairs. For example, it classiﬁes the “Jack” and “Harvard University” into PER and ORG, respectively.
+And it classiﬁes the <“Jack”, “Harvard University”> and <“Harvard University”, “Jack”> into WORK
+and NoneType, respectively.1)
+The majority of span-based models [7,8,10] use Pre-trained Language Models (PLMs) as their encoders
+directly, which relies on the encoding ability of PLMs heavily, resulting in insuﬃcient span semantic repre-
+sentations and poor model performance. To alleviate this problem, some span-based models [11,12] make
+attempts to incorporate other related NLP tasks into this task, such as event detection and coreference
+resolution. By using carefully designed neural architectures, these models enable span semantic represen-
+tation to incorporate information shared from the added tasks. However, these additional tasks require
+* Corresponding author (email: xuhao@nudt.edu.cn, liuhuijun@nudt.edu.cn)
+† Bin Ji and Shasha Li have the same contribution to this work.
+1) The span-based paradigm assigns the NoneType to spans that are not entities, as well as span pairs that do not hold relations.
+arXiv:2210.12720v1  [cs.CL]  23 Oct 2022
+Sci China Inf Sci
+2
+B-PER       O     O     B-ORG        I-ORG         O    O      B-ORG    I-ORG    I-ORG    O 
+JackPER taught at Harvard UniversityORG and the National War CollegeORG . 
+WORK
+WORK
+Text 
+Token-level 
+labels 
+Figure 1
+A span-based joint extraction example, which contains three gold entities and two gold relations. Tokens in shade are
+span examples, PER and ORG are entity types, WORK is a relation type. We also label the text with token-level labels via the sequence
+tagging mechanism, such as B-PER, B-ORG etc.
+extra data annotations such as event annotations, which are inaccessible in most datasets for the task,
+such as SciERC [6], DocRED [13], TACRED [14], NYT [15], WebNLG [16], SemEval [17], CoNLL04 [18],
+and ADE [19] etc.
+Previous sequence tagging-based joint models [2,4,20,21] demonstrate that token-level labels convey
+critical information, which can be used to compensate for span-level semantic representations. For ex-
+ample, if a span-based model is aware that the “Jack” is a person entity (labeled with the PER label)
+and the “Harvard University” is an organization entity (labeled with the ORG label) beforehand, it may
+readily infer that they have a WORK relation. Unfortunately, as far as we know, existing span-based models
+neglect this critical information due to their inability to produce token-level labels. Additionally, existing
+sequence tagging-based models establish a unidirectional information ﬂow from NER to RE by using the
+token-level label information in the relation classiﬁcation, hence enhancing information sharing. Due to
+the lack of token-level labels, previous span-based models are unable to build such an information ﬂow,
+let alone a more eﬀective bi-directional information interaction.
+In this paper, we explore using the token-level label information in the span-based joint extraction,
+aiming to improve the performance of the span-based joint extraction. To this end, we propose a Sequence
+Tagging augmented Span-based Network (STSN) where the core module is a carefully designed neural ar-
+chitecture, which is achieved by deep stacking multiple attention layers. Speciﬁcally, the core architecture
+ﬁrst learns three types of semantic representations: label representations for classifying token-level la-
+bels, and token representations for span-based NER and RE, respectively; it then establishes information
+interactions among the three learned representations. As a result, the two types of token representations
+can fully incorporate label information. Thus, span representations constructed with the above token
+representations are also enriched with label information. Additionally, the core architecture enables our
+model to build an eﬀective bi-directional information interaction between NER and RE.
+For the above purposes, each attention layer of the core architecture consists of three basic attention
+units: (1) Entity&Relation to Label Attention (E&R-L-A) enables label representations to attend to the
+two types of token representations. The reason for doing this is two-fold: one is that E&R-L-A enables
+label representations to incorporate task-speciﬁc information eﬀectively; the other is that E&R-L-A is
+essential to construct the bi-directional information interaction between NER and RE. (2) Label to Entity
+Attention (L-E-A) enables token representations for NER to attend to label representations with the
+goal of enriching the token representations with label information. (3) Label to Relation Attention (L-
+R-A) enables token representations for RE to attend to label representations with the goal of enriching
+the token representations with label information. In addition, we establish the bi-directional information
+interaction by taking the label representation as a medium, enabling the two types of token representations
+to attend to each other. We have validated the eﬀectiveness of the bi-directional information interaction
+in Section 4.4.2. Moreover, to enable STSN to use token-level label information of overlapping entities,
+we extend the BIO tagging scheme and discuss more details in Section 4.1.2.
+In STSN, aiming to train token-level label information in a supervised way, we add a sequence tagging-
+based NER decoder to the span-based model. And we use entities and relations extracted by the span-
+based model to evaluate the model performance. Experimental results on ACE05, CoNLL04, and ADE
+demonstrate that STSN consistently outperforms the strongest baselines in terms of F1, creating new
+state-of-the-art performance.2)
+In sum, we summarize the contributions as follows: (1) We propose an eﬀective method to augment
+the span-based joint entity and relation extraction model with the sequence tagging mechanism. (2) We
+carefully design the deep-stacked attention layers, enabling the span-based model to use token-level label
+information and establish a bi-directional information interaction between NER and RE. (3) Experimental
+results on three datasets demonstrate that STSN creates new state-of-the-art results.
+2) For reproducibility, our code for this paper will be publicly available at https://github.com/jibin/STSN.
+Sci China Inf Sci
+3
+2
+Related work
+2.1
+Span-based joint extraction
+Models for span-based joint entity and relation extraction have been widely studied. Luan et al. [6]
+propose almost the ﬁrst published span-based model, which is drawn from two models for coreference
+resolution [22] and semantic role labeling [23], respectively. With the advent of Pre-trained Language
+Models (PLMs), span-based models directly take PLMs as their encoders, such as Dixit and Al-Onaizan [7]
+propose a span-based model which takes ELMo [24] as the encoder; Eberts and Ulges [8] propose SpERT,
+which takes BERT [25] as the encoder; Zhong and Chen [10] propose PURE which takes ALBERT [26] as
+the encoder. However, these models rely heavily on the encoding ability of PLMs, leading to insuﬃcient
+span semantic representations and ﬁnally resulting in poor model performance. Some models [11,12] make
+attempts to alleviate this issue by adding additional NLP tasks to the task, such as coreference resolution
+or event detection. These models enable span semantic representations to incorporate information derived
+from the added tasks through complicated neural architectures. However, the added tasks need extra data
+annotations (such as event annotations are required in joint entity-relation extraction datasets), which are
+unavailable in most cases. Compared to these models, our model enriches span semantic representations
+with token-level label information without additional data annotations.
+2.2
+Token-level label
+Numerous work has demonstrated that token-level label information beneﬁts the joint extraction task a
+lot. For example, the models reported in the literature [2–4,20] train ﬁxed-size semantic representations
+for token-level labels and use them in relation classiﬁcation by concatenating them to relation semantic
+representations, delivering promising performance gains.
+However, Zhao et al. [21] demonstrate that
+the above shallow semantic concatenation cannot make full use of the label information.
+Therefore,
+they carefully design a deep neural architecture to capture ﬁne-grained token-label interactions and
+deep infuse token-level label information into token semantic representations, delivering more promising
+performance gains. Unfortunately, previous span-based joint extraction models cannot beneﬁt from the
+token-level label information since they completely give up the sequence tagging mechanism. In contrast,
+we propose a sequence tagging augmented span-based joint extraction model, which generates token-level
+label information via the sequence tagging mechanism and further infuses the information into token
+semantic representations via deep infusion.
+3
+Approach
+In this section, we will describe the Sequence Tagging augmented Span-based Network (STSN) in detail.
+As Figure 2 shows, STSN consists of three components: a BERT-based embedding layer, an encoder
+composed of deep-stacked attention layers, and three separate linear decoders for sequence tagging-based
+NER, span-based NER and span-based RE, respectively.
+3.1
+Embedding layer
+In STSN, we use BERT [25] as the default embedding generator. For a given text T = (t1, t2, t3, ..., tn)
+where ti denotes the i-th token, BERT ﬁrst tokenizes it with the WordPiece vocabulary [27] to obtain
+an input sequence. For each element of the sequence, its representation is the element-wise addition of
+WordPiece embedding, positional embedding, and segment embedding. Then a list of input embeddings
+H ∈Rlen∗hid are obtained, where len is the sequence length and hid is the size of hidden units. A series
+of pre-trained Transformer [28] blocks are then used to project H into a BERT embedding sequence
+(denoted as ET ):
+ET = {e1, e2, e3, ..., elen}.
+(1)
+BERT may tokenize one token into several sub-tokens to alleviate the Out-of-Vocabulary (OOV) prob-
+lem, leading to that T cannot align with ET , i.e., n ̸= len. To achieve alignment, we propose an Align
+Module, which applies the max-pooling function to the BERT embeddings of tokenized sub-tokens to
+obtain token embeddings. We denote the aligned embedding sequence for T as:
+ˆET = {ˆe1, ˆe2, ˆe3, ..., ˆen},
+(2)
+Sci China Inf Sci
+4
+...
+N
+L
+H
+label
+p
+O
+B-type  I-type
+Token-level 
+labels
+...
+N
+R
+H
+(Entity, Entity)
+...
+Entity
+Pairs
+Relations <Entity, Entity, r>
+...
+...
+N
+E
+H
+Entity
+Entity
+...
+Entities 
+Softmax
+Softmax
+Sigmoid
+...
+...
+relation
+p
+Span
+Span
+...
+Spans
+entity
+p
+N
+E
+H
+N
+L
+H
+N
+R
+H
+L-E-A
+E&R-L-A
+L-R-A
+× N
+ˆES
+...
+0
+E
+H
+0
+L
+H
+0
+R
+H
+Embedding Layer
+Encoder
+Decoders
+Align Module
+BERT
+...
+S 
+ˆES
+...
+Decoder for sequence tagging-based NER
+Decoder for span-based NER
+Decoder for span-based RE
+Used to decode entities and relations 
+Used to train labels supervisedly
+Figure 2
+The illustration of STSN, which consists of a BERT-based embedding layer, an encoder and three separate linear
+decoders. We solely use the decoder for sequence tagging-based NER to train token-level label semantics (HL) in a supervised way.
+And entities and relations decoded by the span-based NER and RE decoders are used to evaluate model performance.
+where ˆET ∈Rn∗d and d is the BERT embedding dimension. ˆei denotes the BERT embedding of ti.
+3.2
+Encoder
+The encoder is a deep neural architecture, which is achieved by stacking multiple (N) attention layers in
+depth.
+3.2.1
+Deep neural architecture
+We deep stack multiple attention layers to build the deep neural architecture, where each layer is composed
+of three basic attention units, as shown in Figure 2.
+The deep neural architecture learns three types of semantic representations: label representations
+(denoted as HL) used to classify token-level labels for sequence tagging-based NER, token representations
+(denoted as HE) for span-based NER, and token representations (denoted as HR) for span-based RE. The
+three representations have the same embedding dimension d. Additionally, we denote the concatenation
+of HE and HR as HC and convert its embedding dimension to d via a Feed Forward Network (FFN):
+HC = [HE; HR]WC + bC,
+(3)
+where WC ∈R2d∗d and bC ∈Rd are trainable FFN parameters.
+We formulate the ﬁrst attention layer as follows:
+[Layer]1 =
+
+
+
+
+
+
+
+
+
+
+
+H0
+C = [H0
+E; H0
+R]W0
+C + b0
+C,
+H1
+L = E&R-L-A(H0
+L, H0
+C, H0
+C),
+H1
+E = L-E-A(H0
+E, H1
+L, H1
+L),
+H1
+R = L-R-A(H0
+R, H1
+L, H1
+L),
+(4)
+where ˆET is mapped to H0
+L, H0
+E, and H0
+R, respectively. H1
+L, H1
+E, and H1
+R are the outputs of the ﬁrst
+layer.
+Then H1
+L, H1
+E, and H1
+R are passed to the next layer. We recursively repeat the above procedure until
+we obtain the outputs of the N-th layer, namely HN
+L , HN
+E , and HN
+R . Now we assume that HN
+E and HN
+R
+have fully incorporated token-level label information. And they will be used for span-based NER and
+RE, respectively. HN
+L will be used to classify token BIO labels for sequence tagging-based NER.
+As Figure 2 shows, we establish information interactions among the three types of representations in
+each attention layer. Speciﬁcally, HE and HL can interact with each other directly, as well as HR and HL.
+Therefore by taking HL as a medium, HE and HR can also interact with each other, which establishes
+a bi-directional information interaction between span-based NER and span-based RE in essence.
+Sci China Inf Sci
+5
+i-1
+R
+H
+i
+R
+H
+Q
+K
+i
+L
+H
+V
+i
+L
+H
+L-R-A
+FFN
+Add & Norm
+Add & Norm
+Multi-Head 
+Attention
+Q
+i-1
+L
+H
+K
+i-1
+i-1
+[
+;
+]
+E
+R
+H
+H
+V
+i
+L
+H
+i-1
+C
+H
+i-1
+C
+H
+E&R-L-A
+FFN
+Add & Norm
+Add & Norm
+FFN
+Multi-Head 
+Attention
+i
+E
+H
+Q
+i-1
+E
+H
+K
+i
+L
+H
+V
+i
+L
+H
+L-E-A
+FFN
+Add & Norm
+Add & Norm
+Multi-Head 
+Attention
+Figure 3
+Neural architectures of E&R-L-A, L-E-A, and L-R-A. The three units share a common architecture but diﬀer in inputs.
+3.2.2
+Basic attention units
+As Figure 3 shows, the three types of basic attention units share a common neural architecture but diﬀer in
+model inputs. The common architecture is composed of two sub-layers: multi-head attention and position-
+wise FFN. A residual connection is adopted around each sub-layer, followed by layer normalization.
+Multi-head attention has been proven eﬀective in capturing long-range dependencies by explicitly
+attending to all positions in various feature spaces. It has a series of h parallel heads and requires three
+inputs, i.e., Query (Q), Key (K) and Value (V):
+headi = softmax((QWi
+Q)(KWi
+K)T
+p
+d/h
+(VWi
+V )),
+(5)
+I = concat(head1, ..., headh)WO,
+(6)
+where {Q, K, V} ∈Rn∗d, {Wi
+Q, Wi
+K, Wi
+V } ∈Rd∗(d/h) and WO ∈Rd∗d are trainable parameters. I ∈
+Rn∗d is the output. Multi-head attention learns the pairwise relationship between Q and K and outputs
+weighted summation across all instances. Then residual connection conducts element-wise addition of I
+and Q.
+Position-wise FFN contains two linear transformations with a ReLU activation in between:
+FFN(I) = max(0, IW1 + b1)W2 + b2,
+(7)
+where {W1, W2} ∈Rd∗d and {b1, b2} ∈Rd are trainable FFN parameters.
+Figure 3 shows the detailed implementations of the three units. To be speciﬁc, (1) Entity&Relation
+to Label Attention (E&R-L-A) takes HL as Q, and HC as K and V, respectively.
+It enables label
+representations to attend to the two types of token representations, aiming to make label representations
+incorporate task-speciﬁc information well. (2) Label to Entity Attention (L-E-A) takes HE as Q, and
+HL as K and V, respectively. It enables token representations for span-based NER to attend to label
+representations, aiming to infuse label information into the token representations. (3) Label to Relation
+Attention (L-R-A) takes HR as Q, and HL as K and V, respectively. It enables token representations
+for span-based RE to attend to label representations, aiming to infuse label information into the token
+representations.
+3.3
+Decoders
+We design three separate linear decoders for sequence tagging-based NER, span-based NER and RE,
+respectively.
+3.3.1
+Decoder for sequence tagging-based NER
+This encoder aims to train label representations in a supervised way. The decoder ﬁrst uses an FFN to
+convert the embedding space of label representations (d) to the embedding space of BIO labels. It then
+Sci China Inf Sci
+6
+uses the softmax function to calculate probability distributions on the BIO label space:
+ˆyL = softmax(HN
+L WL + bL),
+(8)
+where WL ∈Rd∗l and bL ∈Rl are trainable FFN parameters. l is the count of BIO label types.
+The training objective is to minimize the following cross-entropy loss:
+LL = −1
+ML
+ML
+X
+i=1
+yi
+L log ˆyi
+L,
+(9)
+where yL is the one-hot vector of the gold token BIO label. ML is the count of token-label instances.
+3.3.2
+Decoder for span-based NER
+This decoder classiﬁes span representations to obtain entities. These entities will be used for RE and
+model performance evaluation. We ﬁrst add the NoneEntity type to the pre-deﬁned entity types. Our
+model will be trained to classify spans into NoneEntity if they are not entities. We formulate deﬁnition
+of span as:
+s = (ti, ti+1, ti+2..., ti+j)
+s.t. 1 ⩽i ⩽i + j ⩽n,
+(10)
+where span width is restricted by a threshold ϵ and j < ϵ.
+We obtain the span representation of s
+(denoted as Es) by concatenating semantic representations of span head and tail tokens, and the span
+width embedding:
+Es = [HN
+E,i; HN
+E,i+j; Wj+1],
+(11)
+where HN
+E,i and HN
+E,i+j are the i-th and (i + j)-th embeddings in HN
+E . Wj+1 is the ﬁxed-size span width
+embedding, which is trained during model training.
+Es ﬁrst passes through an FFN then is fed into the softmax function, yielding a posterior on the space
+of entity types (including NoneEntity):
+ˆys = softmax(EsWs + bs),
+(12)
+where Ws and bs are trainable FFN parameters. The training objective is to minimize the following
+cross-entropy loss:
+LE = −1
+ME
+ME
+X
+i=1
+yi
+s log ˆyi
+s,
+(13)
+where ys is the one-hot vector of the gold span type. ME is the number of span instances.
+We ﬁlter spans that are predicted as entities and build an entity set Se.
+3.3.3
+Decoder for span-based RE
+This decoder classiﬁes relation representations to obtain relations. These relations will be used for model
+performance evaluation. As relations exist between entities, only spans predicted as entities are used for
+the classiﬁcation. We formulate the deﬁnition of ordered entity pairs (a.k.a. candidate relation tuple) as:
+r =< e1, e2 >
+s.t. e1, e2 ∈Se, e1 ̸= e2,
+(14)
+where e1 and e2 are the head and tail entities, respectively.
+We obtain relation representations (denoted as Er) by concatenating semantic representations of head
+entity, tail entity and relation context:
+Er = [Ee1; Ee2; Cr],
+(15)
+where Ee1 and Ee2 are semantics of e1 and e2, respectively. We obtain them using Eq.11 with HN
+R .
+Following previous work [8], we obtain Cr by applying the max-pooling function to the embedding
+sequence of the relation context.
+Er ﬁrst passes through an FFN then is fed into the sigmoid function:
+ˆyr = σ(ErWr + br),
+(16)
+Sci China Inf Sci
+7
+ B-AE/B-DRUG        I-AE          O   O       O     O 
+CodeineDRUG intoxicationAE in the neonate . 
+Figure 4
+An example of overlapping entities which are tagged by the extended BIO tagging scheme, where “Codeine” is the
+overlapping token, DRUG and AE are entity types.
+where σ is the sigmoid. Wr and br are trainable FFN parameters.
+Any high response in the sigmoid outputs indicates that a corresponding relation is held between e1
+and e2. Given a conﬁdence threshold α, any relation with a score ⩾α is considered activated.
+The training objective is to minimize the following binary cross-entropy loss:
+LR = −1
+MR
+MR
+X
+i=1
+(yi
+r log ˆyi
+r + (1 −yi
+r) log(1 −ˆyi
+r)),
+(17)
+where yr is the one-hot vector of the gold relation type. MR is the number of entity pair instances.
+3.3.4
+Model training
+During model training, we optimize the following joint training objective:
+Ljoint(W; θ) = LL + LE + LR.
+(18)
+4
+Experiments
+4.1
+Experimental setup
+4.1.1
+Datasets
+We evaluate STSN on ACE05 [29], CoNLL04 [18], and ADE [19] and use the same entity and relation
+types, data splits, and pre-processing following the established line of work [30]. Moreover, for a fair
+comparison with previous work [8], we maintain a full version of the ADE dataset, which includes 119
+instances containing overlapping entities.
+4.1.2
+Extended BIO tagging scheme
+To make STSN use token-level label information of overlapping entities, we extend the BIO tagging
+scheme, which cannot tag overlapping entities initially. We begin by establishing two deﬁnitions:
+• DEFINITION 1. Two-fold overlapping entities. A pair of overlapping entities where the overlap-
+ping tokens are not contained in any other entities.
+• DEFINITION 2. Preceding entity. An entity with a preceding head location. If two entities have
+the same head location, the entity with a longer length is chosen.
+Figure 4 gives a typical example: “Codeine” and “Codeine intoxication” are two-fold overlapping
+entities, and “Codeine intoxication” is the preceding entity.
+The detailed tagging principle is that we ﬁrst tag the preceding entity with the BIO tagging scheme.
+Then for the overlapping entity, we append its BIO labels to existing labels, separated by “/”.
+For
+example, “Codeine” is tagged with B-AE/B-DRUG. As all overlapping entities in the full ADE dataset are
+two-fold, we tag the dataset with the extended BIO tagging scheme. For other datasets, we tag them
+with the BIO tagging scheme.
+4.1.3
+Evaluation metrics
+Following the established line of work [9, 10], we use the standard precision (P), recall (R) and F1
+to evaluate the model performance. For NER, a predicted entity is considered correct if its type and
+boundaries (entity head for ACE05) match the ground truth. For RE, we adopt two evaluation metrics:
+(1) A predicted relation is considered correct if the relation type and boundaries of the two entities match
+the ground truth. We denote this metric as RE. (2) A predicted relation is considered correct if both
+relation type and the two entities match ground truth. We denote this metric as RE+. More discussion
+of evaluation settings can be found in the literature [30].
+Sci China Inf Sci
+8
+4.1.4
+Implementation details
+We build STSN by deep stacking three attention layers and evaluate it with bert-base-cased [25] and
+albert-xxlarge-v1 [26] on a single NVIDIA RTX 3090 GPU. We optimize STSN using AdamW for 100
+epochs with a learning rate of 5e-5, a linear scheduler with a warmup ratio of 0.1 and a weight decay of
+1e-2. We set the training batch size to 4, dimension of Wj+1 to 150, h of multi-head attention to 8, span
+width threshold ϵ to 10 and relation threshold α to 0.4. Following the established line of work [8,9], we
+adopt a negative sampling strategy and set the number of the negative entity and relation samples per
+data entry to 100, respectively.
+Across all the three datasets, we use the training set to train STSN and use the test set to report
+model evaluation performance. For ACE05 and CoNLL04, we run STSN 20 times and report averaged
+results of the best 5 runs. For ADE, we adopt the 10-fold cross-validation and run each fold 20 times
+and report averaged results of the best 5 runs.
+Model
+PLM
+NER
+RE
+RE+
+P
+R
+F1
+P
+R
+F1
+P
+R
+F1
+Li and Ji [1]
+-
+85.2
+76.9
+80.8
+68.9
+41.9
+52.1
+65.4
+39.8
+49.5
+Katiyar et al. [3]
+-
+84.0
+81.3
+82.6
+57.9
+54.0
+55.9
+55.5
+51.8
+53.6
+Miwa et al. [2]
+-
+82.9
+83.9
+83.4
+-
+-
+-
+57.2
+54.0
+55.6
+Sun et al. [31]
+-
+83.9
+83.2
+83.6
+-
+-
+-
+64.9
+55.1
+59.6
+Li et al. [32]
+BERT
+84.7
+84.9
+84.8
+-
+-
+-
+64.8
+56.2
+60.2
+Dixit and Al [7]
+ELMo
+85.9
+86.1
+86.0
+68.0
+58.4
+62.8
+-
+-
+-
+Shen et al. [33]
+BERT
+87.7
+87.5
+87.6
+-
+-
+-
+62.2
+63.7
+62.8
+Luan et al. [11]
+-
+-
+-
+88.4
+-
+-
+-
+-
+-
+63.2
+Wadden et al. [12]
+BERT
+-
+-
+88.6
+-
+-
+-
+-
+-
+63.4
+Lin et al. [5]
+BERT
+-
+-
+88.8
+-
+-
+-
+-
+-
+67.5
+Wang and Lu [30]
+ALBERT
+-
+-
+89.5
+-
+-
+67.6
+-
+-
+64.3
+Ji et al. [9]
+BERT
+89.3
+89.9
+89.6
+-
+-
+-
+71.2
+60.2
+65.2
+Ren et al. [34]
+ALBERT
+-
+-
+89.9
+-
+-
+-
+-
+-
+68.0
+Zhong et al. [10]
+BERT
+-
+-
+90.1
+-
+-
+67.7
+-
+-
+64.8
+Zhong et al. [10]
+ALBERT
+-
+-
+90.9
+-
+-
+69.4
+-
+-
+67.0
+STSN (Ours)
+BERT
+90.9
+89.9
+90.4
+77.8
+60.7
+68.2
+69.4
+64.4
+66.8
+STSN (Ours)
+ALBERT
+92.7
+90.5
+91.6
+80.2
+64.2
+71.3
+69.5
+68.7
+69.1
+Table 1
+Model comparisons on ACE05 using the micro-averaged F1. Bold values denote the state-of-the-art results.
+Model
+PLM
+NER
+RE+
+P
+R
+F1
+P
+R
+F1
+Bekoulis et al. [20] ▲
+-
+83.4
+84.1
+83.9
+63.8
+60.4
+62.0
+Nguyen et al. [35] ▲
+-
+-
+-
+86.2
+-
+-
+64.4
+Eberts et al. [8] ▲
+BERT
+85.8
+86.8
+86.3
+74.8
+71.5
+72.9
+Wang and Lu [30] ▲
+ALBERT
+-
+-
+86.9
+-
+-
+75.4
+Miwa et al. [36] △
+-
+81.2
+80.2
+80.7
+76.0
+50.9
+61.0
+Zhang et al. [37] △
+-
+-
+-
+85.6
+-
+-
+67.8
+Li et al. [32] △
+BERT
+89.0
+86.6
+87.8
+69.2
+68.2
+68.9
+Eberts et al. [8] △
+BERT
+88.3
+89.6
+88.9
+73.0
+70.0
+71.5
+Wang and Lu [30] △
+ALBERT
+-
+-
+90.1
+-
+-
+73.6
+Jiet al. [9] △
+BERT
+90.1
+90.4
+90.2
+77.0
+71.9
+74.3
+Shen et al. [33] △
+BERT
+90.3
+90.3
+90.3
+73.0
+71.6
+72.4
+Zhao et al. [21] △
+ELMO
+-
+-
+90.6
+-
+-
+73.0
+Cabot et al. [38] △
+BART
+-
+-
+-
+75.6
+75.1
+75.4
+STSN (Ours) △
+BERT
+90.6
+91.2
+90.9
+76.1
+73.9
+75.0
+STSN (Ours) △
+ALBERT
+92.4
+90.8
+91.6
+76.8
+77.4
+77.1
+STSN (Ours) ▲
+BERT
+88.5
+87.9
+88.2
+77.5
+77.1
+77.3
+STSN (Ours) ▲
+ALBERT
+89.8
+89.0
+89.4
+79.0
+78.0
+78.5
+Table 2
+Model comparisons on CoNLL04. △denotes using the micro-averaged F1. ▲denotes using the macro-averaged F1. Bold
+values denote the state-of-the-art results.
+Sci China Inf Sci
+9
+4.2
+Main results
+Table 1, Table 2, and Table 3 show the model comparison results. We have the following observations:
+(1) Our best model consistently surpasses all the selected baselines in terms of F1.
+(2) On ACE05,
+compared to the strongest baselines [10,34], our best model obtains +0.7%, +1.9%, and +1.1% F1 gains
+on NER, RE, and RE+, resepectively. (3) On CoNLL04, compared to the strongest baselines [21, 38],
+our best model obtains +1.0% and +1.7% micro-averaged F1 gains on NER and RE+, respectively.
+And compared to the strongest baselines [8,30], our model obtains +2.5% and +3.1% macro-averaged
+F1 gains on NER and RE, respectively. (4) On ADE (without overlapping entities), compared to the
+strongest baseline [39], our best model obtains +1.0% and +1.3% F1 gains on NER and RE, respectively.
+(5) On the full ADE (with overlapping entities), compared to the strongest baseline [40], our best
+model obtains +1.1% and +2.7% F1 gains on NER and RE, respectively.
+We attribute these performance gains to: (1) The success of using token-level label information in
+span-based joint extraction. (2) The bi-directional information interaction between NER and RE. (3)
+The eﬀectiveness of the extended BIO tagging scheme. Additionally, we report concrete positive and
+negative case studies to help understand our model, as shown in Section 4.5.
+Model
+PLM
+NER
+RE+
+P
+R
+F1
+P
+R
+F1
+Eberts et al. [8] ♠
+BERT
+89.0
+89.6
+89.3
+77.8
+78.0
+78.8
+Ji et al. [9] ♠
+BERT
+89.9
+91.3
+90.6
+79.6
+81.9
+80.7
+Lai et al. [40] ♠
+BERT
+-
+-
+90.7
+-
+-
+81.7
+Li et al. [41]
+-
+79.5
+79.6
+79.5
+64.0
+62.9
+63.4
+Li et al. [42]
+-
+82.7
+86.7
+84.6
+67.5
+75.8
+71.4
+Bekoulis et al. [20]
+-
+84.7
+88.2
+86.4
+72.1
+77.2
+74.6
+Eberts et al. [8]
+BERT
+89.3
+89.3
+89.3
+78.1
+80.4
+79.2
+Zhao et al. [21]
+ELMo
+-
+-
+89.4
+-
+-
+81.1
+Yan [39]
+BERT
+-
+-
+89.6
+-
+-
+80.0
+Wang and Lu [30]
+ALBERT
+-
+-
+89.7
+-
+-
+80.1
+Shen et al. [33]
+BERT
+89.5
+91.3
+90.4
+84.2
+83.4
+80.7
+Cabot et al. [38]
+BART
+-
+-
+-
+81.5
+83.1
+82.2
+Yan [39]
+ALBERT
+-
+-
+91.3
+-
+-
+83.2
+STSN (Ours)
+BERT
+91.3
+91.9
+91.6
+82.8
+84.6
+83.7
+STSN (Ours)
+ALBERT
+91.5
+93.1
+92.3
+84.8
+84.2
+84.5
+STSN (Ours) ♠
+BERT
+90.8
+91.4
+91.1
+83.3
+83.7
+83.5
+STSN (Ours) ♠
+ALBERT
+91.6
+92.0
+91.8
+85.0
+83.8
+84.4
+Table 3
+Model comparisons on ADE. ♠denotes evaluating STSN on the full ADE dataset (with overlapping entities).
+Bold
+values denote the state-of-the-art results.
+4.3
+Analysis
+We report analysis results on the dev set of ACE05 and the test sets of CoNLL04 and ADE.3) And we
+take SpERT [8] as the baseline, which is the closest span-based model to ours. SpERT uses BERT as
+the encoder and two linear decoders to classify spans and span pairs. For a fair comparison, we use our
+BERT-based STSN.
+4.3.1
+Performance against entity length
+Figure 5 shows performance comparisons on NER under various entity lengths. We divide all entity
+lengths, which is restricted by span width threshold ϵ, into [1-2], [3-4], [5-6], [7-8], and [9-10]. We have
+the following observations: across all datasets, (1) STSN consistently outperforms the baseline under all
+length intervals. (2) Performance improvements brought by STSN are generally further enhanced when
+the entity length increases. Speciﬁcally, STSN obtains much higher F1 gains under [7-8] and [9-10] than
+the ones under [1-2] and [3-4], demonstrating that STSN is more eﬀective in terms of long entities.
+3) Following previous work [8,9,21,30], we combine the training and dev sets of CoNLL04 to train our STSN. Thus we use the
+test set for the analysis. And since ADE does not contain a dev set, we also use the test set for the analysis.
+Sci China Inf Sci
+10
+[1-2]
+[3-4]
+[5-6]
+[7-8]
+[9-10]
+a) NER performance comparison
+40
+50
+60
+70
+80
+90
+F1 Scores (%)
+ACE05
+STSN
+baseline
+[1-2]
+[3-4]
+[5-6]
+[7-8]
+[9-10]
+b) NER performance comparison
+50
+60
+70
+80
+90
+F1 Scores (%)
+CoNLL04
+STSN
+baseline
+[1-2]
+[3-4]
+[5-6]
+[7-8]
+[9-10]
+c) NER performance comparison
+40
+50
+60
+70
+80
+90
+F1 Scores (%)
+ADE
+STSN
+baseline
+Figure 5
+NER performance comparisons under various grouped entity lengths across the three datasets.
+4.3.2
+Performance against text length
+We compare STSN with the baseline under grouped text lengths. As Figure 6 shows, we divide text
+lengths into [0-19], [20-34], [35-49], and [⩾50]. We have the following observations: across the three
+datasets, (1) STSN performs way better than the baseline under all text lengths on both NER (a.1,
+b.1, and c.1) and RE (a.2, b.2, and c.2). (2) Performance gains brought by STSN are generally further
+enhanced when text length increases. In particular, STSN obtains the best performance gains under
+[>=50] on both NER and RE, demonstrating that STSN is more eﬀective in terms of long texts.
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+a.1) NER performance comparison
+60
+70
+80
+90
+F1 Scores (%)
+ACE05
+STSN
+baseline
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+b.1) NER performance comparison
+70
+80
+90
+F1 Scores (%)
+CoNLL04
+STSN
+baseline
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+c.1) NER performance comparison
+70
+80
+90
+F1 Scores (%)
+ADE
+STSN
+baseline
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+a.2) RE performance comparison
+40
+50
+60
+70
+F1 Scores (%)
+STSN
+baseline
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+b.2) RE performance comparison
+40
+60
+80
+F1 Scores (%)
+STSN
+baseline
+[0-19]
+[20-34]
+[35-49]
+[>=50]
+c.2) RE performance comparison
+50
+60
+70
+80
+90
+F1 Scores (%)
+STSN
+baseline
+Figure 6
+NER and RE performance comparisons under various grouped text lengths across the three datasets.
+4.4
+Ablation study
+We conduct ablation studies on our BERT-based STSN and report ablation results on the dev set of
+ACE05 and the test sets of CoNLL04 and ADE.
+4.4.1
+Ablations on various attention layers
+We conduct ablations on attention layer numbers by deep stacking various attention layers in STSN.
+Table 4 shows the ablation results, from which we can observe that: across the three datasets, (1) When
+deep stacking three attention layers, STSN performs the best (82.2% Ave. F1). (2) STSN with only
+one attention layer performs the worst, which we attribute to the fact that one layer cannot fully infuse
+token-level label information into token semantic representations. (3) When the number of attention
+layers increases, the model performance generally ﬁrst drastically increases then slightly decreases. We
+attribute this to the fact that deeper models make it easier to fully infuse token-level label information
+into token semantic representations, while much deeper models tend to infuse more noisy information,
+which harms the model performance.
+Sci China Inf Sci
+11
+Method
+ACE05
+CoNLL04
+ADE
+Ave. F1
+NER
+RE+
+NER
+RE+
+NER
+RE+
+STSN + deep stacking
+1 AttentionLayer
+87.6
+59.2
+87.4
+72.1
+88.9
+81.1
+79.4
+2 AttentionLayers
+88.7
+60.5
+90.0
+73.9
+89.5
+80.4
+80.5
+3 AttentionLayers
+89.5
+62.6
+90.9
+75.0
+91.6
+83.7
+82.2
+4 AttentionLayers
+89.2
+62.5
+91.3
+75.2
+90.5
+83.8
+82.1
+5 AttentionLayers
+88.9
+62.6
+90.4
+74.2
+90.7
+83.2
+81.7
+6 AttentionLayers
+89.1
+62.0
+90.4
+74.4
+90.5
+82.9
+81.6
+Table 4
+Ablation study on attention layer numbers. We solely report the F1 scores and consider the averaged score of the 6 F1
+scores in each row to be Ave. F1, which we use as an overall evaluation metric. The bold value denotes the best result.
+N
+E
+H
+N
+L
+H
+N
+R
+H
+L-E-A
+E&R-L-A
+L-R-A
+× N
+ˆES
+...
+0
+HE
+0
+L
+H
+0
+R
+H
+Encoder
+...
+...
+Figure 7
+Removing the information ﬂow
+from RE to NER, as the red lines show.
+N
+E
+H
+N
+L
+H
+N
+R
+H
+L-E-A
+E&R-L-A
+L-R-A
+× N
+ˆES
+...
+0
+E
+H
+0
+L
+H
+0
+R
+H
+Encoder
+...
+...
+Figure 8
+Removing the information ﬂow
+from NER to RE, as the red lines show.
+N
+E
+H
+N
+L
+H
+N
+R
+H
+L-E-A
+E&R-L-A
+L-R-A
+× N
+ˆES
+...
+0
+HE
+0
+L
+H
+0
+R
+H
+Encoder
+...
+...
+Figure 9
+Removing the information in-
+teractions, as the red lines show.
+4.4.2
+Ablations on model components
+Table 5 reports the ablation results across the three datasets, where
+(1) “w/o Label” denotes ablating token-level label information. We realize this ablation by removing
+the stacked attention layers and the decoder for sequence tagging-based NER from STSN. After doing
+this, our model cannot beneﬁt from the token-level label information. The results show that using the
+token-level label information boosts the model performance by delivering +2.7% to +3.1% F1 gains on
+NER and +4.2% to +6.0% F1 gains on RE+.
+(2) “w/o Bi-Interaction†” denotes removing the information ﬂow from RE to NER but keeping the
+information ﬂow from NER to RE, as shown in Figure 7. We realize this ablation by making the K and
+V of E&R-L-A be HE and the Q of E&R-L-A be HL. Thus HL no longer attends to HR and solely
+attends to HE. The results show that the information ﬂow from RE to NER brings +1.1% and +0.8%
+averaged F1 gains on NER and RE, respectively.
+(3) “w/o Bi-Interaction‡” denotes removing the information ﬂow from NER to RE but keeping the
+information ﬂow from RE to NER, as shown in Figure 8. We realize this ablation by making the K and
+V of E&R-L-A be HR and the Q of E&R-L-A be HL. Thus HL no longer attends to HE and solely
+attends to HR. The results show that the information ﬂow from NER to RE brings +0.4% and +1.3%
+averaged F1 gains on NER and RE, respectively.
+(4) “w/o Interaction” denotes removing the information interactions between NER and RE, as shown
+in Figure 9. We realize this ablation by making the Q, K, and V of E&R-L-A be HL. In other words,
+E&R-L-A is the self-attention in the current scenario, disabling the information interactions between
+NER and RE. The results show that the bi-directional information interactions bring +1.2% and +1.5%
+averaged F1 gains on NER and RE, respectively.
+Based on these observations, we can conclude that the performance gains mainly beneﬁt from using
+the token-level label information, revealing that our motivation is suﬃcient. Moreover, the bi-directional
+information interaction is consistently superior to the two unidirectional information ﬂows, validating the
+eﬀectiveness of our novel bi-directional design.
+Method
+ACE05
+CoNLL04
+ADE
+NER
+RE+
+NER
+RE+
+NER
+RE+
+STSN
+89.5
+62.6
+90.9
+75.0
+91.6
+83.7
+w/o Label
+86.4 (-3.1)
+56.6 (-6.0)
+88.1 (-2.7)
+70.8 (-4.2)
+88.7 (-2.9)
+78.5 (-5.2)
+w/o Bi-Interaction†
+89.0 (-0.5)
+61.6 (-1.0)
+89.6 (-1.3)
+74.4 (-0.6)
+90.1 (-1.5)
+82.9 (-0.8)
+w/o Bi-Interaction‡
+89.2 (-0.3)
+61.4 (-1.2)
+90.2 (-0.7)
+73.5 (-1.5)
+91.5 (-0.1)
+82.4 (-1.3)
+w/o Interaction
+88.9 (-0.6)
+61.7 (-0.9)
+89.5 (-1.4)
+73.4 (-1.6)
+90.1 (-1.5)
+81.6 (-2.1)
+Table 5
+Ablation results. We solely report the F1 scores. The values in parentheses denote the F1 score decreases (compared to
+STSN) caused by corresponding ablation settings.
+Sci China Inf Sci
+12
+4.5
+Case study
+We conduct qualitative analysis on concrete examples to help understand our model. We take SpERT as
+the baseline, which is the closest span-based model to ours. For a fair comparison, we use our BERT-based
+STSN.
+4.5.1
+Positive example
+Table 6 reports four positive examples. In Text 1, SpERT mistakenly predicts “House of Delegates” as a
+LOC entity, while STSN correctly predicts it as a ORG entity. We attribute it to the fact that STSN enables
+span representations to incorporate token-level label information in the case that STSN correctly tags
+“House of Delegates” with ORG labels. Moreover, STSN correctly predicts that <“House of Delegates”,
+“Maryland”> holds a OrgBased In relation. Text 2 shows a similar example, where STSN correctly
+predicts “La.” as a LOC entity, as well as the Located In relation hold by <“Grand Isle”, “La.”>.
+Text 3 and 4 mainly show the eﬀects of using token-level label information in relation classiﬁcation. For
+example, both SpERT and STSN correctly predict all entities of Text 3, but SpERT mistakenly predicts
+that there is no relation between these entities. In contrast, STSN correctly predicts the two Located In
+relations. We attribute it to using token-level label information in relation representations, enabling our
+model to know detailed entity types beforehand.
+Text 1
+Judith Toth says she returned for a fourth term in Maryland’s House of Delegates
+SpERT
+Entity
+[Judith Toth]PER
+[Maryland]LOC
+[House of Delegates]LOC
+Relation
+<House of Delegates, Maryland, Located In>
+STSN
+Token label
+B-PER
+I-PER
+O
+O
+O
+O
+O
+O
+O
+O
+B-LOC
+B-ORG
+I-ORG
+I-ORG
+Entity
+[Judith Toth]PER
+[Maryland]LOC
+[House of Delegates]ORG
+Relation
+<House of Delegates, Maryland, OrgBased In>
+Text 2
+One man was lost from an oil rig oﬀGrand Isle, La., as the storm moved in
+SpERT
+Entity
+[Grand Isle]LOC
+Relation
+No relation
+STSN
+Token label
+O
+O
+O
+O
+O
+O
+O
+O
+O
+B-LOC
+I-LOC
+B-LOC
+O
+O
+O
+O
+O
+Entity
+[Grand Isle]LOC
+[La.]LOC
+Relation
+<Grand Isle, La., Located In>
+Text 3
+Seattle has a hour-glass ﬁgure, squeezed between Puget Sound and Lake Washington
+SpERT
+Entity
+[Seattle]LOC
+[Puget Sound]LOC
+[Lake Washington]LOC
+Relation
+No relation
+STSN
+Token label
+B-LOC
+O
+O
+O
+O
+O
+O
+B-LOC
+I-LOC
+O
+B-LOC
+I-LOC
+Entity
+[Seattle]LOC
+[Puget Sound]LOC
+[Lake Washington]LOC
+Relation
+<Puget Sound, Seattle, Located In>, <Lake Washington, Seattle, Located In>
+Text 4
+An enraged Khrushchev instructed Soviet ships to ignore Kennedy’s naval blockade
+SpERT
+Entity
+[Khrushchev]PER
+[Soviet]LOC
+[Kennedy]PER
+Relation
+No relation
+STSN
+Token label
+O
+O
+B-PER
+O
+B-LOC
+O
+O
+O
+B-PER
+O
+O
+Entity
+[Khrushchev]PER
+[Soviet]LOC
+[Kennedy]PER
+Relation
+<Khrushchev, Soviet, Live In>
+Table 6
+Positive examples regarding using token-level label information in the span-based joint extraction, where the red font
+denotes that entities or relations are mistakenly predicted, and the blue font denotes corresponding entities located in texts, and
+all labels, entities, and relations in the STSN rows are predicted correctly.
+4.5.2
+Negative example
+We also report a negative example, as Table 7 shows. In this example, STSN mistakenly tags a token
+label: “president” is tagged with I-ORG, which is supposedly tagged with O. However, STSN still correctly
+predicts all entities and relations of this Text. Moreover, we ﬁnd that STSN successfully tackles most of
+the similar cases (97.56%) across the three datasets. We attribute it to the fact that STSN learns only to
+incorporate useful label information, enabling our model to avoid suﬀering from wrong label predictions.
+Sci China Inf Sci
+13
+Text
+But Jack Frazier, Rotary Club president, said volunteers picked up the ducks
+SpERT
+Entity
+[Jack Frazier]PER
+[Rotary Club]ORG
+Relation
+<Jack Frazier, Rotary Club, Work For>
+STSN
+Token label
+O
+B-PER
+I-PER
+B-ORG
+I-ORG I-ORG O
+O
+O
+O
+O
+O
+Entity
+[Jack Frazier]PER
+[Rotary Club]ORG
+Relation
+<Jack Frazier, Rotary Club, Work For>
+Table 7
+A negative example, in which STSN mistakenly predicts a token label (i.e., the I-ORG), but it still correctly predicts all
+entities and relations.
+5
+Conclusion
+In this paper, we propose a Sequence Tagging augmented Span-based Network (STSN) for the joint entity
+and relation extraction task. STSN enables the span-based joint extraction model to use token-level label
+information, which is achieved by deep stacking multiple attention layers. Moreover, STSN establishes
+bi-directional information interactions between NER and RE, which is proven eﬀective. Furthermore,
+we extend the BIO tagging scheme, allowing STSN to use the label information of overlapping entities.
+Experiments on three datasets show that STSN consistently outperforms other competing models in
+terms of F1. Since STSN only considers the two-fold overlapping entities, we will investigate upgrading
+our model in the future to extract other overlapping entities.
+Acknowledgements
+This work was supported by Hunan Provincial Natural Science Foundation (Grant Nos. 2022JJ30668 and
+2022JJ30046).
+References
+1
+Li Q, Ji H. Incremental joint extraction of entity mentions and relations. In: Proceedings of the 52nd Annual Meeting of the
+Association for Computational Linguistics, Baltimore, Maryland, 2014. 402–412
+2
+Miwa M, Bansal M. End-to-end relation extraction using LSTMs on sequences and tree structures. In: Proceedings of the
+54th Annual Meeting of the Association for Computational Linguistics, Berlin, Germany, 2016. 1105–1116
+3
+Katiyar A, Cardie C. Going out on a limb: Joint extraction of entity mentions and relations without dependency trees. In:
+Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics, Vancouver, Canada, 2017. 917–928
+4
+Ye W, Li B, Xie R, et al. Exploiting entity BIO tag embeddings and multi-task learning for relation extraction with imbalanced
+data. In: Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, Florence, Italy, 2019.
+1351–1360
+5
+Lin Y, Ji H, Huang F, et al. A joint neural model for information extraction with global features. In: Proceedings of the 58th
+Annual Meeting of the Association for Computational Linguistics, Online, 2020. 7999–8009
+6
+Luan Y, He L, Ostendorf M, et al.
+Multi-task identiﬁcation of entities, relations, and coreference for scientiﬁc knowledge
+graph construction. In: Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing, Brussels,
+Belgium, 2018. 3219–3232
+7
+Dixit K, Al-Onaizan Y. Span-level model for relation extraction. In: Proceedings of the 57th Annual Meeting of the Association
+for Computational Linguistics, Florence, Italy, 2019. 5308–5314
+8
+Eberts M, Ulges A. Span-based joint entity and relation extraction with transformer pre-training. In: Proceedings of the 24th
+European Conference on Artiﬁcial Intelligence, Santiago de Compostela, Spain, 2020. 1–8
+9
+Ji B, Yu J, Li S, et al.
+Span-based joint entity and relation extraction with attention-based span-speciﬁc and contextual
+semantic representations. In: Proceedings of the 28th International Conference on Computational Linguistics, Online, 2020.
+88–99
+10
+Zhong Z, Chen D. A frustratingly easy approach for entity and relation extraction. In: Proceedings of the 2021 Conference of
+the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Online, 2021.
+50–61
+11
+Luan Y, Wadden D, He L, et al. A general framework for information extraction using dynamic span graphs. In: Proceedings
+of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language
+Technologies, Minneapolis, Minnesota, 2019. 3036–3046
+12
+Wadden D, Wennberg U, Luan Y, et al. Entity, relation, and event extraction with contextualized span representations. In:
+Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint
+Conference on Natural Language Processing, Hong Kong, China, 2019. 5784–5789
+13
+Yao Y, Ye D, Li P, et al. DocRED: A large-scale document-level relation extraction dataset. In: Proceedings of the 57th
+Annual Meeting of the Association for Computational Linguistics, Florence, Italy, 2019. 764–777
+14
+Zhang Y, Zhong V, Chen D, et al. Position-aware attention and supervised data improve slot ﬁlling. In: Proceedings of the
+2017 Conference on Empirical Methods in Natural Language Processing, Copenhagen, Denmark, 2017. 35–45
+15
+Riedel S, Yao L, McCallum A. Modeling relations and their mentions without labeled text.
+In: Proceedings of the Joint
+European Conference on Machine Learning and Knowledge Discovery in Databases, Berlin, Heidelberg, 2010. 148–163
+16
+Zeng X, Zeng D, He S, et al. Extracting relational facts by an end-to-end neural model with copy mechanism. In: Proceedings
+of the 56th Annual Meeting of the Association for Computational Linguistics, Melbourne, Australia, 2018. 506–514
+17
+Hendrickx I, Kim S, Kozareva Z, et al. SemEval-2010 task 8: Multi-way classiﬁcation of semantic relations between pairs of
+nominals. In: Proceedings of the 5th International Workshop on Semantic Evaluation, Uppsala, Sweden, 2010. 33–38
+18
+Roth D, Yih W. A linear programming formulation for global inference in natural language tasks. In: Proceedings of the 8th
+Conference on Computational Natural Language Learning at HLT-NAACL, Boston, Massachusetts, USA, 2004. 1–8
+19
+Gurulingappa H, Rajput A, Roberts A. Development of a benchmark corpus to support the automatic extraction of drug-
+related adverse eﬀects from medical case reports. J Biomed Inform, 2012, 45: 885–892
+Sci China Inf Sci
+14
+20
+Bekoulis G, Deleu J, Demeester T, et al. Joint entity recognition and relation extraction as a multi-head selection problem.
+Expert Syst Appl, 2018, 114: 34-45.
+21
+Zhao S, Hu M, Cai Z, et al. Modeling dense cross-modal interactions for joint entity-relation extraction. In: Proceedings of
+the 29th International Joint Conference on Artiﬁcial Intelligence, Online, 2020. 4032–4038
+22
+Lee K, He L, Zettlemoyer L. Higher-order coreference resolution with coarse-to-ﬁne inference. In: Proceedings of the 2018
+Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies,
+New Orleans, Louisiana, 2018. 687–692
+23
+He L, Lee K, Levy O, et al. Jointly predicting predicates and arguments in neural semantic role labeling. In: Proceedings of
+the 56th Annual Meeting of the Association for Computational Linguistics, Melbourne, Australia, 2018. 364–369
+24
+Peters M, Neumann M, Iyyer M, et al. Deep contextualized word representations. In: Proceedings of the 2018 Conference of
+the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, New Orleans,
+Louisiana, 2018. 2227–2237
+25
+Devlin J, Chang M, Lee K, et al.
+BERT: pre-training of deep bidirectional transformers for language understanding.
+In:
+Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human
+Language Technologies, Minneapolis, Minnesota, 2019. 4171–4186
+26
+Lan Z, Chen M, Goodman S, et al.
+ALBERT: a lite BERT for self-supervised learning of language representations.
+In:
+Proceedings of the 8th International Conference on Learning Representations, Online, 2020. 1-17
+27
+Wu Y, Schuster M, Chen Z, et al. Google’s neural machine translation system: bridging the gap between human and machine
+translation. 2016. ArXiv:1609.08144
+28
+Vaswani A, Shazeer N, Parmar N, et al.
+Attention is all you need.
+In:
+Proceedings of the 31st Conference on Neural
+Information Processing Systems, Long Beach, CA, USA, 2017. 5998–6008
+29
+Doddington G, Mitchell A, Przybocki M, et al. The automatic content extraction (ACE) program – tasks, data, and evaluation.
+In: Proceedings of the 4th International Conference on Language Resources and Evaluation, Lisbon, Portugal, 2004. 837-840
+30
+Wang J, Lu W. Two are better than one: Joint entity and relation extraction with table-sequence encoders. In: Proceedings
+of the 2020 Conference on Empirical Methods in Natural Language Processing, Online, 2020. 1706–1721
+31
+Sun C, Wu Y, Lan M, et al. Extracting entities and relations with joint minimum risk training. In: Proceedings of the 2018
+Conference on Empirical Methods in Natural Language Processing, Brussels, Belgium, 2018. 2256–2265
+32
+Li X, Yin F, Sun Z, et al. Entity-relation extraction as multi-turn question answering. In: Proceedings of the 57th Annual
+Meeting of the Association for Computational Linguistics, Florence, Italy, 2019. 1340–1350
+33
+Shen Y, Ma X, Tang Y, et al. A trigger-sense memory ﬂow framework for joint entity and relation extraction. In: Proceedings
+of the Web Conference 2021, Online, 2021. 1704-1715
+34
+Ren L, Sun C, Ji H, et al. HySPA: hybrid span generation for scalable text-to-graph extraction. In: Findings of the Association
+for Computational Linguistics: ACL-IJCNLP, Online, 2021. 4066–4078
+35
+Nguyen D Q, Verspoor K. End-to-end neural relation extraction using deep biaﬃne attention. In: Proceedings of the 41st
+European Conference on Information Retrieval, Cologne, Germany, 2019. 729–738
+36
+Miwa M, Sasaki Y. Modeling joint entity and relation extraction with table representation.
+In: Proceedings of the 2014
+Conference on Empirical Methods in Natural Language Processing, Doha, Qatar, 2014. 1858–1869
+37
+Zhang M, Zhang Y, Fu G. End-to-end neural relation extraction with global optimization.
+In:
+Proceedings of the 2017
+Conference on Empirical Methods in Natural Language Processing, Copenhagen, Denmark, 2017. 1730–1740
+38
+Huguet P, Navigli R. REBEL: relation extraction by end-to-end language generation. In: Findings of the 2021 Conference on
+Empirical Methods in Natural Language Processing, Punta Cana, Dominican Republic, 2021. 2370–2381
+39
+Yan Z, Zhang C, Fu J, et al. A partition ﬁlter network for joint entity and relation extraction. In: Proceedings of the 2021
+Conference on Empirical Methods in Natural Language Processing, Punta Cana, Dominican Republic, 2021. 185–197
+40
+Lai T, Ji H, Zhai C, et al. Joint biomedical entity and relation extraction with knowledge-enhanced collective inference. In:
+Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint
+Conference on Natural Language Processing, Online, 2021. 6248–6260
+41
+Li F, Zhang Y, Zhang M, et al. Joint models for extracting adverse drug events from biomedical text. In: Proceedings of the
+25th International Joint Conference on Artiﬁcial Intelligence, New York, USA, 2016. 2838–2844
+42
+Li F, Zhang M, Fu G, et al. A neural joint model for entity and relation extraction from biomedical text. BMC bioinformatics,
+2017, 18: 1–11

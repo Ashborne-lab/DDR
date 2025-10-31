@@ -1,0 +1,214 @@
+[image] ACL Anthology
+•  News(current)
+•  FAQ(current)
+•  Corrections(current)
+•  Submissions(current)
+•  Github
+Making the most of limited training data
+using distant supervision
+Roland Roller, Mark Stevenson
+Correct Metadata for
+×
+ Authors Adjust author names and order to match the PDF.Add Author
+Important: The Anthology treat PDFs as authoritative. Please use
+this form only to correct data that is out of line with the PDF. See
+our corrections guidelines if you need to change the PDF.
+Title Adjust the title. Retain tags such as <fixed-case>.
+Abstract Correct abstract if needed. Retain XML formatting tags such as <tex-
+math>.
+Verification against PDF Ensure that the new title/authors match the
+snapshot below. (If there is no snapshot or it is too small, consult the PDF.)
+[image]
+Authors concatenated from the text boxes above:
+ALL author names match the snapshot above—including middle
+initials, hyphens, and accents.
+Submit
+Anthology ID:
+W15-3802
+Volume:
+Proceedings of BioNLP 15
+Month:
+July
+Year:
+2015
+Address:
+Beijing, China
+Editors:
+Kevin Bretonnel Cohen, Dina Demner-Fushman, Sophia
+Ananiadou, Jun-ichi Tsujii
+Venue:
+BioNLP
+SIG:
+SIGBIOMED
+Publisher:
+Association for Computational Linguistics
+Note:
+Pages:
+12–20
+Language:
+URL:
+https://aclanthology.org/W15-3802/
+DOI:
+10.18653/v1/W15-3802
+Bibkey:
+roller-stevenson-2015-making
+Cite (ACL):
+Roland Roller and Mark Stevenson. 2015. Making the most
+of limited training data using distant supervision. In
+Proceedings of BioNLP 15, pages 12–20, Beijing, China.
+Association for Computational Linguistics.
+Cite (Informal):
+Making the most of limited training data using distant
+supervision (Roller & Stevenson, BioNLP 2015)
+Copy Citation:
+BibTeX Markdown MODS XML Endnote More options…
+PDF:
+https://aclanthology.org/W15-3802.pdf
+PDF Cite Search Fix data
+Export citation
+×
+•  BibTeX
+•  MODS XML
+•  Endnote
+•  Preformatted
+@inproceedings{roller-stevenson-2015-making,
+    title = "Making the most of limited training data us
+    author = "Roller, Roland  and
+      Stevenson, Mark",
+    editor = "Cohen, Kevin Bretonnel  and
+      Demner-Fushman, Dina  and
+      Ananiadou, Sophia  and
+      Tsujii, Jun-ichi",
+    booktitle = "Proceedings of {B}io{NLP} 15",
+    month = jul,
+    year = "2015",
+    address = "Beijing, China",
+    publisher = "Association for Computational Linguisti
+    url = "https://aclanthology.org/W15-3802/",
+    doi = "10.18653/v1/W15-3802",
+    pages = "12--20"
+}
+Download as File Copy to Clipboard
+<?xml version="1.0" encoding="UTF-8"?>
+<modsCollection xmlns="http://www.loc.gov/mods/v3">
+<mods ID="roller-stevenson-2015-making">
+    <titleInfo>
+        <title>Making the most of limited training data 
+    </titleInfo>
+    <name type="personal">
+        <namePart type="given">Roland</namePart>
+        <namePart type="family">Roller</namePart>
+        <role>
+            <roleTerm authority="marcrelator" type="text
+        </role>
+    </name>
+    <name type="personal">
+        <namePart type="given">Mark</namePart>
+        <namePart type="family">Stevenson</namePart>
+        <role>
+            <roleTerm authority="marcrelator" type="text
+        </role>
+    </name>
+    <originInfo>
+        <dateIssued>2015-07</dateIssued>
+    </originInfo>
+    <typeOfResource>text</typeOfResource>
+    <relatedItem type="host">
+        <titleInfo>
+            <title>Proceedings of BioNLP 15</title>
+        </titleInfo>
+        <name type="personal">
+            <namePart type="given">Kevin</namePart>
+            <namePart type="given">Bretonnel</namePart>
+            <namePart type="family">Cohen</namePart>
+            <role>
+                <roleTerm authority="marcrelator" type="
+            </role>
+        </name>
+        <name type="personal">
+            <namePart type="given">Dina</namePart>
+            <namePart type="family">Demner-Fushman</name
+            <role>
+                <roleTerm authority="marcrelator" type="
+            </role>
+        </name>
+        <name type="personal">
+            <namePart type="given">Sophia</namePart>
+            <namePart type="family">Ananiadou</namePart>
+            <role>
+                <roleTerm authority="marcrelator" type="
+            </role>
+        </name>
+        <name type="personal">
+            <namePart type="given">Jun-ichi</namePart>
+            <namePart type="family">Tsujii</namePart>
+            <role>
+                <roleTerm authority="marcrelator" type="
+            </role>
+        </name>
+        <originInfo>
+            <publisher>Association for Computational Lin
+            <place>
+                <placeTerm type="text">Beijing, China</p
+            </place>
+        </originInfo>
+        <genre authority="marcgt">conference publication
+    </relatedItem>
+    <identifier type="citekey">roller-stevenson-2015-mak
+    <identifier type="doi">10.18653/v1/W15-3802</identif
+    <location>
+        <url>https://aclanthology.org/W15-3802/</url>
+    </location>
+    <part>
+        <date>2015-07</date>
+        <extent unit="page">
+            <start>12</start>
+            <end>20</end>
+        </extent>
+    </part>
+</mods>
+</modsCollection>
+Download as File Copy to Clipboard
+%0 Conference Proceedings
+%T Making the most of limited training data using distan
+%A Roller, Roland
+%A Stevenson, Mark
+%Y Cohen, Kevin Bretonnel
+%Y Demner-Fushman, Dina
+%Y Ananiadou, Sophia
+%Y Tsujii, Jun-ichi
+%S Proceedings of BioNLP 15
+%D 2015
+%8 July
+%I Association for Computational Linguistics
+%C Beijing, China
+%F roller-stevenson-2015-making
+%R 10.18653/v1/W15-3802
+%U https://aclanthology.org/W15-3802/
+%U https://doi.org/10.18653/v1/W15-3802
+%P 12-20
+Download as File Copy to Clipboard
+Markdown (Informal)
+[Making the most of limited training data using distant supervision]
+(https://aclanthology.org/W15-3802/) (Roller & Stevenson, BioNLP
+2015)
+•  Making the most of limited training data using distant
+supervision (Roller & Stevenson, BioNLP 2015)
+ACL
+•  Roland Roller and Mark Stevenson. 2015. Making the most of
+limited training data using distant supervision. In Proceedings
+of BioNLP 15, pages 12–20, Beijing, China. Association for
+Computational Linguistics.
+Copy Markdown to Clipboard Copy ACL to Clipboard
+[image] ACL materials are Copyright © 1963–2025 ACL; other
+materials are copyrighted by their respective copyright holders.
+Materials prior to 2016 here are licensed under the Creative
+Commons Attribution-NonCommercial-ShareAlike 3.0 International
+License. Permission is granted to make copies for the purposes of
+teaching and research. Materials published in or after 2016 are
+licensed on a Creative Commons Attribution 4.0 International
+License.
+The ACL Anthology is managed and built by the ACL Anthology
+team of volunteers.
+Site last built on 19 September 2025 at 12:32 UTC with commit
+c862ea1.

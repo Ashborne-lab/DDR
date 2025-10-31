@@ -1,0 +1,1389 @@
+BioIE: Biomedical Information Extraction with
+Multi-head Attention Enhanced Graph
+Convolutional Network
+Jialun Wu1, Yang Liu1, Zeyu Gao1, Tieliang Gong1, Chunbao Wang2,and Chen Li1,∗
+1School of Computer Science and Technology, Xi’an Jiaotong University, Xi’an, China
+National Engineering Lab for Big Data Analytics, Xi’an Jiaotong University, Xi’an, China
+2Department of Pathology, the First Afﬁliated Hospital of Xi’an Jiaotong University, Xi’an, China
+Email: andylun96@stu.xjtu.edu.cn
+Abstract—Constructing
+large-scaled
+medical
+knowledge
+graphs (MKGs) can signiﬁcantly boost healthcare applications
+for medical surveillance, bring much attention from recent
+research. An essential step in constructing large-scale MKG
+is
+extracting
+information
+from
+medical
+reports.
+Recently,
+information extraction techniques have been proposed and show
+promising performance in biomedical information extraction.
+However, these methods only consider limited types of entity
+and relation due to the noisy biomedical text data with
+complex entity correlations. Thus, they fail to provide enough
+information for constructing MKGs and restrict the downstream
+applications. To address this issue, we propose Biomedical
+Information Extraction (BioIE), a hybrid neural network to
+extract relations from biomedical text and unstructured medical
+reports. Our model utilizes a multi-head attention enhanced
+graph convolutional network (GCN) to capture the complex
+relations and context information while resisting the noise from
+the data. We evaluate our model on two major biomedical
+relationship extraction tasks, chemical-disease relation (CDR)
+and chemical–protein interaction (CPI), and a cross-hospital
+pan-cancer pathology report corpus. The results show that
+our method achieves superior performance than baselines.
+Furthermore, we evaluate the applicability of our method
+under a transfer learning setting and show that BioIE achieves
+promising performance in processing medical text from different
+formats and writing styles.
+I. INTRODUCTION
+The number of biomedical texts with rich textual informa-
+tion and complex data structures is increasing exponentially.
+Much important biomedical information and knowledge are
+hidden in it. Medical knowledge graphs (MKGs) represent
+medical entities and relations in the form of nodes and edges.
+Analyzing these entities, including chemical-disease, chemi-
+cal–protein, especially the interactions between the pairs, can
+be critical to study the potential mechanisms behind massive
+biological functions. For example, the electronic health records
+and pathology reports contain biological information such as
+biochemical, image, and pathology information in diagnosis
+and treatment. Generally, a large-scale MKG contains vast
+amounts of biomedical entity relations to support healthcare
+applications. Named Entity Recognition (NER) and Relation
+Extraction (RE) are promising technologies to automatically
+build such large-scale MKGs.
+The number of new cancer cases and cancer deaths in China
+ranks ﬁrst in the world in 2020, Using population-level statis-
+tics to monitor cancer prevalence and outcomes is essential
+in understanding the disease and developing treatment and
+prevention plans [1]. The pathology report plays a critical
+role in diagnosing and staging cancer, which usually consists
+of three parts, the ﬁrst part is the visual observation of the
+biopsy tissue, the second part is the professional description
+of the biopsy tissue at the molecular level, and the third
+part is the professional diagnosis given by the pathologist.
+Pathology reports are usually recorded by the pathologists
+in natural language and stored in a database. Therefore, the
+pathologist can analyze the patient’s pathological features from
+the pathology report to guide the prognosis. However, due to
+the ﬂexibility of natural language, the analysis of pathology
+reports is time-consuming and laborious. Using structured
+pathology reports can reduce the inﬂuence of subjective factors
+on analysis and effectively improve the efﬁciency of report
+analysis. The design of structured pathology report templates
+is difﬁcult due to the different standards among different
+medical organizations. In addition, pathologists prefer to use
+natural language to record their observations and analysis
+results freely and ﬂexibly compared to the templates that lack
+ﬂexibility. Such unstructured data cannot be directly used for
+data mining and analysis. Therefore, it is valuable to transform
+unstructured data into structured data that can be analyzed and
+processed by computers. Pathologists can combine patients’
+structured pathology reports with images to perform cluster
+analysis on patients, which is conducive to the selection and
+treatment of targeted drugs.
+In recent years, the deep neural networks have been widely
+used in various natural language processing (NLP) tasks show-
+ing superior performance, such as named entity recognition,
+relationship extraction, sentiment classiﬁcation and machine
+translation. Some researchers have developed medical infor-
+mation extraction methods based on deep neural networks
+and achieved good performance, which are mainly based on
+recurrent neural networks and convolutional neural networks.
+Lee et al. [2] designed a new data model for representing
+biomarker knowledge from pathology report. Alawad et al. [3]
+arXiv:2110.13683v1  [cs.CV]  26 Oct 2021
+implemented 2 different multitask learning (MTL) techniques
+to train a word-level convolutional neural network (CNN) for
+automatic extraction of cancer data from unstructured text in
+pathology reports. In our previous work [4], we applied the
+graph convolutional neural network to extract medical infor-
+mation and generate structured data from unstructured text in
+pathology reports. However, pathology reports contain lengthy
+and complicated descriptions, entities across sentences are
+difﬁcult to detect, and some critical medical information may
+be lost. Compared with traditional machine learning methods
+and neural network methods, our experiments have proved that
+GCN is more effective than other neural network methods,
+GCN can capture the semantic and syntactic information
+between remote sentences based on the dependency structure
+of sentences. However, it is hard to distinguish the relevance
+of contextual features for the relation extraction in traditional
+methods. Li et al. [5] suggested that attention mechanism
+can capture the most important semantic information for the
+information extraction task. Vaswani et al. [6] introduced a
+multi-head attention mechanism that applied the self-attention
+mechanism multiple times to capture the relatively important
+features from different representation subspaces.
+To improve cross-sentence relationships extraction and re-
+duce noise data restraint, we explore the Biomedical Infor-
+mation Extraction (BioIE), an information extraction with
+multi-head attention mechanism enhanced graph convolutional
+network. The GCN is exploited to encode the dependency
+structure of the input sentences, the multi-head attention mech-
+anism can automatically assign weight to each edge according
+to the importance of nodes in the dependency tree.
+We evaluate our model BioIE on two public biomedical
+relationship extraction tasks (CDR and CPI) and a cross-
+hospital pan-cancer pathology report corpus, which contain
+the data from The Cancer Genome Atlas (TCGA) [7] and the
+data from hospital. In the pathological information extraction
+task, we extract seven key characteristics from pathology
+reports–cancer type, lateral site, tumor size, histological type,
+histological grade, TNM stage and lymphatic metastasis. Each
+cancer characteristic constitutes a different learning task. The
+result shows that BioIE achieves better clinical performance
+than traditional methods and deep learning approaches. Fur-
+thermore, we evaluate the applicability of BioIE under a
+transfer learning setting and show that our method achieves
+promising performance in processing pathology reports from
+different formats and writing styles. Our main contributions
+are as follows:
+1.We construct a cross-institutional data set of cancer
+pathology reports from the TCGA and local hospital.
+2. We apply the graph convolutional network to extract
+biomedical relations which includes the semantic, syntactic,
+and sequential representation of the sentences.
+3. We use the multi-head attention mechanism to reduce
+noise data and retain valuable long-range information effec-
+tively.
+The organizational structure of this paper is as follows: The
+second part includes related work. The third part describes the
+data set and our proposed model with the experimental process
+in detail. In the fourth part, we introduce the statistical data
+and model performance of our data set, Finally we discuss the
+experimental results and limitations.
+II. RELATED WORK
+A. Relation extraction based on machine learning
+Relation extraction is an essential subﬁeld of natural lan-
+guage processing. Many approaches have been developed to
+deal with relation extraction, like bootstrapping, unsupervised
+relation discovery, and supervised classiﬁcation [8]. One of
+the popular methods is supervised machine learning based on
+feature vectors. The previous representative work [9] used the
+Maximum Entropy model to combine various lexical, syntac-
+tic, and semantic features and Nguyen et al. [10] performed
+word embedding and clustering on adapting feature-based
+relation extraction systems. Besides feature-based methods,
+kernel-based methods are commonly used. Zelenko et al.[11]
+integrated kernels with Support Vector Machine and Voted
+Perceptron learning algorithms to do person-afﬁliation and
+organization-location relations. An unsupervised method for
+relation extraction was proposed by Hasegawa et al. [12]. In
+Hasegawa’s work, they clustered pairs of named entities based
+on the similarity of the context.
+B. Relation extraction based on neural network
+In recent years, deep learning methods are widely applied in
+many NLP tasks. Convolutional neural networks (CNNs) and
+recurrent neural networks (RNNs) are two popular models.
+In several relation extraction tasks, the neural networks also
+showed their effectiveness. For example, Liu et al. [13] proved
+their CNN on relation extraction was state-of-the-art as their
+coding method has integrated semantic information into the
+neural network. Lin et al. [14] employed CNNs to embed
+the semantic for the sentence to do relation extraction on the
+sentence level. Sahu et al. [15] built a labeled edge GCN model
+based on document-level graphs to do inter-sentence relation
+extraction. Other relation extraction tasks, which focused on a
+speciﬁc ﬁeld, could also be completed with a neural network
+like multichannel convolutional neural network (MCCNN)
+used for biomedical area [16], maximum entropy model and
+CNN were both employed on chemical–disease relation extrac-
+tion task [17], [18] used recursive neural network for chemical-
+gene relation extraction.
+C. Graph convolution network
+Graph convolution network (GCN) was ﬁrst introduced by
+Kipf & Welling in 2017 [19], aiming at performing semi-
+supervised learning semi-supervised learning on graph-struct
+data. GCN can be used in a wide range of domains like
+computer vision, NLP, physics, chemistry, and many other
+domains [20]. To be speciﬁc, GCN has been applied to many
+tasks in the NLP ﬁeld, like text classiﬁcation. Yao et al. [21]
+proposed TextGCN as a model to process the corpus into a
+graph and learn the word and document embedding. Tensor
+Graph Convolutional Networks [22] is another method used
+TABLE I
+DIFFERENT TYPES OF RELATION DEFINE IN STRUCTURE REPORTS
+Type
+Description
+Example
+Type
+The type and location of cancer
+kidney and adrenal gland
+Site
+Laterality or resection site of cancer
+left, radical nephrectomy
+Size
+Maximum diameter of the neoplasm
+maximum diameter of the neoplasm is 11 cm
+Subtype
+Histology subtype in WHO guideline
+renal cell carcinoma, conventional (clear and granular cell) type
+Grade
+Histology grade in WHO guideline
+Fuhrman’s nuclear grade varies from grade II to grade IV
+TNM
+Pathological TNM classiﬁcation and stage
+TNM Stage: pT3b NX MX
+Metas
+lymphatic metastasis is the most common metastasis mode
+Regional Lymph Nodes: Negative 0/2
+TABLE II
+THE CANCER PATHOLOGY REPORT INFORMATION
+data set
+TCGA
+TFAH
+Cancer
+Breast
+Lung
+Kidney
+Colon
+Prostate
+Gastric
+Total
+Breast
+Kidney
+Colon
+Gastric
+Total
+Type
+1044
+978
+894
+599
+480
+443
+4438
+680
+174
+261
+283
+1398
+Site
+783
+848
+937
+405
+472
+419
+3864
+418
+174
+249
+267
+1108
+Subtype
+1070
+1026
+941
+593
+499
+445
+4574
+283
+174
+162
+165
+784
+Grade
+1081
+1020
+730
+569
+441
+435
+4276
+394
+73
+189
+229
+885
+Size
+926
+855
+812
+441
+369
+477
+3880
+568
+174
+186
+192
+1120
+TNM
+1045
+920
+836
+534
+477
+415
+4227
+/
+/
+/
+/
+/
+Metas
+674
+845
+453
+379
+261
+334
+2946
+298
+24
+178
+176
+676
+# of Reports
+1098
+1027
+943
+599
+500
+449
+4616
+680
+174
+267
+283
+1404
+# of sentences
+9382
+8743
+8087
+5093
+4550
+4146
+40001
+5720
+1157
+2203
+2447
+11527
+# of annotate sentences
+6623
+6492
+5803
+3520
+2999
+2968
+28405
+2641
+793
+1225
+1312
+5971
+for text classiﬁcation to harmonize and integrate heterogeneous
+information from the graph. Based on textGCN, a heteroge-
+neous graph convolutional network (HeteGCN) was introduced
+by Ragesh et al. [23]. Li et al. [24] proposed a graph neural
+network for diagnosis prediction in the medical ﬁeld. Other
+applications like the type inference on entities and relations
+[25], inter-sentence relation extraction [15], and others all
+prove that GCN is useful when facing the tasks with text.
+D. The attention mechanism
+Attention mechanism was ﬁrst introduced into the ﬁeld
+of natural language processing by Bahdanau et al. [26],
+which achieved great success in machine translation tasks.
+After that, there are several forms of attention mechanism
+being developed. For instance, hard attention [27], local and
+global attention [28] and multi-head attention [6]. In recent
+years, attention mechanism is widely applied to some tasks in
+the subﬁeld of natural language processing like and relation
+extraction. Wang et al. [29] proposed a convolutional neural
+network for relation classiﬁcation depending on two levels of
+attention. Shen et al. [30] explored the word level attention
+mechanism to improve the discovery of better patterns in
+heterogeneous contexts.
+III. DATA AND METHOD
+A. Data sets
+Apart from the hardware performance and the selection of
+model, the success of deep learning training largely depends
+on the number and representativeness of adequate data in
+the training data set and the consistency of labeling them.
+Thus, high quality data sets would be signiﬁcant for model
+training and testing. Chemical-disease relations, chemical-
+protein interactions, and
+protein-protein interactions are three of the most fundamental
+relation types in complicated MKGs, which signiﬁcantly ben-
+eﬁt various biomedical tasks, such as protein prediction and
+knowledge graph construction. We choose two biomedical data
+set include CDR corpus [31] and Chemprot corpus [32] for
+training, testing and evaluation. At the same time, we construct
+a cross-institutional data set of cancer pathology reports. Our
+construction process is as follows.
+1) Corpus preparation: In this study, we mainly focus
+on six cancers (lung, breast, gastric, colorectal, kidney, and
+prostate) that are common among patients and have a high
+mortality rate according to WHO in 2020. We construct a
+cross-institutional data set of cancer pathology reports from
+The Cancer Genome Atlas (TCGA) and the department of
+pathology in the First Afﬁliated Hospital of Xi’an Jiaotong
+University (TFAH) and draft the annotation guidelines. The
+TFAH data set consists of the unstructured text from 5878
+pathology reports covering cancer cases diagnosed in the
+hospital from 2015 to 2018. Since the reports were written
+in Chinese by the pathologists,it may be difﬁcult for non-
+Chinese people to understand and affect the applicability of the
+transfer learning model. Thus, we translated all the reports into
+English with Google Translation. In the TFAH, each pathology
+report identiﬁes the patient ID (we will delete it in the study
+to ensure patient privacy). 2353 reports related to metastatic
+tumors were excluded from the study. In the remaining corpus,
+2121 duplicate reports with multiple diagnoses were excluded,
+and the pathological reports with the same case ID were
+integrated into one report. The ﬁnal data set consisted of
+1404 cancer pathology reports, each corresponding to a unique
+primary cancer. After removing invalid reports (including
+deleting multiple reports of the same patient, deleting reports
+challenging to identify, and reports of poor quality), we select
+4616 pathology reports from the TCGA database, and 1404
+pathology reports from the Local Hospital for annotation.
+2) Corpus annotation: To increase the quality of our data
+sets, we would start with a high-quality pathology report cor-
+pus. By annotating pathology reports from different medical
+institutions, pathologists can ensure the consistency and high
+quality of the annotation results, requiring detailed annotation
+guidelines and multiple iterations.
+Based on two biomedical corpus annotation examples [33],
+[34], the corresponding author and pathologists drafted the ﬁrst
+edition of the annotation guideline. We design an iterative an-
+notation workﬂow by revising our annotation guideline several
+times. To better understand and unify the pathology reports,
+seven types of cancer variables are deﬁned for extraction,
+according to the World Health Organization and American
+Joint Committee on Cancer standard. Table 1 summarizes the
+variables deﬁned for cancer, including cancer type (Type),
+tumor resection site (Site), maximum tumor diameter (Size),
+histology subtype (Subtype), histology grade (Grade), patho-
+logical TNM classiﬁcations (TNM), lymph node metastasis
+(Metas).
+The meanings of the variables are introduced as follow:
+Cancer type refers to the organ where the primary cancer is
+found. Laterality refers to the side of the corresponding organ
+on which primary cancer occurs. Size refers to the maximum
+diameter distance of the tumor. Tumor subtypes describe the
+types of cells found in cancer tissue. Histological grading is
+used to determine the rate of cell growth and proliferation.
+The TNM stage can be used to measure disease progression,
+which is also instructive to the evaluation and determination
+of prognosis. Lymphatic metastasis refers to the movement of
+cells through lymphatic vessels around the tumor into nearby
+or even further lymph nodes. In our annotating session, ﬁrstly,
+Three pathologists annotated the pathology reports in two
+rounds. We evaluate the annotation consistency with inter-
+annotator agreement (IAA) metrics and improve the annotation
+guideline. After completing the training process, six qualiﬁed
+annotators ﬁnish annotating the rest pathology reports with the
+assistance of a rule-based quality control program written by
+us. All annotations are done at the document-level so that the
+annotators can leverage the context under challenging cases.
+An open-source software called MAE version 2.2.10 [35] is
+used as the annotation tool throughout the entire process.
+B. Proposed method
+The structure of our model is shown in ﬁgure 1, which
+includes the following parts: the initialization layer, the Bi-
+LSTM layer, the multi-head attention layer, the GCN layer,
+and the relation classiﬁcation layer. The input of our model
+is the text sequence, and we ﬁrst feed the sentence into the
+initialization layer, which will generate the word represen-
+tation. The Bi-LSTM layer will obtain contextual features
+Fig. 1. The Architecture of Our Work.
+and capture long-range context information from the word
+representation. The multi-head attention layer applies the self-
+attention mechanism to capture the weighted connections
+between words in several dependency trees. The GCN layer
+will guide a contextual representation between word nodes
+over the document-level dependency graph to capture long-
+range features. The ﬁnal representations of the concatenated
+vectors are used for relation classiﬁcation. The details of our
+model are described in the following sections.
+1) Initialization
+layer:
+Given
+the
+sentence
+S = (w1, w2, · · · , wn), where n is the number of words. We
+used the BioBERT word representation [36], a pre-trained
+biomedical language representation model, to map our words
+to the corresponding feature. Also, the position information of
+tokens are crucial with the relation extraction task. The output
+of the initialization layer concatenated the vectors of word
+embedding and position embedding. The ﬁnal representations
+are ωi =
+
+wiemb, wipos
+.
+2) Bi-LSTM layer: The Bi-LSTM model can better capture
+the bidirectional semantic dependencies and the long distance
+dependencies. For the giving sentence S = (ω1, ω2, · · · , ωn) ,
+we represent the Bi-LSTM forward process as follows:
+−→
+ht = LSTM
+−−→
+ht−1, ωi
+
+(1)
+←−
+ht = LSTM
+←−−
+ht−1, ωi
+
+(2)
+ht =
+h−→
+ht ⊕←−
+ht
+i
+(3)
+ht−1 indicates the output of the previous hidden state and
+ωt indicates the input of the current state at the moment t.
+ht is the hidden state of the current time step t. −→
+ht and ←−
+ht
+represent the output of the forward LSTM and the backward
+LSTM, respectively. ⊕is concatenation operation, and the
+ﬁnal hidden state ht is the concatenation of forward LSTM
+and the backward LSTM. The Bi-LSTMs layer can learn the
+latent features from the input sequences automatically and
+effectively.
+3) Multi-head attention layer: Through the Bi-LSTM layer,
+our model obtains the context characteristics of the input
+text. Different features have various weights in biomedical
+relation extraction tasks. To highlight the relatively important
+features, we introduce a multi-head attention mechanism so
+that it can generate different subspaces and reduce the impact
+of noise data. The essence of multi-head attention is the
+multiple application of the self-attention mechanism, with
+which the model learns relatively important features from
+different representation subspaces. The hidden output of Bi-
+LSTM layer is used as the input of multi-head attention
+layer. Given each input as query Q, key K, and value V ,
+attention scores are obtained by the following scaled dot-
+product attention calculation method:
+attention (Q, K, V ) = softmax
+QKt
+√
+d
+
+V
+(4)
+where d denote the dimension of the output of the
+hidden units. Therefore, the model can learn more dif-
+ferent types of information through the multi-head at-
+tention mechanism. Considering the multi-head attention
+contains h heads, the ﬁnal multi-head attention is the
+concatenation of each head as Multihead (Q, K, V )
+=
+Concat (head1, head2, · · · , headh) W.
+4) GCN layer: In order to preserve the multi-dimensional
+information of the text, we use GCN to construct the de-
+pendency relation between the words encoded by dependency
+graphs. Inspired by the previous work [22], we constructed
+three kinds of graph edges on the corpus from three per-
+spectives: semantic-based graph, syntactic-based graph and
+sequence-based graph.
+• Semantic-based graph: For each document, we obtain the
+semantic features of each word from the trained LSTM
+and calculate the cosine similarity between the words. If
+the similarity value exceeds the predeﬁned threshold, it
+means that the two words have a semantic relationship
+in the current document. We count the number of times
+each pair of words has a semantic relationship in the
+entire corpus.
+• Syntax-based graph: For each document in the corpus, we
+ﬁrst use a parser to extract the directionless dependencies
+between words. Similar to the strategy used in semantic
+graphs, we count the number of times each pair of
+words has syntactic dependence in the entire corpus and
+calculate the edge weight of each pair of words.
+• Sequence-based graph: Sequence context describes the
+language attributes between words. The weight of an
+edge between two words is the point-wise mutual in-
+formation (PMI) of them. Using PMI achieves better
+results than word co-occurrence count in our preliminary
+experiments.
+For each layer, we perform two kinds of propagation
+learning, intra-graph propagation and inter-graph propagation.
+The GCN layer takes the hidden output of the Bi-LSTM layer
+as the input. In the layer l of one L-layer GCN, the hidden
+representation of node i can be calculated as:
+hi = f
+ n
+X
+i=1
+AijW (j)xj + b(j)
+!
+(5)
+hi
+(l) = f
+ n
+X
+i=1
+AijW (l)hj
+(l−1)/di + b(l)
+!
+(6)
+where hj
+(l−1) is the output of the previous GCN layer, di is
+the degree of node i in the dependency graph, b(j) and b(l) are
+bias terms and the activation function f is nonlinear function.
+5) Relation classiﬁcation layer: To extract relations by
+using the output vector representations of the multi-head
+attention layer and the GCN layer, we contact the two vectors
+to form the ﬁnal representation of relation classiﬁcation.
+We employ max pooling over the outputs of the multihead
+attention layer and the GCN layer and then concatenate these
+2 vectors as the ﬁnal representation. Probability distribution
+would be calculated with softmax function.
+6) Transfer learning: Transfer learning [46] aims to use
+what has been previously learned from the source domain
+to learn a better model in the target domain. In this study,
+transfer learning techniques are used to reduce the stress and
+duplication in cross-institutional pathology report analysis. We
+ﬁrst train our model on the primary data set (TCGA) and
+then re-trained the model with transfer parameters by ﬁne-
+tuning the characteristics learned on the target hospital data
+set (TFAH), the data set used to train the target task. Then,
+we exchange the primary data set and the target data set, using
+TFAH as the original data set, and using the well-trained model
+to train on the TCGA data set. In our experiment, we do not
+reduce or change any layers but ﬁne-tuned the parameters in
+different layers. We verify the accuracy of different models. If
+these features are easy to generalize and apply to primary and
+target tasks, transfer learning can be carried out effectively.
+In the experiments, we ﬁrstly set the range of parameters
+according to the experience, then tune the parameters on the
+validation set, and ﬁnally select the model with the optimal
+parameters to evaluate on the test set.
+IV. EXPERIMENTS
+A. Corpus Statistics
+We ﬁrst evaluate our proposed method in two major biomed-
+ical relationship extraction tasks. We evaluate our model on
+the CDR corpus which is the benchmark dataset for the CID
+relation extraction task. CDR corpus consists of 1500 PubMed
+TABLE III
+PERFORMANCE COMPARISON WITH OTHER METHODS ON CDR AND CPI CORPUS
+CDR
+CPI
+Methods
+P(%)
+R(%)
+F(%)
+Methods
+P(%)
+R(%)
+F(%)
+Sahu et al. [15]
+52.8
+66.0
+58.6
+Liu et al. [37]
+57.4
+48.7
+52.7
+Lowe et al. [38]
+59.3
+62.3
+60.8
+Lung et al. [39]
+63.5
+51.2
+56.7
+Zhou et al. [40]
+55.6
+68.4
+61.3
+Corbett et al. [41]
+56.1
+67.8
+61.5
+Gu et al. [17]
+55.7
+68.1
+61.3
+Peng et al. [42]
+72.7
+57.4
+64.1
+Proposed method
+61.5
+72.3
+66.4
+Proposed method
+70.3
+62.5
+66.1
+TABLE IV
+DETAIL INDICATORS FOR EACH CANCER TASK
+Method
+David et al. [43]
+John et al. [44]
+Mohammed et al. [3]
+P(%)
+R(%)
+F(%)
+P(%)
+R(%)
+F(%)
+P(%)
+R(%)
+F(%)
+Cancer
+77.5
+68.6
+72.8
+80.6
+73.7
+76.9
+82.0
+78.5
+80.2
+Subtype
+64.9
+57.3
+60.9
+73.2
+71.5
+72.3
+76.8
+75.2
+75.9
+Site
+72.6
+63.6
+67.8
+75.4
+69.3
+72.2
+76.1
+73.6
+74.9
+Size
+71.3
+67.1
+69.1
+76.5
+74.8
+75.6
+77.2
+75.6
+76.4
+Grade
+72.9
+66.3
+69.4
+81.7
+80.1
+80.9
+82.9
+80.8
+81.8
+TNM
+76.2
+72.8
+74.5
+82.4
+81.6
+81.9
+86.3
+85.1
+85.7
+Metas
+78.8
+73.1
+75.8
+80.4
+78.5
+79.4
+84.5
+83.1
+83.8
+Method
+Liu et al. [45]
+Wu et al. [4]
+Proposed
+P(%)
+R(%)
+F(%)
+P(%)
+R(%)
+F(%)
+P(%)
+R(%)
+F(%)
+Cancer
+78.9
+74.7
+76.7
+82.7
+80.4
+81.5
+84.1
+82.2
+83.1
+Subtype
+73.1
+70.1
+71.6
+77.4
+74.8
+76.1
+79.3
+76.6
+77.9
+Site
+73.0
+69.9
+71.4
+75.1
+73.8
+74.4
+75.5
+73.2
+74.3
+Size
+73.8
+70.1
+71.9
+78.7
+77.3
+77.9
+77.8
+78.4
+78.1
+Grade
+79.2
+76.5
+77.8
+85.1
+84.2
+84.6
+87.3
+85.6
+86.4
+TNM
+82.9
+78.1
+80.4
+87.6
+86.0
+86.8
+89.4
+89.1
+89.2
+Metas
+86.7
+82.3
+84.4
+88.4
+85.7
+87.1
+88.6
+87.8
+88.2
+abstracts. In this study, the gold entity annotations provided
+by BioCreative V are used to evaluate our model. In addition,
+we compare our model with other existing methods on another
+public CPI relation extraction task. We use ChemProt corpus
+provided by BioCreative VI. The dataset includes 10-type
+relation classes in which ﬁve classes (CPR3,4,5,6,9) are used
+for evaluation purposes, which totally consists of 7600 CPIs.
+The PubMed abstracts from biomedical literature constitute
+the original corpus where more than 98% of the relation
+entity pairs are contained in a sentence, and we only need to
+consider the relation extraction within the sentence. Therefore,
+different from the CID relationship, we can ignore the cross-
+sentence entity relationship pairs at the document-level in the
+CPI relationship extraction, so as to conduct experiments at
+the sentence-level.
+In addition, we also evaluate our method on our pathology
+reports corpus. The original corpus includes a total of 7650
+reports collected from the TCGA and TFAH data set with
+detailed label. After removing invalid data (including missing
+and duplicate data), 6020 reports are annotated by pathologists
+and well trained annotators. Table 2 lists the detailed statistics
+of our corpus. As one can see, the size of TCGA is much
+larger than that of TFAH. Some pathology reports include the
+patient’s label in the title but not in the body of the report.
+In these cases, we directly associate the patient markers in
+the pathology report title with the text. Each pathology report
+describes an average of 120.3 words. We limit the maximum
+and minimum lengths of pathology report descriptions to 150
+and 50, respectively.
+It is worth noting that we retain histological grade (Gleason
+grade in prostate cancer) and TNM stage as separate types in
+the type Grade in our experiment. This is because, on the
+one hand, they represent different meanings of pathological
+grade and have different clinical guidance roles in structured
+pathological reports. On the other hand, syntax, co-occurrence,
+and their order are subtly different from one another. Keeping
+them as separate types may help improve model performance.
+B. Evaluation metrics
+In the experiment, we perform 10-fold cross-validation to
+test the accuracy of the algorithm. The data set is divided into
+ten parts, and nine parts are used as training data while the
+other part is used as test data. 10 percent of the annotation
+data are randomly selected for veriﬁcation.
+In order to evaluate different models and classiﬁers, the
+standard macro-Precision (P), Recall (R) and F-score (F) are
+used to evaluate the performance of our model against the
+gold annotations. TP, FN and FP represent true positive, false
+negative and false positive, respectively. The F score is a
+harmonic mean of precision and recall rate.
+For all metrics, by calculating 95% conﬁdence intervals
+from the test set, we are able to better determine the statistical
+signiﬁcance of the difference in performance between the
+baseline model and our proposed approach.
+TABLE V
+PERFORMANCE COMPARISON WITH OTHER METHODS
+Method
+P(%)
+R(%)
+F(%)
+David et al. [43]
+68.3
+57.5
+62.4
+John et al. [44]
+82.3
+79.8
+81.0
+Mohammed et al. [3]
+84.6
+81.2
+82.9
+Liu et al. [45]
+81.0
+81.8
+81.4
+Wu et al. [4]
+85.7
+83.6
+84.6
+Proposed method
+86.9
+83.7
+85.3
+In the experiments, we ﬁrstly set the range of parameters
+according to experience, then use grid search to tune the
+parameters on the development set, and ﬁnally select the model
+with the optimal parameters to evaluate on the test set.
+C. Performance
+In this experiment, we compare our model on CID relation
+extraction and CPI extraction separately with other existing
+methods. The results shown in Table 3 indicate that our model
+achieves the best performance on both tasks.
+1) Performance comparisons on CID relation extraction:
+We compare our model with several state-of-the-art methods
+of the CID relation extraction. In the left part of Table 3, the
+neural network methods achieved competitive performance in
+the CID relation extraction task.
+Lowe et al. [38] developed a rule-based system with speciﬁc
+patterns to extract CID relations. However, the hand-crafted
+rules is laborious and time-consuming. Compared with the
+rule-based approach, machine learning methods have shown
+a promising capability of relation extraction. Sahu et al [15]
+proposed a graph convolutional neural network model on a
+document-level graph. Zhou et al. [40] proposed a hybrid
+method which consisted an LSTM network with SVM for
+the sentence-level CID relations. Their model achieves im-
+provement with using additional postprocessing heuristic rules.
+Gu et al. [17] proposed a convolution neural network (CNN)
+model based on contextual and dependency information. They
+also used additional postprocessing heuristic rules to improve
+performance. Compared with the methods above, our model
+can effectively learn semantic and syntactic information from
+complex sentences. And the results suggest that our model
+achieves the highest F-scores.
+2) Performance comparisons on CPI extraction: We com-
+pare our model with several state-of-the-art methods of the
+CPI relation extraction. In the right part of Table 3, the neural
+network methods achieved competitive performance in the
+ChemProt corpus.
+Liu et al. [37] synthesized the GRU model with attention
+pooling. Corbett et al. [41] used a Bi-LSTMs model with
+pretrained LSTM layers to extract CPIs. Lung et al. [39] used a
+multiple model to integrate the semantic and dependency graph
+features. Peng et al. [42] applied majority vote or ensemble
+method to combine the results of SVM, CNN and Bi-LSTM
+models. Compared with other methods, our model is more
+effective in biomedical relation extraction by capturing long-
+range information.
+TABLE VI
+PERFORMANCE COMPARISON IN TRANSFER LEARNING
+TCGA-TFAH
+TFAH-TCGA
+Method
+P(%)
+R(%)
+F(%)
+P(%)
+R(%)
+F(%)
+SVM
+43.3
+51.4
+47.1
+37.6
+46.5
+41.6
+CNN
+52.7
+49.1
+50.8
+46.9
+42.1
+44.4
+MT-CNN
+61.3
+52.9
+56.7
+51.5
+48.2
+49.8
+Bi-LSTM
+58.1
+48.7
+52.8
+46.6
+43.7
+45.1
+GCN
+67.5
+56.3
+61.4
+60.9
+51.4
+55.7
+Proposed method
+75.4
+58.4
+65.8
+61.5
+54.3
+56.7
+3) Performance comparisons on pathological information
+extraction: In this experiment, we compare our model on
+our corpus with other existing methods in Table 4 and Table
+5. David et al. [43] used Na¨ıve-Bayes and support vector
+machine (SVM) as their classiﬁer in the relation extraction
+tasks. John et al. [44] indicated that CNN may perform well
+in information extraction of pathology reports. Mohammed
+et al. [3] used multi-task convolutional neural network(MT-
+CNN) to achieve a better classiﬁed effect. Liu et al. [45] used
+bidirectional LSTM(Bi-LSTM) in text classiﬁcation. Wu et al.
+[4] proposed a new model that constructs a separate graph
+for each text-level input. The model we use extracts seven
+different cancer characteristics from cancer pathology reports.
+Each cancer characteristic constitutes a different learning sub-
+task. Compared with these methods, our model can improve
+cross-sentence relationships extraction and reduce noise data
+restraint. The results displayed in Table 5 shows that our model
+achieves the most advanced performance, F-score of 85.3%,
+on the whole corpus. In each sub-task in Table 4, our model
+also achieves the best accuracy.
+Overall, our method takes advantage of the deep context
+representation, graph convolutional network and multi-head
+attention mechanism to achieve state-of-the-art performance
+on the relation extraction task.
+In this experiment, we further study the effects of transfer
+learning methods on cross-hospital data sets. We ﬁrst use
+TCGA as the primary data set since its size is larger than
+that of TFAH. We conduct experiments to examine the effect
+of transfer knowledge learned from TCGA to TFAH and from
+TFAH to TCGA. As we can see from the experimental results
+in Table 6, the generality and re-usability of the proposed
+model are improved compared with other models. Compared
+with Table 5, the transfer learning model can ﬁnd a more
+signiﬁcant performance decline on both data sets. In real-
+world situations, the format and writing style of descriptive
+pathology reports differ across hospitals.
+V. DISCUSSION
+A. Ablation study
+To study the contribution of each component in the model,
+we perform ablation studies on the corpus, where we delete
+different parts of the model at a time. The model network
+architecture and results are shown in the Table 7.
+First, we evaluate the effectiveness of the word represen-
+tation of our model. We change the input representations
+TABLE VII
+ABLATION STUDY
+Model
+F-Score(%)
+Proposed Method
+85.3
+- BioBert
+77.8
+- position
+84.5
+- position - BioBert
+76.3
+- Multi-head Attention
+84.1
+- Multi-head Attention + Single-head attention
+84.6
+- GCN
+82.7
+from Word2Vec to BioBert with position embedding. The
+results show that the BioBert pre-trained model is able to
+generate more comprehensive word representations based on
+sentence context, and combining position embedding with
+word embedding can further improve performance. When we
+concatenate the pre-trained word representation and position
+embedding as the input representation, we achieve the best
+F-measure of 85.3%.
+When we remove the multihead attention layer and the GCN
+layer, the F-measure drops by 1.2% and 2.6%, respectively.
+We can observe that removing either the multi-head attention
+layer or the GCN layer reduces the performance of the model.
+The addition of GCN can capture structural information by
+using the document graph and effectively capture long-range
+syntactic features using the dependency structure of input
+sentences.
+We evaluate the effectiveness of the multi-head attention
+mechanism. We deal with the output of Bi-LSTM by different
+attention mechanisms–without attention mechanism, scaled
+dot-product attention in single-head attention mechanism, and
+multi-head attention mechanism. From the result we can see
+that using the multi-head attention mechanism can improve
+the performance of the relation extraction task. The multi-head
+attention mechanism can effectively reduce the impact of noise
+data without losing valuable information in the sentence. It
+can learn the global dependency information by modeling the
+implicit dependency relationship between words, which helps
+the model produce a better graph representation.
+B. Error analysis
+By comparing the output of the model to the pathologist’s
+standard, we analyze the ﬁnal results for errors. There are two
+main types of errors: In the misclassiﬁcation results, we ﬁnd
+that most of the samples mistake the non-relational type for
+the relational type, such as the misclassiﬁcation of the cancer
+resection site and the type of cancer. There are also some errors
+like misclassifying the location of the lump within the organ
+as the site of excision. According to our analysis of the results,
+it is possible that the attention mechanism gives higher weight
+to entities that have across-sentences relationships . In another
+case, multiple entities appear in a single sentence and some
+entities have relationships with each other. This is like the case
+of a mixed diagnosis of several subtypes. We will consider
+using better pretreatment and post-processing technology to
+solve the above problems in future work.
+VI. CONCLUSION
+In this paper, we proposed Biomedical Information Ex-
+traction (BioIE), a hybrid neural network to extract relations
+from biomedical text and unstructured pathology reports. We
+used GCN to obtain graph representation based on semantics,
+syntax, and sequences to improve relationship extraction per-
+formance. Using the multi-head attention mechanism, we can
+effectively reduce the impact of noise data and obtain relatively
+important contextual features without losing valuable informa-
+tion. Combining multi-head attention with GCN can further
+improve the performance of the model. The results showed that
+our model achieved the most advanced performance on the two
+major biomedical relationship extraction corpus and a cross-
+hospital pan-cancer pathology report corpus. With evaluating
+the applicability of BioIE under a transfer learning setting,
+the results showed that BioIE achieves promising performance
+in processing pathology reports from different formats and
+writing styles
+The limitation of our work is the initialization of the
+text representation and the graph representation. In future
+work, we will integrate pathology knowledge, deﬁne pathology
+ontologies, build pathology knowledge bases, which contain a
+large number of structured data in the form of triples (entities,
+relationships, entities), and combine them with powerful pre-
+training language models to further improve the performance
+of our approach.
+ACKNOWLEDGMENT
+This work has been supported by National Natural Sci-
+ence Foundation of China (61772409); The consulting re-
+search project of the Chinese Academy of Engineering
+(The Online and Ofﬂine Mixed Educational Service Sys-
+tem for “The Belt and Road” Training in MOOC China);
+Project of China Knowledge Centre for Engineering Sci-
+ence and Technology; The innovation team from the Min-
+istry of Education (IRT 17R86); and the Innovative Research
+Group of the National Natural Science Foundation of China
+(61721002). The results shown here are in whole or part
+based upon data generated by the TCGA Research Network:
+https://www.cancer.gov/tcga.
+REFERENCES
+[1] M. J. Hayat, N. Howlader, M. E. Reichman, and B. K. Edwards,
+“Cancer statistics, trends, and multiple primary cancer analyses from
+the surveillance, epidemiology, and end results (seer) program,” The
+oncologist, vol. 12, no. 1, pp. 20–37, 2007.
+[2] J. Lee, H.-J. Song, E. Yoon, S.-B. Park, S.-H. Park, J.-W. Seo, P. Park,
+and J. Choi, “Automated extraction of biomarker information from
+pathology reports,” BMC medical informatics and decision making,
+vol. 18, no. 1, pp. 1–11, 2018.
+[3] M. Alawad, S. Gao, J. X. Qiu, H. J. Yoon, J. Blair Christian, L. Pen-
+berthy, B. Mumphrey, X.-C. Wu, L. Coyle, and G. Tourassi, “Auto-
+matic extraction of cancer registry reportable information from free-
+text pathology reports using multitask convolutional neural networks,”
+Journal of the American Medical Informatics Association, vol. 27, no. 1,
+pp. 89–98, 2020.
+[4] J. Wu, K. Tang, H. Zhang, C. Wang, and C. Li, “Structured information
+extraction of pathology reports with attention-based graph convolutional
+network,” in 2020 IEEE International Conference on Bioinformatics and
+Biomedicine (BIBM).
+IEEE, 2020, pp. 2395–2402.
+[5] L. Li, Y. Nie, W. Han, and J. Huang, “A multi-attention-based bidi-
+rectional long short-term memory network for relation extraction,” in
+International conference on neural information processing.
+Springer,
+2017, pp. 216–227.
+[6] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez,
+L. Kaiser, and I. Polosukhin, “Attention is all you need,” arXiv preprint
+arXiv:1706.03762, 2017.
+[7] K. Tomczak, P. Czerwi´nska, and M. Wiznerowicz, “The cancer genome
+atlas (tcga): an immeasurable source of knowledge,” Contemporary
+oncology, vol. 19, no. 1A, p. A68, 2015.
+[8] D. Zeng, K. Liu, Y. Chen, and J. Zhao, “Distant supervision for relation
+extraction via piecewise convolutional neural networks,” in Proceedings
+of the 2015 conference on empirical methods in natural language
+processing, 2015, pp. 1753–1762.
+[9] N. Kambhatla, “Combining lexical, syntactic, and semantic features with
+maximum entropy models for information extraction,” in Proceedings of
+the ACL Interactive Poster and Demonstration Sessions, 2004, pp. 178–
+181.
+[10] T. H. Nguyen and R. Grishman, “Employing word representations and
+regularization for domain adaptation of relation extraction,” in Proceed-
+ings of the 52nd Annual Meeting of the Association for Computational
+Linguistics (Volume 2: Short Papers), 2014, pp. 68–74.
+[11] D. Zelenko, C. Aone, and A. Richardella, “Kernel methods for relation
+extraction,” Journal of machine learning research, vol. 3, no. Feb, pp.
+1083–1106, 2003.
+[12] T. Hasegawa, S. Sekine, and R. Grishman, “Discovering relations among
+named entities from large corpora,” in Proceedings of the 42nd Annual
+Meeting of the Association for Computational Linguistics (ACL-04),
+2004, pp. 415–422.
+[13] C. Liu, W. Sun, W. Chao, and W. Che, “Convolution neural network
+for relation extraction,” in International Conference on Advanced Data
+Mining and Applications.
+Springer, 2013, pp. 231–242.
+[14] Y. Lin, S. Shen, Z. Liu, H. Luan, and M. Sun, “Neural relation
+extraction with selective attention over instances,” in Proceedings of the
+54th Annual Meeting of the Association for Computational Linguistics
+(Volume 1: Long Papers), 2016, pp. 2124–2133.
+[15] S. K. Sahu, F. Christopoulou, M. Miwa, and S. Ananiadou, “Inter-
+sentence relation extraction with document-level graph convolutional
+neural network,” arXiv preprint arXiv:1906.04684, 2019.
+[16] C. Quan, L. Hua, X. Sun, and W. Bai, “Multichannel convolutional
+neural network for biological relation extraction,” BioMed research
+international, vol. 2016, 2016.
+[17] J. Gu, F. Sun, L. Qian, and G. Zhou, “Chemical-induced disease relation
+extraction via convolutional neural network,” Database, vol. 2017, 2017.
+[18] S. Lim and J. Kang, “Chemical–gene relation extraction using recursive
+neural network,” Database, vol. 2018, 2018.
+[19] T. N. Kipf and M. Welling, “Semi-supervised classiﬁcation with graph
+convolutional networks,” arXiv preprint arXiv:1609.02907, 2016.
+[20] S. Zhang, H. Tong, J. Xu, and R. Maciejewski, “Graph convolutional
+networks: a comprehensive review,” Computational Social Networks,
+vol. 6, no. 1, pp. 1–23, 2019.
+[21] L. Yao, C. Mao, and Y. Luo, “Graph convolutional networks for text
+classiﬁcation,” in Proceedings of the AAAI Conference on Artiﬁcial
+Intelligence, vol. 33, no. 01, 2019, pp. 7370–7377.
+[22] X. Liu, X. You, X. Zhang, J. Wu, and P. Lv, “Tensor graph convolutional
+networks for text classiﬁcation,” in Proceedings of the AAAI Conference
+on Artiﬁcial Intelligence, vol. 34, no. 05, 2020, pp. 8409–8416.
+[23] R. Ragesh, S. Sellamanickam, A. Iyer, R. Bairi, and V. Lingam,
+“Hetegcn: heterogeneous graph convolutional networks for text classi-
+ﬁcation,” in Proceedings of the 14th ACM International Conference on
+Web Search and Data Mining, 2021, pp. 860–868.
+[24] Y. Li, B. Qian, X. Zhang, and H. Liu, “Graph neural network-based
+diagnosis prediction,” Big Data, vol. 8, no. 5, pp. 379–390, 2020.
+[25] C. Sun, Y. Gong, Y. Wu, M. Gong, D. Jiang, M. Lan, S. Sun, and
+N. Duan, “Joint type inference on entities and relations via graph
+convolutional networks,” in Proceedings of the 57th Annual Meeting
+of the Association for Computational Linguistics, 2019, pp. 1361–1370.
+[26] D. Bahdanau, K. Cho, and Y. Bengio, “Neural machine translation by
+jointly learning to align and translate,” arXiv preprint arXiv:1409.0473,
+2014.
+[27] K. Xu, J. Ba, R. Kiros, K. Cho, A. Courville, R. Salakhudinov, R. Zemel,
+and Y. Bengio, “Show, attend and tell: Neural image caption generation
+with visual attention,” in International conference on machine learning.
+PMLR, 2015, pp. 2048–2057.
+[28] M.-T.
+Luong,
+H.
+Pham,
+and
+C.
+D.
+Manning,
+“Effective
+ap-
+proaches to attention-based neural machine translation,” arXiv preprint
+arXiv:1508.04025, 2015.
+[29] L. Wang, Z. Cao, G. De Melo, and Z. Liu, “Relation classiﬁcation via
+multi-level attention cnns,” in Proceedings of the 54th Annual Meeting of
+the Association for Computational Linguistics (Volume 1: Long Papers),
+2016, pp. 1298–1307.
+[30] Y. Shen and X.-J. Huang, “Attention-based convolutional neural network
+for semantic relation extraction,” in Proceedings of COLING 2016, the
+26th International Conference on Computational Linguistics: Technical
+Papers, 2016, pp. 2526–2536.
+[31] J. Li, Y. Sun, R. J. Johnson, D. Sciaky, C.-H. Wei, R. Leaman, A. P.
+Davis, C. J. Mattingly, T. C. Wiegers, and Z. Lu, “Biocreative v cdr task
+corpus: a resource for chemical disease relation extraction,” Database,
+vol. 2016, 2016.
+[32] J. Kringelum, S. K. Kjaerulff, S. Brunak, O. Lund, T. I. Oprea,
+and O. Taboureau, “Chemprot-3.0: a global chemical biology diseases
+mapping,” Database, vol. 2016, 2016.
+[33] H. Gurulingappa, A. M. Rajput, A. Roberts, J. Fluck, M. Hofmann-
+Apitius, and L. Toldo, “Development of a benchmark corpus to support
+the automatic extraction of drug-related adverse effects from medical
+case reports,” Journal of biomedical informatics, vol. 45, no. 5, pp.
+885–892, 2012.
+[34] A. Roberts, R. Gaizauskas, M. Hepple, G. Demetriou, Y. Guo, I. Roberts,
+and A. Setzer, “Building a semantically annotated corpus of clinical
+texts,” Journal of biomedical informatics, vol. 42, no. 5, pp. 950–966,
+2009.
+[35] K. Rim, “Mae2: Portable annotation tool for general natural language
+use,” in Proc 12th Joint ACL-ISO Workshop on Interoperable Semantic
+Annotation, 2016, pp. 75–80.
+[36] J. Lee, W. Yoon, S. Kim, D. Kim, S. Kim, C. H. So, and J. Kang,
+“Biobert: a pre-trained biomedical language representation model for
+biomedical text mining,” Bioinformatics, vol. 36, no. 4, pp. 1234–1240,
+2020.
+[37] S. Liu, F. Shen, R. Komandur Elayavilli, Y. Wang, M. Rastegar-Mojarad,
+V. Chaudhary, and H. Liu, “Extracting chemical–protein relations using
+attention-based neural networks,” Database, vol. 2018, 2018.
+[38] D. M. Lowe, N. M. O’Boyle, and R. A. Sayle, “Efﬁcient chemical-
+disease identiﬁcation and relationship extraction using wikipedia to
+improve recall,” Database, vol. 2016, 2016.
+[39] P.-Y. Lung, Z. He, T. Zhao, D. Yu, and J. Zhang, “Extracting chemical–
+protein interactions from literature using sentence structure analysis and
+feature engineering,” Database, vol. 2019, 2019.
+[40] H. Zhou, H. Deng, L. Chen, Y. Yang, C. Jia, and D. Huang, “Exploit-
+ing syntactic and semantics information for chemical–disease relation
+extraction,” Database, vol. 2016, 2016.
+[41] P. Corbett and J. Boyle, “Improving the learning of chemical-protein
+interactions from literature using transfer learning and specialized word
+embeddings,” Database, vol. 2018, 2018.
+[42] Y. Peng, A. Rios, R. Kavuluru, and Z. Lu, “Extracting chemical–protein
+relations with ensembles of svm and deep learning models,” Database,
+vol. 2018, 2018.
+[43] D. Martinez and Y. Li, “Information extraction from pathology reports
+in a hospital setting,” in Proceedings of the 20th ACM international
+conference on Information and knowledge management, 2011, pp. 1877–
+1882.
+[44] J. X. Qiu, H.-J. Yoon, P. A. Fearn, and G. D. Tourassi, “Deep learning
+for automated extraction of primary sites from cancer pathology reports,”
+IEEE journal of biomedical and health informatics, vol. 22, no. 1, pp.
+244–251, 2017.
+[45] G. Liu and J. Guo, “Bidirectional lstm with attention mechanism and
+convolutional layer for text classiﬁcation,” Neurocomputing, vol. 337,
+pp. 325–338, 2019.
+[46] I. Goodfellow, Y. Bengio, A. Courville, and Y. Bengio, Deep learning.
+MIT press Cambridge, 2016, vol. 1, no. 2.

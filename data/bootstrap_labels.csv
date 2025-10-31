@@ -1,0 +1,646 @@
+text,drug,drug_start,drug_end,effect,effect_start,effect_end,label
+"The patient
+presented with giant cell arteritis and was using insulin for diabetes.",insulin,62,69,abdominal pain,-1,-1,No-Relation
+"Or it may instead out-
+put: Side effects of aspirin include cramping and
+stomach pain, and pain in the chest.",aspirin,44,51,abdominal pain,-1,-1,No-Relation
+"For 
+example, if “miR-194,” “basal and insulin-stimulated glu-
+cose uptake,” and “glycogen synthesis” were recognized as 
+named entities in the sentence “Knockdown of miR-194 in 
+L6 skeletal muscle cells induced an increase in basal and 
+insulin-stimulated glucose uptake and glycogen synthe-
+sis” [29], the verb associated with “miR-194,” “basal and 
+insulin-stimulated glucose uptake,” and “glycogen synthe-
+sis” would be “induce.” Although the verb “induce” is usu-
+ally classified as positive, the word “knockdown of” fol-
+lowed by “miR-194” means inhibition; therefore, it should 
+be classified as negative rather than positive.",insulin,39,46,constipation,-1,-1,No-Relation
+"Warfarin versus aspirin for stroke prevention in an
+elderly community population with atrial fibrillation (the Birmingham Atrial Fibrillation Treatment of the Aged Study,
+BAFTA): a randomised controlled trial.",aspirin,16,23,constipation,-1,-1,No-Relation
+"Target population
+Present the results in the following form:
+- Per item use a new line with the format: 'item: hit(s)'
+- List multiple hits separated by semi-colon
+- When you do not find an entry fill the field with 'None'
+- When you find a product combination (PEC, PIC, PDC) separate Drug /
+Device from the other Adverse Event, Indication, or Dose term by a pipe
+character (e.g., 'Aspirin|Rash')
+- List all items with preceding numbers
+- Stop generating after the list is complete
+Input text:
+“###After TACE for intrahepatic metastasis, localized CCRT (45 Gy over
+5 weeks with conventional fractionation and hepatic artery infusional
+chemotherapy using 5-fluorouracil as a radiosensitizer, administered
+during the first and fifth weeks of radiotherapy) was used to treat main
+HCC with PVT.###”
+2.4 Reproducibility Experiments
+Reproducibility is of paramount importance for production use of AI
+models in a regulated environment.",aspirin,383,390,rash,391,395,Adverse
+"• Warfarin-associated bleeding complication saved life
+• Acute pulmonary reactions to nitrofurantoin are an uncommon side effect of therapy
+and can cause minor or life-threatening pulmonary dysfunction.",warfarin,2,10,bleeding,22,30,Adverse
+Aspirin caused bleeding in the patient after administration.,aspirin,0,7,bleeding,15,23,Adverse
+"In the ﬁrst example, initially, there is no edge
+between the node “bleeding symptoms” and the
+node “warfarin”, probably because of the distance
+between their corresponding spans in the original
+input sentence.",warfarin,100,108,bleeding,67,75,Adverse
+"A weighting scheme for
+assigning more weight to associations from FAERS over
+associations from unstructured text can be designed and
+Table 4 Top scoring adverse events for each of the drugs used in this study (Continued)
+COMPLETED SUICIDE
+2.4845999228 SLEEP INITIATION
+AND MAINTENANCE
+DISORDERS
+1.4252916669 PRIAPISM
+5.2601858298
+SUICIDAL IDEATION
+2.3695413431 CONDYLOMATA
+ACUMINATA
+1.3983875588 OVERDOSE
+4.5116173724
+11
+Warfarin
+INTERNATIONAL NORMALISED
+RATIO FLUCTUATION (INCREASED/
+DECREASED)
+3.1642485602 INTERNATIONAL
+NORMALIZED RATIO
+4.2516503259 VITAMIN K
+6.1945919883
+CALCIPHYLAXIS
+2.8692951662 HEMORRHAGE
+2.8983756918 BCR (BLOOD
+CLOTTING RESPONSE)
+5.8376604098
+BLUE TOE SYNDROME
+2.8692951662 STROKE
+2.5276002364 THROMBOEMBOLISM
+5.7963964427
+12
+Ziprasidone
+TARDIVE DYSKINESIA
+4.2677078217 VOMITING
+1.9460228686 SCHIZOPHRENIA
+5.7401521972
+DYSTONIA
+4.0558212672 TREMOR
+1.831079029
+QT INTERVAL
+5.6217692996
+EXTRAPYRAMIDAL DISORDER
+3.7617945087 PSYCHOTIC
+DISORDERS
+1.6030569698 BIPOLAR DISORDER
+5.6013438249
+The scores here are the variance values obtained from running the BCPNN algorithm on the drug-AE pairs.",warfarin,421,429,vomiting,797,805,Adverse
+"BMC Medical Informatics and Decision Making 2014, 14:13
+Page 11 of 16
+http://www.biomedcentral.com/1472-6947/14/13
+Table 4 Top scoring adverse events for each of the drugs used in this study
+Drugname
+AERS
+BCPNN
+score
+Blogs
+BCPNN
+score
+Biomedical
+literature
+BCPNN
+score
+1
+Aspirin
+FLUSHING COLITIS
+3.0453446021 HEMORRHAGE
+2.2974781367 ANTIPLATELET
+THERAPY
+6.4498501796
+COLLAGENOUS
+2.967777029
+ASTHMA
+1.7849414476 ASTHMA, ASPIRIN-
+INDUCED
+6.2465967694
+GASTROINTESTINAL ULCER
+2.8231226105 ULCER
+1.6889750542 PLATELET
+AGGREGATION
+4.9990559736
+2
+Bupropion
+PSORIASIS
+3.0858333183 SMOKING
+2.8487222833 TOBACCO USE
+DISORDER
+6.7616174378
+TINNITUS
+3.0003865794 INTERACTION
+2.0278154524 SUBSTANCE
+WITHDRAWAL
+SYNDROME
+5.6160138431
+CRYING
+2.9716117286 WEIGHT LOSS
+1.9125982688 DEPRESSIVE
+DISORDER, MAJOR
+5.0765060025
+3
+Carbamazepine ANTICONVULSANT DRUG LEVEL
+INCREASED
+3.8394557589 SEIZURES
+2.1831882505 TRIGEMINAL
+NEURALGIA
+5.7366534252
+DRUG RASH WITH EOSINOPHILIA
+AND SYSTEMIC SYMPTOMS
+3.5911285749 EXANTHEMA
+1.8627395675 EPILEPSIES, PARTIAL
+5.5948458460
+EPILEPSY
+3.0298491782 LYMPHOMA
+1.4381580775 STEVENS-JOHNSON
+SYNDROME
+5.3815350109
+4
+Ciprofloxacin
+TENDON RUPTURE
+4.1146259253 UTI
+2.8856797854 MBC
+4.6062736746
+TENDONITIS
+4.0060829925 DIVERTICULITIS
+2.2799989819 CROSS RESISTANCE
+4.4062217226
+TENDON PAIN
+3.6892637795 ACNE VULGARIS
+1.7510888515 DYSENTERY,
+BACILLARY
+4.3850295544
+5
+Ibuprofen
+KOUNIS SYNDROME
+2.9815043448 PAIN
+2.3836377566 DUCTUS ARTERIOSUS,
+PATENT
+4.8635855143
+TOXIC EPIDERMAL NECROLYSIS
+2.8890346654 OSTEOARTHRITIS
+1.9773610941 ACUTE PAIN
+4.4671583670
+OSTEOARTHRITIS
+2.8760959875 STOMACH ULCER
+1.6554329992 OSTEOARTHRITIS
+3.5868790708
+6
+Morphine
+ACUTE CHEST SYNDROME
+3.9896519753 HASHIMOTO DISEASE 0.9969507103 POSTOPERATIVE
+ANALGESIA
+5.9041759822
+ACCIDENTAL DEATH
+3.5380803319 BREATHLESSNESS
+0.9969507103 OPIATES
+5.8450420720
+CARDIO-RESPIRATORY ARREST
+3.2009993755 VIOLENT
+0.995428479
+OPIOID-RELATED
+DISORDERS
+5.4082024508
+7
+Olanzapine
+HOSPITALISATION
+3.6824877733 DIABETES MELLITUS
+1.96163018
+SCHIZOPHRENIA
+5.7849079521
+LEUKOPENIA
+3.2803137933 OVERWEIGHT
+1.8868082131 BIPOLAR DISORDER
+5.7118297960
+METABOLIC SYNDROME
+3.1617168832 FEELING COLD
+1.4527063824 PSYCHOMOTOR
+AGITATION
+5.6353982109
+8
+Paroxetine
+CONGENITAL ANOMALY
+3.1300167523 ANXIETY DISORDERS
+1.5594343083 HAM
+5.6353454077
+ATRIAL SEPTAL DEFECT
+3.1224780702 PHOBIC DISORDERS
+1.5388697964 DEPRESSIVE
+DISORDER, MAJOR
+5.5424233484
+CARDIAC MURMUR
+2.9842039722 HOT FLASHES
+1.4317963274 PANIC DISORDER
+5.3198511794
+9
+Rosiglitazone
+HEART INJURY
+1.5296202559 HEART DISEASES
+1.9460752101 DIABETES MELLITUS,
+TYPE 2
+5.5082168188
+CARDIOVASCULAR DISORDER
+1.5209213985 DIABETES MELLITUS
+1.6536311321 INSULIN RESISTANCE
+5.4173083948
+MYOCARDIAL ISCHAEMIA
+1.5186640529 CORONARY ARTERY
+DISEASE
+1.564503778
+POLYCYSTIC OVARY
+SYNDROME
+4.1594095171
+10
+Trazodone
+CARDIAC ARREST
+2.751062765
+BACK PAIN
+2.0113279316 SLEEP INITIATION
+AND MAINTENANCE
+DISORDERS
+5.5423900660
+Yeleswarapu et al.",aspirin,271,278,rash,929,933,Adverse
+"Multimedia Appendix 1: List of diabetes-related keywords for
+the Twitter API tweet extraction
+English keywords
+glucose
+insulin
+blood glucose
+#glucose
+#insulin
+#bloodglucose
+insulin pump
+diabetes
+t1d
+#insulinpump
+#diabetes
+#t1d
+type 1
+t2d
+type 2
+#type1
+#t2d
+#type2
+#bloodsugar
+#dsma
+#type2diabetes
+#doc
+#bgnow
+#wearenotwaiting
+#insulin4all
+dblog
+diyps
+hba1c
+#dblog
+#diyps
+#hba1c
+#cgm
+#freestylelibre
+diabetic
+#gbdoc
+freestyle libre
+#diabetic
+#gdm
+finger prick
+gestational diabetes
+continuous glucose monitoring
+#fingerprick
+#gestational
+#continuousglucosemonitoring
+#changingdiabetes
+#thisisdiabetes
+#lifewithdiabetes
+#diabetesadvocate
+#stopdiabetes
+#diabadass
+#diabetesawareness
+#diabeticproblems
+#justdiabeticthings
+#t1dlookslikeme
+#diaversary
+#diabetestest
+#t2dlookslikeme
+pwd
+#duckfiabetes
+#GBDoc
+#pwd
+#kissmyassdiabetes
+S1: List of diabetes-related keywords for the Twitter API tweet extraction",insulin,119,126,allergic,-1,-1,No-Relation
+"This
+means it would match sentences such as ”We
+hypothesize that aspirin can alleviate most
+cases of headache”, if the token ”hypothesize”
+is in the list of speculative cues, ”aspirin” is
+marked as a drug and is subject, ”headache”
+is a disease and predicate, and ”alleviate” is a
+trigger word.",aspirin,65,72,headache,101,109,Adverse
+"Tests
+including names of tested elements (radio-
+graphy, biological check-up, blood pressure)
+Surgical treatments:
+treatments done by physi-
+cians (chemotherapy, resection)
+Surgical approach:
+access used by the physi-
+cian (apical access)
+Medical devices
+used by patients or by physi-
+cians (drainage, mask, sensor)
+2.3.3
+Diseases
+We considered four types of disease-related infor-
+mation:
+Pathology:
+mentions of diseases or diseased
+condition (acute lymphoblastic leukemia, tumor)
+Signs or symptoms
+which are not chronic dis-
+eases (cough, fever, headache, hypertension)
+Biological organism:
+bacteria and infectious or-
+ganisms (escherichia coli, group B streptococcus)
+Nature:
+indication of quality (qualifying adjec-
+tives, grade) for diseases, signs and symptoms
+(pT2 G1 carcinoma, benign cyst)
+2.3.4
+Drugs
+Pharmaceutical class
+or family of drugs (an-
+tibiotic, anticoagulant, anti-vitamin K)
+Substance:
+commercial and generic drug names
+or generic substance (acetaminophen, ferrous sul-
+phate)
+Concentration
+of molecules in drugs (10%,
+5 mg/ml)
+Mode
+of
+administration
+(intravenous,
+oral
+route, by nebulization)
+Dose:
+composed of value and unit for drug dose
+(0.5 mg, four doses, one to two pills, three million
+units) or rates (5 mg/kg).",acetaminophen,964,977,headache,548,556,Adverse
+Aspirin treats pain).,aspirin,0,7,rash,-1,-1,No-Relation
+"The drugs
+include: Bupropion, Carbamazepine, Olanzapine, Ciproflox-
+acin, Trazodone, Ziprasidone, Aspirin, Ibuprofen, Warfarin,
+Paroxetine, Rosiglitazone and Morphine.",aspirin,98,105,bleeding,-1,-1,No-Relation
+"In line with the
+UMLS definition, a concept is a meaning, which can have many different
+names (synonyms, for example ‘diabetes mellitus type II’ can also be
+called ‘non-insulin dependent diabetes mellitus’) (“Concepts and Concept
+Identifiers,” 2009).",insulin,169,176,nausea,-1,-1,No-Relation
+"For example, given an input from ADE and
+prompted to list all drugs and associated adverse
+events, a large language model might yield Aspirin:
+stomach pain, chest pain.",aspirin,134,141,allergic,-1,-1,No-Relation
+"For each event type, certain participant types are 
+obligatory (i.e., the participant, or an anaphoric expres-
+sion referring to the participant, must be present in the 
+same sentence as the trigger in order for the event to be 
+Table 2  NE types
+Entity type
+Description
+Examples
+Pharmaco‑
+logical_sub‑
+stance
+Pharmacological substance that may or may 
+not be approved for human use
+Genes/gene products used as therapeutic 
+agents
+Echistatin
+Generic drug names
+Didanosine
+IUPAC and IUPAC-like chemical names of 
+drugs
+5-hydroxy-l-tryptophan
+Endogenous substances administered as 
+exogenous drugs
+Insulin
+Toxins
+1-methyl-4-phenyl-1,2,3,4-tetrahydropyr-
+idine
+Excipients
+Isopropyl myristate
+Generic or chemical names of metabolites
+Threohydrobupropion
+Drug brand names
+DIAMOX
+Names of groups of drugs
+Fluoroquinolones
+Expressions characterising general classes 
+of drugs
+Dopamine D1 receptor antagonist
+Disorder
+Observation about a medical subject’s body 
+or  mind  that  is considered  to be abnor‑
+mal  or caused  by  a  disease, pharmaco‑
+logical substance or DDI
+Medical conditions
+Pulmonary embolism
+Abnormality in physiological function
+Hyperlocomotion
+Pathological process
+Fibrosis
+Neoplastic process
+Intestinal adenocarcinomas
+Damage caused by disease or drugs
+Cerebellar damage
+Mental  or  behavioural  issue
+Drug abuse
+Injury  or  poisoning
+Clinical toxicities
+Viruses/bacteria
+Micrococcus luteus
+Sign or symptom
+Nausea
+Abnormality in clinical attributes or meas‑
+urements
+Increased urine sodium
+Subject
+An organism, cell line, bacterium or group 
+thereof, whose characteristics are under 
+discussion.",insulin,596,603,nausea,1421,1427,Adverse
+"Input Sentence
+Initial Span Graph
+Final Span Graph
+#1: Despite the low dosage of warfarin, interna-
+tional normalized ratio (INR) was markedly el-
+evated from 1.15 to 11.28 for only 4 days, and
+bleeding symptoms concurrently developed.",warfarin,81,89,bleeding,194,202,Adverse
+"and Leaman et al., used in the current work
+No Drug name
+Drug type
+Synonyms
+Indications
+Known AEs
+1
+Bupropion
+Atypical anti-
+depressant
+and smoking
+cessation agent
+Wellbutrin, Quomen, Zyntabac,
+Bupropion hydrochloride, Zyban,
+Amfebutamone, Voxra, Budeprion,
+Aplenzin
+Depression and smoking
+cessation aid
+Dizziness, abnormal sensation,
+difficulty, drugged state, fatigue,
+constipation sleeplessness, seizure,
+tinnitus, pruritus feeling suicidal
+2
+Carbamazepine Antipsychotic/
+anti-depressant
+Carbamazepine hydrochloride, Tegretol,
+Carbazepin, Carbamazepine sulfate
+(2:1), Carbamazepine dihydrate,
+Amizepine, Amizepin, Finlepsin,
+Neurotol, Epitol, Carbamazepine
+acetate, Carbamazepine phosphate,
+Biston, Calepsin, Carbatrol, Equetro,
+Sirtal, Stazepine, Telesmin, EPITAB XR,
+Teril, Timonil, Trimonil, Epimaz,
+Carbama, Carbamaze, Carzine, Mazetol,
+Tegrita, Tegrital, Karbapin, Hermolepsin,
+Degranol, Tegretal, Mannomustine,
+Mannitlost, Decranol, Mannitol mustard
+Epilepsy, trigeminal neuralgia
+Dizziness, somnolence or fatigue,
+unsteadiness, nausea, vomiting
+3
+Olanzapine
+Antipsychotic/
+anti-depressant
+Zyprexa, Zydis, Relprevv, Zyprexa
+Relprevv
+Schizophrenia, bipolar disorder
+Weight gain, alteration in lipids,
+somnolence or fatigue, increased
+cholesterol, diabetes
+4
+Ciprofloxacin
+Antibiotic
+Ciprofloxacin hydrochloride, Ciprinol,
+Cipro, Baycip, Ciloxan, Ciflox, Cipro XR,
+Cipro XL, Ciproxin, Prociflor, Proquin,
+Proquin XR, Ciprex, Cetraxal, Axcin
+Bacterial infection
+Diarrhea, vomiting, abdominal
+pain, headache, restlessness
+5
+Trazadone
+Antipsychotic/
+anti-depressant
+Trazon, Thombran, Trazodone
+hydrochloride, Gen trazodone,
+Trazodon neuraxpharm, Molipaxin, Apo
+trazodone, Trittico, Deprax, Novo
+trazodone, Pms-trazodone, Nu-
+trazodone, Nu trazodone, Desyrel, Olep-
+tro, Beneficat, Desirel, Trazorel, Trialodine,
+Mesyrel
+Depression
+Somnolence or fatigue, headache,
+dry mouth, dizziness, nausea
+6
+Ziprasidone
+Antipsychotic/
+anti-depressant
+Ziprasidone hydrochloride, ziprasidone
+hydrochloride, monohydrate, Geodon,
+Ziprazidone, Zeldox
+Schizophrenia
+Somnolence or fatigue, dyskinesia,
+nausea, constipation, dizziness
+7
+Aspirin
+Analgesic/anti-
+inflammatory
+Zorprin, Magnecyl, Acetylsalicylic acid,
+Polopirin, Solupsan, Endosprin,
+Polopiryna, Acetysal, Easprin, Ecotrin,
+Aloxiprimum, Colfarit, Dispril, Solprin,
+Micristin, Acylpyrin, Empirin, Bufferin,
+Fasprin, Genacote, Halfprin
+Pain, fever, reduce blood
+clotting
+Nausea, vomiting, ulcers, bleeding,
+stomach pain or upset
+8
+Ibuprofen
+Analgesic/anti-
+inflammatory
+Salprofen, Trauma-dolgit gel, Trauma
+dolgit gel, Rufen, Nuprin, Brufen,
+Motrin, Ibumetin, Nurofen, Advil
+Pain of rheumatoid arthritis,
+osteoarthritis, menstrual
+cramps, or mild to moderate
+pain
+Headache, achalasia, nausea,
+constipation
+9
+Warfarin
+Anticoagulant
+Coumadine, Tedicumar, Warfant,
+Coumadin, Gen-warfarin, Aldocumar,
+Marevan, Apo-warfarin, Jantoven,
+Lawarin, Waran
+-
+-
+10
+Paroxetine
+Antipsychotic/
+anti-depressant
+Seroxat, Paroxetine maleate, Paxil,
+Aropax, Paroxetine acetate, Paroxetine
+hydrochloride, Paxil cr, Pexeva, Sereupin
+Mental depression, obsessive-
+compulsive disorder, panic
+disorder, generalized anxiety
+disorder, social anxiety disorder
+Pain chest, drowsiness, orthostasis,
+dyspnea, agitation, dizziness,
+feeling suicidal
+11
+Rosiglitazone
+Antidiabetic
+Avandia, Rosiglitazone maleate,
+Diabetes
+Headache, chest pain, left atrial
+hypertrophy, shortness of breath
+Yeleswarapu et al.",aspirin,2120,2127,nausea,1038,1044,Adverse
+"We realized that the task definition in our prompt should be as exact as
+possible (e.g., three directly consecutive hashtags instead of three
+consecutive hashtags) and preferably with an example (e.g., for product
+event combination: “Aspirin|Rash”).",aspirin,234,241,rash,242,246,Adverse
+"The first annotator has marked ‘diabetes
+mellitus’ as a Disorder entity, while the second annotator has marked the
+‘insulin-dependent diabetes mellitus’ as a Disorder entity.",insulin,116,123,diarrhea,-1,-1,No-Relation
+"766
+Concepts/Entities
+Examples
+Drug
+morphine, ibuprofen, antibiotics (or “abx” as its
+abbreviation), chemotherapy etc.",ibuprofen,46,55,constipation,-1,-1,No-Relation
+"For instance, in Figure
+1, ”Hypersensitivity,” ”Hypersensitivity to,” and ”Hypersensitivity to aspirin” represent
+spans of different lengths.",aspirin,95,102,headache,-1,-1,No-Relation

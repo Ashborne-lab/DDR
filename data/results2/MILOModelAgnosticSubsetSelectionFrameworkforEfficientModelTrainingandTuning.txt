@@ -1,0 +1,4172 @@
+MILO : Model-Agnostic Subset Selection Framework
+for Efficient Model Training and Tuning
+Krishnateja Killamsetty1, 2, ∗, Alexandre V. Evfimievski2, Tejaswini Pedapati 2
+Kiran Kate2
+Lucian Popa2,
+Rishabh Iyer1
+1 The University of Texas at Dallas
+2 IBM Research
+{krishnateja.killamsetty, rishabh.iyer}@utdallas.edu
+{evfimi, tejaswinip, kakate, lpopa}@us.ibm.com
+Abstract
+Training deep networks and tuning hyperparameters on large datasets is compu-
+tationally intensive. One of the primary research directions for efficient training
+is to reduce training costs by selecting well-generalizable subsets of training data.
+Compared to simple adaptive random subset selection baselines, existing intelligent
+subset selection approaches are not competitive due to the time-consuming subset
+selection step, which involves computing model-dependent gradients and feature
+embeddings and applies greedy maximization of submodular objectives. Our key
+insight is that removing the reliance on downstream model parameters enables
+subset selection as a pre-processing step and enables one to train multiple models
+at no additional cost. In this work, we propose MILO, a model-agnostic subset
+selection framework that decouples the subset selection from model training while
+enabling superior model convergence and performance by using an easy-to-hard
+curriculum. Our empirical results indicate that MILO can train models 3 × −10×
+faster and tune hyperparameters 20 × −75× faster than full-dataset training or
+tuning without compromising performance.
+1
+Introduction
+Deep learning has achieved remarkable success in a multitude of machine learning tasks, including
+natural language processing, computer vision, and speech recognition in recent years. This success
+is partially due to the availability of massive training datasets and the capacity to train large-scale
+neural networks. However, training deep models on extensive datasets is computationally demanding,
+incurring significant financial costs and generating substantial CO2 emissions [63, 59]. Bhavya et
+al. [2] overview several research trajectories aimed at enhancing model convergence and reducing
+training time and costs, including data subset selection, curriculum learning, model architecture
+improvements, and optimization algorithm enhancements. Our work specifically focuses on selecting
+useful, generalizable data subsets for efficient deep neural network training.
+Recent research [66, 5, 21] suggests that many current training datasets are redundant, indicating that
+a non-redundant, informative subset could achieve comparable performance to training on the full
+dataset. To identify such informative samples, metrics such as prediction uncertainty [7], prediction
+flips [66, 72], loss [42], or gradient/gradient-norm [21, 47, 28, 27, 29] have been applied. These
+metrics, calculated using either the downstream machine learning model or a lightweight surrogate
+[7], require a fully converged model, a requirement that runs counter to the goal of efficient training.
+To address this, existing subset selection algorithms [47, 28, 27, 29, 30, 54] for efficient learning
+∗A portion of this work was completed while Krishnateja was an intern at IBM Research.
+Preprint. Under review.
+arXiv:2301.13287v4  [cs.LG]  16 Jun 2023
+utilize the downstream model during training for heuristic computation and periodically update the
+subset as the model-dependent metrics for each sample evolve.
+0
+200
+Epochs →
+0
+50
+Test Accuracy →
+GRAD-MATCHPB
+ADAPTIVE-RANDOM
+CRAIGPB
+(a)
+0
+5000
+Time Taken (in Secs) →
+0
+50
+Test Accuracy →
+GRAD-MATCHPB
+ADAPTIVE-RANDOM
+CRAIGPB
+(b)
+Figure 1: Sub-figures (a) and (b) display the conver-
+gence of the ResNet18 model trained on a 10% sub-
+set selected using Adaptive-Random, CRAIGPB, and
+GRADMATCHPB on the CIFAR100 dataset, with re-
+spect to epochs and time, respectively. Each strategy
+selects a new subset every epoch.
+Drawbacks of Model-Dependent Subset Se-
+lection: Despite the theoretical advantages of
+existing subset selection strategies[28, 27, 47],
+they often fall short in computational efficiency
+compared to adaptive random subset selection,
+which selects random subsets periodically. This
+is primarily because traditional approaches rely
+on downstream models and typically require the
+calculation of sample metrics, such as gradi-
+ents, before each subset selection step. Further-
+more, these computationally demanding subset
+selection steps occur during model training. For
+instance, Figure 1 compares the convergence
+rate of the ResNet18 model on the CIFAR100
+dataset, in terms of both time and epochs. Here,
+the model uses 10% subsets chosen every epoch
+by GradMatchPB [27], a state-of-the-art data subset selection strategy for efficient training, CraigPB
+[47], and Adaptive-Random (where a new 10% subset is randomly selected periodically). The
+selection of a new subset every epoch is done to demonstrate the maximum performance attain-
+able by GradMatchPB and CraigPB. The results indicate that GradMatchPB achieves faster epoch
+convergence than both Adaptive-Random and CraigPB when selecting a new subset each epoch.
+However, due to the necessity for a computationally intensive subset selection step every epoch, both
+GradMatchPB and CraigPB demonstrate considerable inefficiency in terms of training time. In their
+respective studies, Killamsetty et al. [27] and Mirzasoleiman et al. [47] suggested selecting a new
+subset every R epochs to enhance training efficiency. However, this comes at the cost of the model’s
+convergence rate. Lastly, model-dependent subset selection requires a computationally intensive
+subset selection steps each time a new model is trained.
+Model-Agnostic Selection: Our primary insight is that a model-agnostic subset selection frame-
+work can circumvent the computationally intensive subset selection steps during model training
+by conducting subset selection in the preprocessing phase. By pre-selecting subsets and storing
+them as metadata with each dataset, we can train numerous models without incurring additional
+costs, effectively spreading out the expense of subset selection. In this work, we endeavor to answer
+the following question: Is it possible to develop a model-agnostic subset selection method that
+selects new subsets in a minimal amount of time, yet achieves superior model convergence without
+significant compromise in test accuracy or generalization performance?
+1.1
+Contributions
+MILO Framework: In this study, we introduce MILO, a model-agnostic subset selection framework
+designed for efficient model training and tuning. MILO employs submodular measures [13, 23], which
+capture higher-order interactions between data samples for subset selection. We utilize pre-trained
+large language models [55] and pre-trained vision transformers [25] as feature encoders due to their
+zero-shot feature encoding capabilities. These encoders compute the sample metrics in a nominal
+amount of time, and this computation is independent of the downstream model, rendering MILO
+model-agnostic. Figure 3 provides a visual representation of MILO for model training, comprising
+two steps: a) A pre-processing step that involves the selection of multiple subsets from the training
+dataset using "Stochastic-Greedy Exploration (SGE)" (refer to Section 3.1.1), and the construction
+of a probability distribution over the entire dataset for subset sampling through "Weighted Random
+Exploration (WRE)" (refer to Section 3.1.2); b) A model training scheme that involves training the
+model on a curriculum of easy-to-hard subsets (refer to Section 3.1.3) using the subsets selected
+and the probability distribution constructed in the pre-processing step. We also present a class-wise
+partitioning trick to significantly minimize the memory footprint of MILO (refer to Section 3.2).
+Effectiveness of MILO : Through extensive experiments on multiple real-world datasets, we empiri-
+cally demonstrate the effectiveness of the MILO framework for efficient training and hyperparameter
+tuning. In Figure 2, we provide a summary of the speedup achieved by MILO compared to full
+2
+(a) Efficient Training
+(b) Efficient Tuning
+Figure 2: This figure illustrates the MILO’s tradeoff between speedup and accuracy degradation compared to
+full data training and tuning. For model training, speedups of 3× to 10× were achieved with less than a 1.5%
+accuracy drop, and for hyper-parameter tuning, MILO achieves speedups of 20× to 75× with less than a 0.15%
+accuracy drop.
+data training and tuning, along with the corresponding relative performance. Our results show that
+MILO can train models 3x to 10x faster and tune hyperparameters 20x to 75x faster, with minimal
+loss in performance. Furthermore, we consistently outperform the subset selection baselines that
+were considered. Additionally, MILO exhibits significantly faster initial model convergence and
+maintains faster convergence throughout training compared to other baselines. These qualities make
+it highly effective for applications such as hyperparameter tuning and neural architecture search,
+where the ability to distinguish good models from bad models early in the tuning process is crucial
+for enhancing efficiency [38, 37].
+Related Work:
+In recent years, data-subset selection strategies have achieved success in various
+machine learning applications such as speech recognition [68, 67], machine translation [32], active
+learning [60, 1, 33], hyper-parameter tuning [30], continual learning [65], domain adaptation [20],
+and computer vision [22]. A recent empirical study [5] demonstrated that datasets frequently contain
+semantic redundancies. These redundancies can be removed during training without affecting
+performance. In response, data pruning methods [66, 51, 62] have developed principled selection
+criteria for pruning redundant samples before model training, with minimal loss in performance.
+However, both existing data pruning and compute-efficient learning approaches are model-dependent,
+resulting in them being computationally expensive. In contrast, our method is model-agnostic and
+capable of identifying high-quality subsets by intelligent data exploration. Furthermore, our approach
+can achieve superior model convergence by utilizing an easy-to-hard curriculum, transitioning from
+representative to diverse subsets during training.
+2
+Preliminaries
+Notation: We briefly describe the notation for various variables that will be used throughout the
+remainder of this work. Denote the training dataset as D = {(xj, yj)}m
+j=1 with m data points. Let
+S be the subset of the training dataset on which the downstream model is trained. Let the feature
+encoder be denoted as g : X →Z, which transforms the input from the feature space X to an
+embedding space Z. Let the downstream model parameters be characterized by θ. We subscript the
+changing variables, such as model parameters θ and subset S, with the timestep t to denote their
+specific values at that timestep. Finally, let the subset size be denoted as k.
+Subset Selection Formulation: The standard subset selection problem can be formulated as the
+maximization of a set function f subject to a budget constraint k:
+S∗=
+arg max
+S:S⊆D,|S|=k
+f(S)
+(1)
+Submodular Functions: Given a set function f : 2D →R that maps sets to real values. For a set
+A ⊆D, f(A) gives a real-valued score for A. Formally, a function f is defined as submodular [13]
+if, for any x ∈U, the inequality f(A ∪x) −f(A) ≥f(B ∪x) −f(B) holds for all A ⊆B ⊆D
+and x /∈B. Submodular gain, f(x|D), is defined as the difference between the set function value of
+the set D ∪x and the set function value of set D, i.e., f(x|D) = f(D ∪x) −f(D). A function f is
+considered monotone if f(A) ≤f(B) for any A ⊆B. Although most general discrete maximization
+3
+Initial
+parameters
+Stochastic-
+Greedy
+Exploration
+Selected
+Subsets
+Training Dataset
+Graph-cut
+ Function: 
+Disparity-Min
+Function: 
+Weighted 
+Random
+Exploration
+Probability
+Distribution
+Pre-Processing Step
+ 
+Sample
+Subset 
+using  
+Model Training
+Mini-batch SGD
+on 
+ for 
+epochs, 
+ 
+Mini-batch SGD
+on 
+ for 
+epochs, 
+ 
+True
+True
+Model Training on Representative (Easy)
+Samples for 
+ Epochs
+Model Training on Diverse(Hard) Samples
+from Epoch 
+ to Epoch 
+Need to be done only once for each dataset
+Figure 3: Block diagram of MILO for model training.
+problems are NP-hard, they can be approximately solved if the set function f being maximized
+is submodular. Furthermore, if the set function f is monotone submodular, then the optimization
+problem in Equation 1 can be approximated to a factor of 1 −1
+e [48] when maximized under a
+cardinality constraint using a simple greedy algorithm.
+3
+Development of MILO
+In this section, we discuss the theoretical and empirical considerations that inspired the development
+of MILO. Our primary objective for this new subset selection approach is to enable the selection
+of a new subset in a negligible amount of time while ensuring superior model convergence and
+performance within a specified period.
+Choice of Feature Encoders:
+The standard subset selection problem as outlined in Equation (1)
+involves maximizing the set function f subject to a budget constraint. To capture interactions between
+data samples, most set functions f necessitate the computation of a similarity kernel K [23]. This
+computation requires informative encodings of samples. Our initial design choice was to utilize
+pre-existing pre-trained language models or vision transformers as feature encoders g. These models
+enhance contextualization, expressiveness, and generalizability, promoting extrapolation in zero-shot
+settings [55, 25]. However, this prompts questions regarding their ability to effectively generalize to
+specialized domain datasets. We address this issue empirically in Appendix H.1, which shows that
+the pre-trained transformer models used in our study can generalize effectively to such domains. In
+cases where a pre-trained model underperforms on a specific dataset—determined by linear probing
+accuracies—one can fine-tune the pre-trained transformer model or train a smaller proxy model [7].
+Although this adds to pre-processing costs, it boosts performance, and pre-processing only needs to
+be done once per dataset. The efficacy of using a proxy model is validated in Appendix H.2. By using
+a pre-trained transformer model or a proxy model, the need for downstream machine-learning models
+to compute sample representations is eliminated. Further, the effectiveness of various language
+models or vision transformers as feature encoders for subset selection is assessed in Appendix I.1.
+0
+200
+Epochs →
+0
+20
+40
+Test Accuracy →
+Graph Cut
+Facility Location
+Disparity-Min
+Disparity-Sum
+(a) CIFAR100 (10%)
+0
+200
+Epochs →
+0
+25
+50
+Test Accuracy →
+Graph Cut
+Facility Location
+Disparity-Min
+Disparity-Sum
+(b) CIFAR100 (30%)
+Figure 4: ResNet18 model performance on 10%
+and 30% subsets of the CIFAR100 dataset, selected
+using diverse set functions for maximization.
+Optimal Subset Composition:
+The immediate
+question that arises is the choice of the appropriate
+set function for subset selection. Essentially, we need
+to pinpoint the key characteristics a subset should
+possess for optimal model performance. To identify
+these characteristics, we assess the empirical perfor-
+mance of various set functions that capture the follow-
+ing subset qualities: Representation: This attribute
+measures the subset’s effectiveness in representing
+the entire dataset. For instance, it ensures that the
+subset includes more samples from dense regions
+than sparse ones, typically resulting in "easier" data
+samples. We used facility location and graph-cut set
+functions to model representation; Diversity: This
+characteristic evaluates the degree of distinctiveness among the data samples within the subset. For
+instance, it ensures that the subset covers highly diverse samples, which are generally "harder"
+data samples. To model diversity, we considered the disparity-sum and disparity-min set functions.
+We empirically support the claim that representation-based functions select easier samples, and
+diversity-based functions select harder samples by presenting the mean EL2N scores [51] for the
+subsets chosen by their respective functions in Appendix E. All set functions considered, except
+4
+disparity-sum and disparity-min, are submodular. Despite the non-submodular nature of disparity-min
+and disparity-sum functions, it has been established that they can be effectively maximized using the
+conventional greedy approach, leading to 1/4 and 1/2 approximations respectively [8]. Therefore, we
+have deemed it appropriate to include these functions in our evaluation. We provide instantiations of
+the considered set functions in Appendix D. Figure 4 demonstrates the performance of a ResNet18
+model trained on 10% and 30% fixed subsets of the CIFAR100 dataset, respectively, by maximizing
+different set functions. The results show that when using larger subset sizes of 30% or more, subsets
+selected with diversity functions disparity-min and disparity-sum lead to superior model performance.
+Conversely, for smaller subset sizes of 10% or less, subsets chosen with representation functions
+graph-cut and facility location yield better model performance. This observation is consistent with
+the recent findings of Sorscher et al. [62].
+Issue with using fixed data subsets:
+If the goal is to achieve the best performance within a certain
+timeframe, the model must also engage in data exploration instead of relying solely on a fixed data
+subset. One significant disadvantage of training models using fixed data subsets is the requirement
+for large subsets, approximately 70% or more, to achieve accuracy comparable to full data training.
+This leads to extended training times. For instance, when training the ResNet101 model on a fixed
+10% random subset of the CIFAR10 dataset for 200 epochs, it only reached a test accuracy of 66.9%.
+Conversely, the ResNet101 model achieved a test accuracy of 87.54% when trained on an adaptive
+10% subset of CIFAR10 data for the same number of epochs, with a new subset being randomly
+selected after each epoch. While random data exploration is a simple and empirically effective
+method for data exploration, it may not be the most efficient strategy due to potential redundancy
+in the randomly selected subsets. Therefore, it is vital to develop a strategy that balances Subset
+Exploration and Subset Exploitation.
+3.1
+Informative Data Exploration
+To balance exploration and exploitation, models should train on small, informative subsets that
+encourage exploration. A performant subset selection approach would combine training samples
+from all parts of the dataset without undue bias. An ideal formulation for informative data subset
+exploration is as follows:
+P(S) ∝exp (β·f(S)) subject to |S| = k
+(2)
+In Equation (2), P(S) represents the probability of sampling subset S, f is our set quality measure,
+and β > 0 is the inverse temperature [14]. This formula ensures higher quality subsets are explored
+more frequently, without showing bias in the points sampled. Ideally, a new subset is selected for
+every epoch from this probability distribution. However, constructing a simple sampler according to
+Equation (2) requires a combinatorial number of set function evaluations. Although Gotovos et al. [14]
+proposed a Gibbs sampling approach for marginal inference with a polynomial mixing time in |D|, to
+enforce |S| = k, it needs modification, involving swapping data points at each step. But this leads to
+considerable mixing times, especially when the current subset has a close-to-optimal f(S) value. We
+propose two scalable alternatives for data exploration with varying exploration-to-exploitation ratios
+and leave the extension of Gotovos et al. [14] to future work.
+3.1.1
+Stochastic-Greedy Exploration (SGE)
+The first method we use for data exploration involves identifying multiple subsets with high function
+values. We then train the downstream model on these selected subsets, changing the subsets every R
+epochs. This approach emphasizes exploitation over exploration, as it primarily focuses on subsets
+with high function values. To select n subsets S1, S2, · · · , Sn from the dataset D with high set
+function values, we employ the stochastic greedy algorithm [46] to maximize the set function f and
+repeat the maximization n times.
+S1, S2, · · · , Sn ←−SGE(f, D, k)
+(3)
+The randomness of the stochastic greedy algorithm allows us to choose a different subset with an
+approximate guarantee of O(1 −1
+e −ϵ) every time. Due to space constraints, a detailed pseudocode
+of the "SGE" is provided in Algorithm 2 in Appendix C. In our experiments, we use an ϵ value of
+0.01 for stochastic greedy maximization.
+5
+3.1.2
+Weighted Random Exploration (WRE)
+In the WRE approach, we explore data by creating a multinomial probability distribution p across
+the entire dataset D. Every R epochs, we sample a subset S of size k from this distribution, without
+replacement. We employ a weighted random sampling method [12], whereby each data sample is
+assigned a weight equal to its normalized set function gain during greedy maximization. Specifically,
+we greedily maximize the set function f over the whole dataset D and designate the set function
+gains associated with each data sample e at its point of greedy inclusion as its importance score ge.
+Here, if S is the subset selected thus far and e is the next optimal data sample to be added greedily,
+the set function gain value of e is computed as f(S ∪e) −f(S).
+g = [g1, g2, · · · , gm] ←−GreedySampleImportance(f, D)
+(4)
+As illustrated in Equation (5), we normalize the importance scores g and construct the probability
+distribution p over the training set D by employing the second-order Taylor-Softmax function [9]
+over the importance scores.
+p = Taylor-Softmax(g) =
+h
+1 + gi + 0.5g2
+i
+Pm
+j=1 1 + gj + 0.5g2
+j
+im
+i=1
+(5)
+When f is submodular, the diminishing returns property of submodular functions means elements
+chosen in early iterations have greater set function gain than those selected later. The probability
+distribution p generated assigns higher probability to more informative samples. Depending on the
+set function, this could mean better representativeness or diversity. Importantly, sampling from p
+allows the exploration of less informative samples while frequently selecting more informative ones.
+Once p is established, selecting new subsets from the multinomial distribution is as quick as random
+subset selection. We use p to sample new subsets of size k every R epochs (without replacement).
+For the detailed pseudocode of the greedy sample importance estimation, please refer to Algorithm 3
+in Appendix C, as space constraints prevent inclusion here.
+SGE
+(5%)
+WRE
+(5%)
+SGE
+(10%)
+WRE
+(10%)
+SGE
+(30%)
+WRE
+(30%)
+0
+50
+100
+Test Accuracy →
+53.17
+68.57
+64.02
+71.92
+74.25
+75.81
+53.01
+67.95
+63.29
+71.27
+73.9
+75.22
+40.07
+65.57
+51.91
+68.56
+69.56
+73.58
+36.62
+65.25
+52.63
+68.68
+70.87
+73.75
+Disparity-Min
+Facility Location
+Graph Cut
+Disparity-Sum
+(a) Comparison of data explo-
+ration approaches
+0
+250
+Time taken (in Secs) →
+0
+50
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Disparity-Min)
+SGE
+(Facility Location)
+WRE
+(Graph-Cut)
+25
+50
+10
+15
+20
+25
+30
+(b)
+ResNet18
+con-
+vergence
+on
+5%
+CIFAR100 subset
+Figure 5: Figure (a) illustrates the performance of the
+ResNet18 model on various subset sizes and set func-
+tions using SGE and WRE approaches on CIFAR100.
+Figure (b) demonstrates the convergence of the model on
+a 5% subset of CIFAR100 employing SGE with Graph
+Cut and WRE with Disparity-Min function.
+SGE vs. WRE: Sub-figure 5a demonstrates that
+training the ResNet18 model using the Weighted
+Random Exploration (WRE) approach, which
+emphasizes exploration, yields better perfor-
+mance than both the Stochastic-Greedy Explo-
+ration (SGE) approach, which prioritizes ex-
+ploitation, and fixed data subsets (pure exploita-
+tion). Furthermore, using Disparity-Min as a
+set function outperforms other set functions in
+both exploration strategies. However, we made
+an important empirical observation: SGE with
+the Graph-cut function achieves superior initial
+model convergence in the early iterations, as
+shown in sub-figure 5b. This sub-figure empha-
+sizes the benefit of early-stage model conver-
+gence of SGE using Graph-cut, focusing on eas-
+ier samples, compared to WRE with Disparity-
+Min, focusing on more challenging samples, and both WRE with Graph-cut and SGE using Facility
+Location, targeting easier samples, on the CIFAR100 dataset. Early convergence is particularly
+beneficial in hyper-parameter tuning or neural-architecture search, where early-stage performance as-
+sessment is critical. This trend of superior early convergence with SGE using Graph-cut is consistent
+across multiple datasets and subset sizes, as shown in Figures 12 and 13 in the Appendix. We provide
+a detailed explanation in Appendix sections I.3 and I.4, explaining why SGE with Graph-cut results
+in superior initial convergence compared to SGE with Facility Location and WRE with Graph-cut,
+even though all these approaches aim to select easy or representative samples.
+3.1.3
+Developing a Curriculum of Easy-to-Hard Subsets:
+Sub-figure 5b suggests that for optimal model convergence with MILO throughout training, we
+should construct an easy-to-hard curriculum, building on the empirical success of such approaches
+6
+[36, 16, 72]. This is accomplished by initially using SGE with graph-cut, followed by WRE with
+disparity-min in later iterations. The curriculum design involves training the model for a fraction
+κ of the total number of epochs with SGE and the graph-cut function, followed by WRE with
+disparity-min for the remaining epochs. The hyper-parameter κ specifies the fraction of epochs
+dedicated to stochastic exploration with the graph-cut function. Our experiments determined that
+setting κ = 1
+6 yielded optimal results following hyper-parameter tuning. The use of disparity-min
+in WRE ensures the selection of subsets that include both easy and difficult samples, with a higher
+probability of selecting difficult samples, and mitigates the model’s catastrophic forgetting of easy
+samples. The results of hyper-parameter tuning for κ are presented in Appendix I.5.1. Furthermore,
+we demonstrate the advantage of curriculum-based data exploration in enhancing model convergence
+and performance through an ablation study, as detailed in Appendix I.5.
+3.2
+MILO Framework
+As mentioned earlier, the MILO training process follows a curriculum of subsets, transitioning from
+representative to diverse subsets. Figure 3 illustrates the MILO training pipeline, while Figure 8
+in the Appendix depicts the hyper-parameter tuning pipeline with MILO. Detailed pseudocode for
+the MILO algorithm can be found in Algorithm 1 in Appendix C, as space constraints preclude
+its inclusion in the main paper. For hyper-parameter search and scheduling algorithms, we used
+Wandb [4], SUBMODLIB [24] for submodular optimization, and CORDS [26] for baseline subset
+selection methods.
+Class-wise Data Partitioning:
+The set functions we experiment with in this study necessitate
+a similarity kernel K of size m × m, which must be computed over the entire dataset of size m.
+This could lead to substantial memory requirements for computation and storage as the dataset size
+m increases, making it computationally prohibitive in some instances. To address this issue, we
+partition the data based on class labels and select multiple subsets from each class (for SGE) or
+create a probability distribution over each class (for WRE), considering only data instances from each
+class separately. For example, in a balanced dataset of size m with c classes, class-wise partitioning
+reduces memory requirements by a factor of c2. By default, we use class-wise partitioning and
+curriculum-based data exploration with MILO.
+4
+Experimental Results
+Our experimental objective is to emphasize the efficiency and stability of MILO in both model training
+and hyper-parameter tuning. Each experiment is repeated five times, and for clarity, we present only
+the mean test accuracies in our plots. A comprehensive table, including both the mean test accuracy
+and standard deviations, can be found in Appendices H.4 and H.6. To ensure a fair comparison, we
+use the same random seed for all trials across all methods. Implementation specifics, datasets, and
+baselines utilized in each scenario will be detailed in the following subsections.
+Subset Selection Baselines:
+Our experiments aim to showcase the performance of MILO in model
+training and hyperparameter tuning scenarios. In single model training experiments, we compare
+MILO with several strategies. These include: RANDOM, which randomly samples a subset of the
+same size as MILO from the training data; ADAPTIVE-RANDOM, which adaptively samples a random
+subset of the same size as MILO from the training data every R epochs; FULL, which uses the entire
+training data for model training and tuning; FULL-EARLYSTOP, where early stopping is applied
+to full training to match the time or energy consumption of MILO; and adaptive gradient-based
+subset selection strategies for efficient learning, where a new subset is selected every R epochs.
+These include CRAIGPB, a faster per-batch version of CRAIG [47] as discussed in Killamsetty et al.
+[27], GLISTER [28], and GRAD-MATCHPB, the per-batch version of GRAD-MATCH [27]. In hyper-
+parameter tuning experiments, we adopt the experimental setup of AUTOMATA [30], an efficient
+hyperparameter tuning framework that uses GRAD-MATCHPB, replacing the subset selection strategy
+with MILO. To assess the efficacy of MILO for hyperparameter tuning, we compare it with RANDOM,
+FULL, ADAPTIVE-RANDOM, and AUTOMATA (GRAD-MATCHPB) as subset selection baselines.
+We also present results from a variant of MILO, denoted MILO (Fixed), which uses a fixed subset for
+model training, selected by maximizing the disparity-min function.
+7
+RANDOM
+ADAPTIVE-RANDOM
+FULL
+FULL-Earlystop
+MILO (Fixed)
+MILO
+CRAIGPB
+GRAD-MATCHPB
+GLISTER
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(a) CIFAR10 (ResNet18)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+80
+Acc. Degradation →
+(b) CIFAR100 (ResNet101)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(c) TinyImagenet (ResNet101)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(d) ImageNet (ResNet50)
+3.5
+10
+30
+80
+Speed Up →
+0
+15
+30
+Acc. Degradation →
+(e) Rotten Tomatoes (LSTM)
+3.5
+10
+30
+80
+Speed Up →
+0
+2
+4
+6
+8
+Acc. Degradation →
+(f) IMDB (BERT+MLP)
+0
+1
+2
+3
+Time taken (in Hrs) →
+0
+20
+40
+60
+80
+Test Accuracy →
+0.3
+0.5
+0.7
+0.9
+50
+55
+60
+65
+70
+75
+(g) CIFAR100 Convergence
+0 20 40 60 80 100
+Time taken (in Secs) →
+0
+20
+40
+60
+80
+Test Accuracy →
+5
+10
+15
+20
+60
+65
+70
+75
+80
+85
+90
+(h) Trec6 (LSTM) Convergence
+Figure 6: Comparison of MILO with baselines for model training using various subset sizes on seven different
+datasets with different models. The x-axis shows the accuracy degradation compared to full data training, and the
+y-axis shows the speedup achieved by using the subset selection approach. Smaller subsets are on the right, and
+larger ones are on the left. MILO significantly outperforms existing baselines in terms of accuracy degradation
+and speedup tradeoff compared to full data training. The bottom-right corner of each plot shows the best
+speedup-accuracy tradeoff region. Plots (g) and (h) show the model convergence with time. Again, we see
+that MILO achieves much faster convergence than all baselines and full training.
+Datasets, Model Architecture, and Experimental Setup: In our experiments, we utilized various
+vision and text datasets, namely CIFAR100, CIFAR10 [34], TINYIMAGENET [35], IMAGENET [58],
+TREC6 [39, 18], IMDB [45], and ROTTEN TOMATOES [49]. For datasets without pre-specified
+validation sets, we created a new validation set by splitting the original training set into a 90%
+training set and a 10% validation set. Appendix F provides detailed information regarding dataset
+sizes and splits. For the text datasets, we employed the LSTM model sourced from PyTorch, using
+trainable GloVe embeddings of 300 dimensions as input. We also utilized the BERT+MLP model,
+which combines a BERT-BASE model with a two-layer MLP for classification. Regarding the vision
+datasets, we used the ResNet18, ResNet50, and ResNet101 models. We trained the ResNet models
+for 200 epochs with a batch size of 128, except for IMAGENET, where we trained for 90 epochs. The
+LSTM model was trained for 24 epochs with a batch size of 16, while the BERT model was trained
+for 12 epochs with a batch size of 16. For image datasets, both MILO and the baselines employed
+Nesterov’s accelerated SGD optimizer with a learning rate of 0.05, weight decay of 5e-4, momentum
+of 0.9, and a cosine annealing learning rate scheduler, except for IMAGENET where a cyclic learning
+rate scheduler was used. For text datasets with the LSTM model, we utilized the Adam optimizer
+with a learning rate of 0.001. For fine-tuning the BERT model, we employed the AdamW optimizer
+with a learning rate of 5e-5. The hyperparameter search spaces used for the hyperparameter tuning
+experiments are outlined in Appendix G. All experiments were conducted on 80GB A100 GPUs.
+Pre-trained Transformer Models as Feature Encoders: We utilized the DINO-VITB16 model [6]
+from HuggingFace [69] as the feature encoder for vision datasets. The final layer CLS token
+embedding output served as the feature representation. For text datasets, we employed the pre-trained
+all-distilroberta-v1 model from the sentence transformers package [57], computing the average of the
+final layer embeddings of all words in the sentence for the feature representation. An evaluation of the
+performance of pre-trained vision transformers and language models as feature encoders for subset
+selection can be found in Appendix I.1. Furthermore, we provide empirical evidence in Appendix H.1
+demonstrating that the pre-trained transformer models used in this study can effectively generalize to
+specialized or unseen domain datasets.
+Efficacy of MILO for Efficient Model Training:
+Figure 6 illustrates the accuracy-efficiency
+tradeoff comparison for various subset selection methods used in model training. The performance is
+compared across different subset sizes of the training data, including 1%, 5%, 10%, and 30%. In our
+experiments, both the MILO and ADAPTIVE-RANDOM used a R value of 1, implying subset selection
+8
+RANDOM
+ADAPTIVE-RANDOM
+CRAIGPB
+AUTOMATA
+MILO (Fixed)
+MILO
+(a) TREC6(Random,HB)
+(b) TREC6(TPE, HB)
+(c) CIFAR10(Random,HB)
+(d) CIFAR10(TPE, HB)
+Figure 7: Comparison of MILO with baselines for hyper-parameter tuning using subset sizes of 1%, 5%, 10%,
+and 30% is shown in sub-figures (a-d) for TREC6 and CIFAR10 datasets for combinations of Random Search
+and Hyperband Scheduler and TPE and Hyperband Scheduler. The scatter plots show that MILO achieves
+the best speedup-accuracy tradeoff in almost every case (bottom-right corner of each plot indicates the best
+speedup-accuracy tradeoff region).
+at each epoch. It was empirically observed that an R value of 1 enhances the performance of the MILO.
+An ablation study for the R value can be found in Appendix I.6. To ensure efficiency comparable to
+other adaptive baselines—namely CRAIGPB, GRADMATCHPB, and GLISTER—we used an R value
+of 10 for vision experiments and 3 for text experiments. Accuracy degradation versus speedup plots,
+both in relation to full training, are provided in the sub-figures 6a, 6b, 6c, 6d, 6e, and 6f. Our results
+highlight MILO’s optimal speedup-accuracy tradeoff, making it a greener choice considering CO2
+emissions. Using ResNet18 on CIFAR10, MILO achieves 3.34x and 10.69x speedups with 1.03%
+and 4.07% performance losses, respectively. Similarly, it achieves a 3.34x speedup with a mere 0.9%
+performance loss using ResNet50 on ImageNet. When employed with ResNet101 on TinyImageNet
+and CIFAR100, MILO yields approximately 3.2x speedup with 1.30% and 3.18% performance losses,
+respectively. MILO achieves even higher speedup gains of around 10x with performance losses
+of 2.30% and 1.23% on TREC6 and Rotten Tomatoes datasets, respectively. For finetuning the
+BERT+MLP model on the IMDB dataset, MILO attains a remarkable 24.94x speedup with just
+a 1.20% performance loss. Furthermore, our model notably surpasses the ADAPTIVE-RANDOM
+baseline, with this advantage being particularly evident on text datasets. On more complex vision
+datasets, the gap between MILO and ADAPTIVE-RANDOM widens, indicating the former’s superior
+performance. In sub-figures 6g and 6h, the MILO is shown to achieve faster convergence compared
+to all other methods on CIFAR100 and TREC6 datasets using 30% subsets. Appendix H provides
+further efficient training results on additional datasets and model architectures, thereby demonstrating
+the MILO´s generalizability.
+Efficacy of MILO for Hyper-parameter Tuning: The effectiveness of MILO in preserving the
+original hyper-parameter ordering is evaluated in Appendix H.5. We found that MILO retains
+the hyper-parameter ordering better than the baseline methods. Figure 7 illustrates the accuracy-
+efficiency trade-off among various subset selection methods for hyper-parameter tuning. We evaluated
+the performance for different subset sizes of the training data: 1%, 5%, 10%, and 30% using
+combinations of Random Search [53] and Hyperband Scheduler [38], as well as TPE [3] and
+Hyperband Scheduler [38]. Sub-figures 7a, 7b, 7c, and 7d display the accuracy degradation vs.
+speedup plots, both w.r.t full data tuning. MILO consistently outperforms the baselines, even with
+smaller subset sizes. Results indicate that MILO achieves the best tradeoff between speedup and
+accuracy for hyper-parameter tuning. Specifically, MILO achieves a 75× and 20× speedup on
+CIFAR10 and TREC6 datasets, respectively, with a negligible performance loss of about 0.1%.
+5
+Conclusion
+We introduce MILO, a novel, model-agnostic subset selection framework for efficient model training
+and tuning. MILO not only rivals the efficiency of random subset selection but also outperforms
+current state-of-the-art strategies in model convergence. Empirically, MILO expedites model training
+and hyper-parameter tuning by 3x to 10x and 20x to 75x, respectively, with minimal performance
+degradation. Consequently, MILO offers a significant societal advantage by facilitating faster,
+energy-efficient model training and tuning, thus reducing CO2 emissions. Although MILO employs
+pre-trained transformer models, it does not rely heavily on them. These models can be replaced with
+smaller proxy models, though the preprocessing times will be slightly longer. However, MILO does
+present some challenges, most notably the requirement for a large amount of memory to construct
+similarity kernels, even with class-wise partitioning strategies. In the future, we will investigate
+9
+feature-based submodular functions to avoid the need for similarity kernel construction, as well as
+potential biases introduced when training on data subsets, to further improve the MILO framework.
+References
+[1] Jordan T Ash, Chicheng Zhang, Akshay Krishnamurthy, John Langford, and Alekh Agarwal.
+Deep batch active learning by diverse, uncertain gradient lower bounds. In ICLR, 2020.
+[2] Brian R. Bartoldson, Bhavya Kailkhura, and Davis Blalock. Compute-efficient deep learning:
+Algorithmic trends and opportunities, 2022. URL https://arxiv.org/abs/2210.06640.
+[3] James Bergstra, Rémi Bardenet, Yoshua Bengio, and Balázs Kégl. Algorithms for hyper-
+parameter optimization.
+In J. Shawe-Taylor, R. Zemel, P. Bartlett, F. Pereira, and K. Q.
+Weinberger, editors, Advances in Neural Information Processing Systems, volume 24. Cur-
+ran Associates, Inc., 2011. URL https://proceedings.neurips.cc/paper/2011/file/
+86e8f7ab32cfd12577bc2619bc635690-Paper.pdf.
+[4] Lukas Biewald. Experiment tracking with weights and biases, 2020. URL https://www.
+wandb.com/. Software available from wandb.com.
+[5] Vighnesh Birodkar, Hossein Mobahi, and Samy Bengio. Semantic redundancies in image-
+classification datasets: The 10% you don’t need. CoRR, abs/1901.11409, 2019. URL http:
+//arxiv.org/abs/1901.11409.
+[6] Mathilde Caron, Hugo Touvron, Ishan Misra, Herv’e J’egou, Julien Mairal, Piotr Bojanowski,
+and Armand Joulin. Emerging properties in self-supervised vision transformers. 2021 IEEE/CVF
+International Conference on Computer Vision (ICCV), pages 9630–9640, 2021.
+[7] Cody Coleman, Christopher Yeh, Stephen Mussmann, Baharan Mirzasoleiman, Peter Bailis,
+Percy Liang, Jure Leskovec, and Matei Zaharia. Selection via proxy: Efficient data selection
+for deep learning. In International Conference on Learning Representations, 2020. URL
+https://openreview.net/forum?id=HJg2b0VYDr.
+[8] Anirban Dasgupta, Ravi Kumar, and Sujith Ravi. Summarization through submodularity and
+dispersion. In Proceedings of the 51st Annual Meeting of the Association for Computational Lin-
+guistics (Volume 1: Long Papers), pages 1014–1022, Sofia, Bulgaria, August 2013. Association
+for Computational Linguistics. URL https://aclanthology.org/P13-1100.
+[9] Alexandre de Brébisson and Pascal Vincent. An exploration of softmax alternatives belonging
+to the spherical loss family. In Yoshua Bengio and Yann LeCun, editors, 4th International
+Conference on Learning Representations, ICLR 2016, San Juan, Puerto Rico, May 2-4, 2016,
+Conference Track Proceedings, 2016. URL http://arxiv.org/abs/1511.05042.
+[10] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of
+deep bidirectional transformers for language understanding. ArXiv, abs/1810.04805, 2019.
+[11] Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai,
+Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly,
+Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image
+recognition at scale. In International Conference on Learning Representations, 2021. URL
+https://openreview.net/forum?id=YicbFdNTTy.
+[12] Pavlos Efraimidis and Paul (Pavlos) Spirakis.
+Weighted Random Sampling, pages 2365–
+2367. Springer New York, New York, NY, 2016. ISBN 978-1-4939-2864-4. doi: 10.1007/
+978-1-4939-2864-4_478. URL https://doi.org/10.1007/978-1-4939-2864-4_478.
+[13] Satoru Fujishige. Submodular functions and optimization. Elsevier, 2005.
+[14] Alkis Gotovos, Hamed Hassani, and Andreas Krause.
+Sampling from probabilistic sub-
+modular models.
+In C. Cortes, N. Lawrence, D. Lee, M. Sugiyama, and R. Gar-
+nett, editors, Advances in Neural Information Processing Systems, volume 28. Curran
+Associates, Inc., 2015.
+URL https://proceedings.neurips.cc/paper/2015/file/
+160c88652d47d0be60bfbfed25111412-Paper.pdf.
+10
+[15] Harsha Gurulingappa, Abdul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin Hofmann-
+Apitius, and Luca Toldo. Development of a benchmark corpus to support the automatic extrac-
+tion of drug-related adverse effects from medical case reports. Journal of Biomedical Informatics,
+45(5):885 – 892, 2012. ISSN 1532-0464. doi: https://doi.org/10.1016/j.jbi.2012.04.008. URL
+http://www.sciencedirect.com/science/article/pii/S1532046412000615.
+Text
+Mining and Natural Language Processing in Pharmacogenomics.
+[16] Guy Hacohen and Daphna Weinshall. On the power of curriculum learning in training deep
+networks. In Kamalika Chaudhuri and Ruslan Salakhutdinov, editors, Proceedings of the 36th
+International Conference on Machine Learning, ICML 2019, 9-15 June 2019, Long Beach,
+California, USA, volume 97 of Proceedings of Machine Learning Research, pages 2535–2544.
+PMLR, 2019. URL http://proceedings.mlr.press/v97/hacohen19a.html.
+[17] Kaiming He, X. Zhang, Shaoqing Ren, and Jian Sun.
+Deep residual learning for image
+recognition. 2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR),
+pages 770–778, 2016.
+[18] Eduard Hovy, Laurie Gerber, Ulf Hermjakob, Chin-Yew Lin, and Deepak Ravichandran. Toward
+semantics-based answer pinpointing. In Proceedings of the First International Conference on Hu-
+man Language Technology Research, 2001. URL https://www.aclweb.org/anthology/
+H01-1069.
+[19] Andrew G. Howard, Menglong Zhu, Bo Chen, Dmitry Kalenichenko, Weijun Wang, Tobias
+Weyand, Marco Andreetto, and Hartwig Adam. Mobilenets: Efficient convolutional neural
+networks for mobile vision applications, 2017.
+[20] Athresh Karanam, Krishnateja Killamsetty, Harsha Kokel, and Rishabh K Iyer. ORIENT:
+Submodular mutual information measures for data subset selection under distribution shift. In
+Alice H. Oh, Alekh Agarwal, Danielle Belgrave, and Kyunghyun Cho, editors, Advances in
+Neural Information Processing Systems, 2022. URL https://openreview.net/forum?id=
+mhP6mHgrg1c.
+[21] Angelos Katharopoulos and Francois Fleuret. Not all samples are created equal: Deep learning
+with importance sampling. In Jennifer Dy and Andreas Krause, editors, Proceedings of the
+35th International Conference on Machine Learning, volume 80 of Proceedings of Machine
+Learning Research, pages 2525–2534. PMLR, 10–15 Jul 2018. URL https://proceedings.
+mlr.press/v80/katharopoulos18a.html.
+[22] Vishal Kaushal, Rishabh Iyer, Suraj Kothawade, Rohan Mahadev, Khoshrav Doctor, and Ganesh
+Ramakrishnan. Learning from less data: A unified data subset selection and active learning
+framework for computer vision. In 2019 IEEE Winter Conference on Applications of Computer
+Vision (WACV), pages 1289–1299. IEEE, 2019.
+[23] Vishal Kaushal, Suraj Kothawade, Ganesh Ramakrishnan, Jeff Bilmes, and Rishabh Iyer. Prism:
+A unified framework of parameterized submodular information measures for targeted data
+subset selection and summarization. arXiv preprint arXiv:2103.00128, 2021.
+[24] Vishal Kaushal, Ganesh Ramakrishnan, and Rishabh Iyer. Submodlib: A submodular optimiza-
+tion library, 2022. URL https://arxiv.org/abs/2202.10680.
+[25] Salman Khan, Muzammal Naseer, Munawar Hayat, Syed Waqas Zamir, Fahad Shahbaz Khan,
+and Mubarak Shah. Transformers in vision: A survey. In ACM Computing Surveys, volume 54,
+New York, NY, USA, sep 2022. Association for Computing Machinery. doi: 10.1145/3505244.
+URL https://doi.org/10.1145/3505244.
+[26] Krishnateja Killamsetty, Dheeraj Bhat, Ganesh Ramakrishnan, and Rishabh Iyer. CORDS:
+COResets and Data Subset selection for Efficient Learning, March 2021. URL https://
+github.com/decile-team/cords.
+[27] Krishnateja Killamsetty, Durga Sivasubramanian, Ganesh Ramakrishnan, Abir De, and Rishabh
+Iyer. Grad-match: Gradient matching based data subset selection for efficient deep model
+training. In Marina Meila and Tong Zhang, editors, Proceedings of the 38th International
+Conference on Machine Learning, volume 139 of Proceedings of Machine Learning Research,
+11
+pages 5464–5474. PMLR, 18–24 Jul 2021. URL https://proceedings.mlr.press/v139/
+killamsetty21a.html.
+[28] Krishnateja Killamsetty, Durga Sivasubramanian, Ganesh Ramakrishnan, and Rishabh Iyer.
+Glister: Generalization based data subset selection for efficient and robust learning. Proceedings
+of the AAAI Conference on Artificial Intelligence, 35(9):8110–8118, May 2021. URL https:
+//ojs.aaai.org/index.php/AAAI/article/view/16988.
+[29] Krishnateja Killamsetty, Xujiang Zhao, Feng Chen, and Rishabh K Iyer. RETRIEVE: Coreset
+selection for efficient and robust semi-supervised learning. In A. Beygelzimer, Y. Dauphin,
+P. Liang, and J. Wortman Vaughan, editors, Advances in Neural Information Processing Systems,
+2021. URL https://openreview.net/forum?id=jSz59N8NvUP.
+[30] Krishnateja Killamsetty, Guttu Sai Abhishek, Aakriti Lnu, Ganesh Ramakrishnan, Alexandre V.
+Evfimievski, Lucian Popa, and Rishabh K Iyer. AUTOMATA: Gradient based data subset
+selection for compute-efficient hyper-parameter tuning. In Alice H. Oh, Alekh Agarwal,
+Danielle Belgrave, and Kyunghyun Cho, editors, Advances in Neural Information Processing
+Systems, 2022. URL https://openreview.net/forum?id=ajH17-Pb43A.
+[31] Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In Yoshua
+Bengio and Yann LeCun, editors, 3rd International Conference on Learning Representations,
+ICLR 2015, San Diego, CA, USA, May 7-9, 2015, Conference Track Proceedings, 2015. URL
+http://arxiv.org/abs/1412.6980.
+[32] Katrin Kirchhoff and Jeff Bilmes. Submodularity for data selection in machine translation. In
+Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing
+(EMNLP), pages 131–141, 2014.
+[33] Suraj Kothawade, Vishal Kaushal, Ganesh Ramakrishnan, Jeff Bilmes, and Rishabh Iyer. Sub-
+modular mutual information for targeted data subset selection. arXiv preprint arXiv:2105.00043,
+2021.
+[34] Alex Krizhevsky and Geoffrey Hinton. Learning multiple layers of features from tiny images.
+Technical Report 0, University of Toronto, Toronto, Ontario, 2009.
+[35] Ya Le and Xuan S. Yang. Tiny imagenet visual recognition challenge, 2015.
+[36] Yong Jae Lee and Kristen Grauman. Learning the easy things first: Self-paced visual category
+discovery. In CVPR 2011, pages 1721–1728, 2011. doi: 10.1109/CVPR.2011.5995523.
+[37] Liam Li, Kevin Jamieson, Afshin Rostamizadeh, Ekaterina Gonina, Jonathan Ben-tzur, Moritz
+Hardt, Benjamin Recht, and Ameet Talwalkar. A system for massively parallel hyperparameter
+tuning. In I. Dhillon, D. Papailiopoulos, and V. Sze, editors, Proceedings of Machine Learning
+and Systems, volume 2, pages 230–246, 2020. URL https://proceedings.mlsys.org/
+paper/2020/file/f4b9ec30ad9f68f89b29639786cb62ef-Paper.pdf.
+[38] Lisha Li, Kevin Jamieson, Giulia DeSalvo, Afshin Rostamizadeh, and Ameet Talwalkar. Hyper-
+band: A novel bandit-based approach to hyperparameter optimization. J. Mach. Learn. Res., 18
+(1):6765–6816, jan 2017. ISSN 1532-4435.
+[39] Xin Li and Dan Roth. Learning question classifiers. In COLING 2002: The 19th Interna-
+tional Conference on Computational Linguistics, 2002. URL https://www.aclweb.org/
+anthology/C02-1150.
+[40] Richard Liaw, Eric Liang, Robert Nishihara, Philipp Moritz, Joseph E Gonzalez, and Ion
+Stoica. Tune: A research platform for distributed model selection and training. arXiv preprint
+arXiv:1807.05118, 2018.
+[41] Yinhan Liu, Myle Ott, Naman Goyal, Jingfei Du, Mandar Joshi, Danqi Chen, Omer Levy,
+Mike Lewis, Luke Zettlemoyer, and Veselin Stoyanov. Ro{bert}a: A robustly optimized {bert}
+pretraining approach, 2020. URL https://openreview.net/forum?id=SyxS0T4tvS.
+[42] Ilya Loshchilov and Frank Hutter. Online batch selection for faster training of neural networks.
+arXiv preprint arXiv:1511.06343, 2015.
+12
+[43] Ilya Loshchilov and Frank Hutter. SGDR: Stochastic gradient descent with warm restarts. In
+International Conference on Learning Representations, 2017. URL https://openreview.
+net/forum?id=Skq89Scxx.
+[44] Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International
+Conference on Learning Representations, 2019. URL https://openreview.net/forum?
+id=Bkg6RiCqY7.
+[45] Andrew L. Maas, Raymond E. Daly, Peter T. Pham, Dan Huang, Andrew Y. Ng, and Christopher
+Potts. Learning word vectors for sentiment analysis. In Proceedings of the 49th Annual Meeting
+of the Association for Computational Linguistics: Human Language Technologies, pages 142–
+150, Portland, Oregon, USA, June 2011. Association for Computational Linguistics. URL
+http://www.aclweb.org/anthology/P11-1015.
+[46] Baharan Mirzasoleiman, Ashwinkumar Badanidiyuru, Amin Karbasi, Jan Vondrák, and An-
+dreas Krause. Lazier than lazy greedy. In Proceedings of the AAAI Conference on Artificial
+Intelligence, volume 29, 2015.
+[47] Baharan Mirzasoleiman, Jeff Bilmes, and Jure Leskovec. Coresets for data-efficient training of
+machine learning models, 2020.
+[48] George L Nemhauser, Laurence A Wolsey, and Marshall L Fisher. An analysis of approximations
+for maximizing submodular set functions—i. Mathematical programming, 14(1):265–294,
+1978.
+[49] Bo Pang and Lillian Lee. Seeing stars: Exploiting class relationships for sentiment categorization
+with respect to rating scales. In Proceedings of the ACL, 2005.
+[50] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan,
+Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas
+Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy,
+Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. Pytorch: An imperative style, high-
+performance deep learning library. In H. Wallach, H. Larochelle, A. Beygelzimer, F. d'Alché-
+Buc, E. Fox, and R. Garnett, editors, Advances in Neural Information Processing Systems 32,
+pages 8024–8035. Curran Associates, Inc., 2019.
+[51] Mansheej Paul, Surya Ganguli, and Gintare Karolina Dziugaite. Deep learning on a data diet:
+Finding important examples early in training. In M. Ranzato, A. Beygelzimer, Y. Dauphin, P.S.
+Liang, and J. Wortman Vaughan, editors, Advances in Neural Information Processing Systems,
+volume 34, pages 20596–20607. Curran Associates, Inc., 2021. URL https://proceedings.
+neurips.cc/paper/2021/file/ac56f8fe9eea3e4a365f29f0f1957c55-Paper.pdf.
+[52] Jeffrey Pennington, Richard Socher, and Christopher Manning. GloVe: Global vectors for
+word representation. In Proceedings of the 2014 Conference on Empirical Methods in Natural
+Language Processing (EMNLP), pages 1532–1543, Doha, Qatar, October 2014. Association for
+Computational Linguistics. doi: 10.3115/v1/D14-1162. URL https://aclanthology.org/
+D14-1162.
+[53] Nicolas Pinto, David Doukhan, James J. DiCarlo, and David D. Cox. A high-throughput
+screening approach to discovering good forms of biologically inspired visual representation.
+PLoS Computational Biology, 5, 2009.
+[54] Omead Pooladzandi, David Davini, and Baharan Mirzasoleiman. Adaptive second order
+coresets for data-efficient machine learning. In Kamalika Chaudhuri, Stefanie Jegelka, Le Song,
+Csaba Szepesvari, Gang Niu, and Sivan Sabato, editors, Proceedings of the 39th International
+Conference on Machine Learning, volume 162 of Proceedings of Machine Learning Research,
+pages 17848–17869. PMLR, 17–23 Jul 2022. URL https://proceedings.mlr.press/
+v162/pooladzandi22a.html.
+[55] Xipeng Qiu, Tianxiang Sun, Yige Xu, Yunfan Shao, Ning Dai, and Xuanjing Huang. Pre-
+trained models for natural language processing: A survey. CoRR, abs/2003.08271, 2020. URL
+https://arxiv.org/abs/2003.08271.
+13
+[56] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agar-
+wal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya
+Sutskever. Learning transferable visual models from natural language supervision. In Marina
+Meila and Tong Zhang, editors, Proceedings of the 38th International Conference on Machine
+Learning, volume 139 of Proceedings of Machine Learning Research, pages 8748–8763. PMLR,
+18–24 Jul 2021. URL https://proceedings.mlr.press/v139/radford21a.html.
+[57] Nils Reimers and Iryna Gurevych. Sentence-bert: Sentence embeddings using siamese bert-
+networks. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language
+Processing. Association for Computational Linguistics, 11 2019. URL http://arxiv.org/
+abs/1908.10084.
+[58] Olga Russakovsky, Jia Deng, Hao Su, Jonathan Krause, Sanjeev Satheesh, Sean Ma, Zhiheng
+Huang, Andrej Karpathy, Aditya Khosla, Michael Bernstein, et al. Imagenet large scale visual
+recognition challenge. International journal of computer vision, 115(3):211–252, 2015.
+[59] Roy Schwartz, Jesse Dodge, Noah Smith, and Oren Etzioni. Green ai. Communications of the
+ACM, 63:54 – 63, 2020.
+[60] Ozan Sener and Silvio Savarese. Active learning for convolutional neural networks: A core-set
+approach. In International Conference on Learning Representations, 2018.
+[61] Kaitao Song, Xu Tan, Tao Qin, Jianfeng Lu, and Tie-Yan Liu. Mpnet: Masked and permuted
+pre-training for language understanding. In Proceedings of the 34th International Conference
+on Neural Information Processing Systems, NIPS’20, Red Hook, NY, USA, 2020. Curran
+Associates Inc. ISBN 9781713829546.
+[62] Ben Sorscher, Robert Geirhos, Shashank Shekhar, Surya Ganguli, and Ari S. Morcos. Beyond
+neural scaling laws: beating power law scaling via data pruning. In Alice H. Oh, Alekh Agarwal,
+Danielle Belgrave, and Kyunghyun Cho, editors, Advances in Neural Information Processing
+Systems, 2022. URL https://openreview.net/forum?id=UmvSlP-PyV.
+[63] Emma Strubell, Ananya Ganesh, and Andrew McCallum. Energy and policy considerations
+for deep learning in NLP. In Proceedings of the 57th Annual Meeting of the Association
+for Computational Linguistics, pages 3645–3650, Florence, Italy, July 2019. Association for
+Computational Linguistics. doi: 10.18653/v1/P19-1355. URL https://aclanthology.org/
+P19-1355.
+[64] Mingxing Tan and Quoc V. Le. Efficientnet: Rethinking model scaling for convolutional neural
+networks, 2020.
+[65] Rishabh Tiwari, Krishnateja Killamsetty, Rishabh K. Iyer, and Pradeep Shenoy. Gcr: Gradient
+coreset based replay buffer selection for continual learning. 2022 IEEE/CVF Conference on
+Computer Vision and Pattern Recognition (CVPR), pages 99–108, 2021.
+[66] Mariya Toneva, Alessandro Sordoni, Remi Tachet des Combes, Adam Trischler, Yoshua Bengio,
+and Geoffrey J. Gordon. An empirical study of example forgetting during deep neural network
+learning. In International Conference on Learning Representations, 2019. URL https:
+//openreview.net/forum?id=BJlxm30cKm.
+[67] Kai Wei, Yuzong Liu, Katrin Kirchhoff, Chris Bartels, and Jeff Bilmes. Submodular subset
+selection for large-scale speech training data. In 2014 IEEE International Conference on
+Acoustics, Speech and Signal Processing (ICASSP), pages 3311–3315. IEEE, 2014.
+[68] Kai Wei, Yuzong Liu, Katrin Kirchhoff, and Jeff Bilmes. Unsupervised submodular subset
+selection for speech data. In 2014 IEEE International Conference on Acoustics, Speech and
+Signal Processing (ICASSP), pages 4107–4111. IEEE, 2014.
+[69] Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony
+Moi, Pierric Cistac, Tim Rault, Rémi Louf, Morgan Funtowicz, Joe Davison, Sam Shleifer,
+Patrick von Platen, Clara Ma, Yacine Jernite, Julien Plu, Canwen Xu, Teven Le Scao, Sylvain
+Gugger, Mariama Drame, Quentin Lhoest, and Alexander M. Rush. Huggingface’s transformers:
+State-of-the-art natural language processing, 2019. URL https://arxiv.org/abs/1910.
+03771.
+14
+[70] Jiancheng Yang, Rui Shi, and Bingbing Ni. Medmnist classification decathlon: A lightweight
+automl benchmark for medical image analysis. In IEEE 18th International Symposium on
+Biomedical Imaging (ISBI), pages 191–195, 2021.
+[71] Jiancheng Yang, Rui Shi, Donglai Wei, Zequan Liu, Lin Zhao, Bilian Ke, Hanspeter Pfister,
+and Bingbing Ni. Medmnist v2-a large-scale lightweight benchmark for 2d and 3d biomedical
+image classification. Scientific Data, 10(1):41, 2023.
+[72] Tianyi Zhou, Shengjie Wang, and Jeffrey Bilmes. Curriculum learning by dynamic instance
+hardness. In H. Larochelle, M. Ranzato, R. Hadsell, M.F. Balcan, and H. Lin, editors, Ad-
+vances in Neural Information Processing Systems, volume 33, pages 8602–8613. Curran
+Associates, Inc., 2020.
+URL https://proceedings.neurips.cc/paper/2020/file/
+62000dee5a05a6a71de3a6127a68778a-Paper.pdf.
+15
+Supplementary Material
+Appendix
+Table of Contents
+A Code
+17
+B
+Licenses
+17
+C
+MILO Algorithm Pseudocode
+17
+D Instantiations of Different Submodular Functions
+17
+D.1
+Representation Functions . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+17
+D.2
+Diversity Functions
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+19
+E Assessing EL2N Scores of Subset Selection with Different Set Functions
+19
+F
+Additional Dataset Details
+20
+F.1
+Details of Text Datasets . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+20
+F.2
+Details of Vision Datasets . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+21
+G Additional Experimental Details
+21
+G.1
+GPU Resources . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+21
+G.2
+Experimental Details for Model Training . . . . . . . . . . . . . . . . . . . . .
+21
+G.3
+Experimental Details for Hyper-Parameter Tuning
+. . . . . . . . . . . . . . . .
+22
+H Additional Experimental Results
+23
+H.1
+Results on Specialized Domain Datasets
+. . . . . . . . . . . . . . . . . . . . .
+23
+H.2
+Results using Proxy Model
+. . . . . . . . . . . . . . . . . . . . . . . . . . . .
+24
+H.3
+Data Pre-processing Time . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+24
+H.4 Test-Accuracies, Training times and Standard deviations for Model Training Ex-
+periments
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+25
+H.5
+Hyper-parameter Ordering Retention Analysis
+. . . . . . . . . . . . . . . . . .
+27
+H.6 Test-Accuracies, Training times, and Standard deviations for Hyper-Parameter
+Tuning Experiments . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+29
+I
+Ablation Studies
+31
+I.1
+Performance Comparison of Existing Pre-trained Transformer Models as Feature
+Encoders . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+31
+I.2
+Optimal Similarity Metric Analysis . . . . . . . . . . . . . . . . . . . . . . . .
+32
+I.3
+SGE (Graph-Cut) vs SGE (Facility Location) . . . . . . . . . . . . . . . . . . .
+33
+I.4
+SGE (Graph-Cut) vs. WRE (Graph-Cut)
+. . . . . . . . . . . . . . . . . . . . .
+33
+I.5
+Advantages of using a Curriculum for Data Exploration
+. . . . . . . . . . . . .
+34
+I.6
+Optimal R analysis
+. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+34
+I.7
+Effectiveness of WRE . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+36
+I.8
+Comparison with Self-supervised Data Pruning Metric . . . . . . . . . . . . . .
+36
+16
+A
+Code
+The code of MILO is available at the following link: https://anonymous.4open.science/r/
+MILO-282B/.
+B
+Licenses
+We release the code repository of MILO with MIT license, and it is available for everybody to
+use freely. We use the popular deep learning framework [50] for implementation of MILO frame-
+work, wandb [4] for hyper-parameter search and scheduling algorithms, SUBMODLIB [24] for
+submodular functions and submodular maximization, and CORDS [26] for subset selection strate-
+gies. We use TREC6 [39, 18], IMDB [45], Rotten Tomatoes [49], CIFAR10 [34], CIFAR100 [34],
+TINYIMAGENET [35], IMAGENET [58], ORGANCMNIST [70, 71], DERMAMNIST [70, 71], and
+AdeCorpusV2 [15] datasets. The license of the TREC6 [39, 18] dataset is CC0:Public Domain.
+IMDB [45] dataset is released with a non-commercial license. The licenses of Rotten Tomatoes
+and AdeCorpusV2 datasets are unknown. But we used the publicly available version from the
+"HuggingFace Datasets" package. CIFAR10, CIFAR100, and TINYIMAGENET are released under
+MIT license. ImageNet [58] is released under a non-commercial license. ORGANCMNIST [70, 71]
+and DERMAMNIST [70, 71] datasets are released under Creative Commons Attribution 4.0 Inter-
+national license (CC BY 4.0). Furthermore, all the datasets and pre-trained models used in this
+work are publicly available. In addition, the datasets used do not contain any personally identifiable
+information.
+C
+MILO Algorithm Pseudocode
+We give the pseudo-code of MILO algorithm for model-training in Algorithm 1.
+D
+Instantiations of Different Submodular Functions
+D.1
+Representation Functions
+D.1.1
+Facility Location
+Given, a dataset D = {(xi, yi)}n
+i=1 with n data samples, the facility location objective can be given
+as following:
+f(S) =
+X
+i∈D
+max
+j∈S sij
+(6)
+where sij denotes the similarity of data samples i and j. For each data point i in the ground set D,
+we compute the most representative samples j from the subset S which is closest to it and add these
+similarities for all data points. Note that due to the sum-max formulation involved in facility location,
+having one representative data sample from each cluster in your dataset is enough for maximizing the
+facility location value. This further prevents the selection of more samples in the subset from more
+dense regions.
+D.1.2
+Graph-Cut
+Given, a dataset D = {(xi, yi)}n
+i=1 with n data samples, the graph-cut objective can be given as
+following:
+f(S) =
+X
+i∈D
+X
+j∈S
+sij −λ
+X
+i∈S
+X
+j∈S
+sij
+(7)
+The λ parameter in the above equation controls the trade-off between diversity and representation.
+When λ is large, the graph cut function also incorporates diversity into its model. In our experiments,
+17
+Algorithm 1: MILO Algorithm
+Input: Train set: D; initial params: θ0; learning rate: α; total epochs: T; selection interval: R; SGE
+Fraction: κ; Training Loss: LT , Mini-batch size: B, Subset size: k
+Initialize Graph-Cut function: f1(S) = P
+i∈D
+P
+j∈S sij −0.4 P
+i∈S
+P
+j∈S sij
+Initialize Disparity-Min function: f2(S) = mini,j∈S,i̸=j(1 −sij)
+*** Check if dataset is pre-processed already ***
+if is_preprocessed(D) then
+*** Retrieve pre-selected subsets and pre-constructed probability from metadata ***
+S0, SR, SκT −R, p = loadmetadata(D)
+else
+*** Stochastic Greedy Exploration with Graph-Cut ***
+S0, SR, SκT −R = SGE(f1, D, k)
+*** Weighted Random Exploration with Disparity-Min ***
+g = [g0, g1, · · · , g|D|] = GreedySampleImportance(f2, D)
+p =
+h
+1+gi+0.5g2
+i
+P|D|
+j=1 1+gj+0.5g2
+j
+i|D|
+i=1
+***Stored selected subsets and constructed probability as metadata***
+storemetadata(D, S0, SR, SκT −R, p)
+*** Model training with subset curriculum ***
+Initialize the subset: S = S0
+*** Model training on representative/easy subsets ***
+for epochs t in 0, · · · , κT −1 do
+if (t mod R == 0) then
+Update the Subset: S = St
+θt+1 = mini-BatchSGD(S, α, LT , B, Epochs = 1)
+*** Model training on diverse/hard subsets ***
+for epochs t in κT, · · · , T −1 do
+if (t −κT mod R == 0) then
+Sample subset St from dataset D using the probability p without replacement
+Update the Subset: S = St
+θt+1 = mini-BatchSGD(S, α, LT , B, Epochs = 1)
+return Final model parameters θT
+Algorithm 2: SGE
+Input: Train set: D; Subset Size: k; Set function: f; ϵ = 1e −2; Number of Subsets: n
+*** Sampling n subsets using stochastic-greedy ***
+for i ∈0, · · · n −1 do
+Initialize empty subset: Si = ∅
+Set random subset size for the stochastic-greedy algorithm: s = |D|
+k log( 1
+ϵ )
+for j ∈0, · · · , k −1 do
+*** Sample a random subset by sampling s elements from D \ Si ***
+R ←sample(D \ Si, s)
+e = arg max
+e∈R
+f(A ∪e) −f(A)
+Si = Si ∪{e}
+return S0, · · · , Sn−1
+18
+Algorithm 3: GreedySampleImportance Algorithm
+Input: Train set: D; Subset Size: k; Set function: f
+Initialize empty subset: S = ∅
+Initialize gains vector of dimension |D| to zeros g =
+→
+0
+*** Calculate greedy informative gains for each element ***
+for j ∈0, · · · , |D| −1 do
+g = max
+e∈D\Sf(A ∪e) −f(A)
+e = arg max
+e∈D\S
+f(A ∪e) −f(A)
+g[e] = g
+return gain vector g
+we set λ = 0.4, thereby making the graph-cut function model representation more and making it
+monotone-submodular. Note that due to the sum-sum formulation involved in graph-cut, selecting
+more samples from dense regions in the center leads to the maximization of the graph-cut function
+value. Thus, graph-cut can result in the selection of subsets consisting of easy samples from very
+dense regions in the dataset.
+D.2
+Diversity Functions
+D.2.1
+Disparity-Sum
+Given, a dataset D = {(xi, yi)}n
+i=1 with n data samples, the disparity-sum objective can be given as
+following:
+f(S) =
+X
+i∈S
+X
+j∈S
+(1 −sij)
+(8)
+Note that in the above equation, disparity-sum purely concentrates on selected samples that are
+maximally different from each other in the dataset without any care for the representation.
+D.2.2
+Disparity-Min
+Given, a dataset D = {(xi, yi)}n
+i=1 with n data samples, the disparity-min objective can be given as
+following:
+f(S) =
+min
+i,j∈S,i̸=j(1 −sij)
+(9)
+In the above equation, 1 −sij can be considered as a distance measure, and maximization of the
+disparity-min objective results in the maximization of the minimum distance between the samples
+in the selected subset. Even though the disparity-min objective is not submodular, it is proven to
+perform empirically well using conventional greedy approaches [8].
+E
+Assessing EL2N Scores of Subset Selection with Different Set Functions
+In this section, we assess the difficulty of data samples by measuring the hardness of subsets selected
+using different set functions. This evaluation is done using the EL2N metric [51]. Tables 2 and 1
+present the Average Sample and Median Sample scores for the selected subsets.
+The results demonstrate that subsets selected using Facility Location and GraphCut exhibit lower
+hardness scores compared to those chosen by Disparity Min and Disparity Sum. This finding provides
+strong support for the assertion that Facility Location and GraphCut tend to prefer subsets that are
+easier, while Disparity Min and Disparity Sum tend to select subsets that are harder. Moreover,
+the results reveal an expected pattern in the disparity of EL2N scores between diversity-based set
+19
+Dataset
+Model
+Subset Fraction
+Set Function
+EL2N (mean)
+EL2N (median)
+CIFAR100
+ResNet18
+0.01
+Graph Cut
+0.31932
+0.25196815
+Facility Location
+0.5005
+0.48838884
+Disparity Min
+0.9512
+0.998251547
+Disparity Sum
+0.9432
+0.9945051
+0.05
+Graph Cut
+0.39428785
+0.35422683
+Facility Location
+0.6082416
+0.6329421
+Disparity Min
+0.8688732
+0.94560076
+Disparity Sum
+0.8725095
+0.947182
+0.1
+Graph Cut
+0.44762444
+0.4188764
+Facility Location
+0.67536277
+0.74037623
+Disparity Min
+0.8125279
+0.8964435
+Disparity Sum
+0.8283565
+0.90549386
+0.3
+Graph Cut
+0.534334
+0.5372032
+Facility Location
+0.68066484
+0.73706484
+Disparity Min
+0.79167026
+0.89193624
+Disparity Sum
+0.7429611
+0.81957316
+Table 1: Table presents the Mean and Median EL2N scores [51] for the CIFAR100 subsets of different
+sizes selected using various set functions.
+Dataset
+Model
+Subset Fraction
+Set Function
+EL2N (mean)
+EL2N (median)
+CIFAR10
+ResNet18
+0.01
+Graph Cut
+0.053498093
+0.093978405
+Facility Location
+0.24479946
+0.32504702
+Disparity Min
+0.3455502
+0.34030083
+Disparity Sum
+0.34296998
+0.3437602
+0.05
+Graph Cut
+0.093978405
+0.039304152
+Facility Location
+0.32504702
+0.21770108
+Disparity Min
+0.34030083
+0.24009448
+Disparity Sum
+0.3437602
+0.24489668
+0.1
+Graph Cut
+0.13287988
+0.060230725
+Facility Location
+0.33706713
+0.2388236
+Disparity Min
+0.37538758
+0.24573568
+Disparity Sum
+0.36741473
+0.24983436
+0.3
+Graph Cut
+0.2021475
+0.11052186
+Facility Location
+0.33232126
+0.23153576
+Disparity Min
+0.38120695
+0.26727863
+Disparity Sum
+0.35034057
+0.25104147
+Table 2: Table presents the Mean and Median EL2N scores [51] for the CIFAR10 subsets of different
+sizes selected using various set functions.
+functions and representation-based set functions. Specifically, this disparity is more pronounced for
+smaller subset sizes and gradually diminishes as the subset size increases.
+Another noteworthy finding is that the hardness scores for samples in the CIFAR10 dataset are
+lower than those in the CIFAR100 dataset. This observation offers a plausible explanation for why
+a straightforward baseline method like ADAPTIVE-RANDOM performs comparably well to MILO
+on the CIFAR10 dataset. This finding further bolsters our claim, as stated in Section 4, that MILO
+outperforms ADAPTIVE-RANDOM as the dataset complexity increases. These additional insights
+contribute to the overall strength of our arguments and provide a more comprehensive understanding
+of the interplay between set functions, hardness scores, and dataset complexity.
+F
+Additional Dataset Details
+F.1
+Details of Text Datasets
+We conducted experiments on three text datasets: TREC6 [39, 18], IMDB [45], and Rotten Tomatoes
+[49]. TREC6 is a question classification dataset comprising open-domain, fact-based questions
+categorized into broad semantic groups: ABBR (Abbreviation), DESC (Description and Abstract
+Concepts), ENTY (Entities), HUM (Human Beings), LOC (Locations), and NYM (Numeric Values).
+20
+Dataset
+#Classes
+#Train
+#Validation
+#Test
+TREC6
+6
+4907
+545
+500
+IMDB
+2
+22500
+25000
+25000
+Rotten Tomatoes
+2
+8530
+1066
+1066
+AdeCorpusV2
+2
+23516
+Table 3: Number of classes, Number of instances in Train, Validation and Test split in Text datasets
+Both IMDB and Rotten Tomatoes datasets are sentiment classification datasets, with reviews sourced
+from their respective platforms. For specialized domain datasets, we utilized the AdeCorpusV2
+dataset [15], which contains data on adverse drug reactions.
+The AdeCorpusV2 dataset was split such that 20% of the original data was used for testing, and 10%
+of the remaining data served as a validation set. The validation data for TREC6 and IMDB datasets
+were obtained by using 10% of the training data. A seed value of 42 was used in the generator
+argument for the random_split function in PyTorch. The number of classes and instances in each split
+of the text datasets are summarized in Table 3.
+F.2
+Details of Vision Datasets
+We performed experiments on CIFAR10 [34], CIFAR100 [34], and TINYIMAGENET [35] datasets.
+The CIFAR10 [34] dataset contains 60,000 colored images of size 32×32 divided into ten classes,
+each with 6000 images. CIFAR100 [34] is also of size 32×32 but contains 600 images per class
+and 100 classes. Both CIFAR10 [34] and CIFAR100 [34] have 50,000 training samples and 10,000
+test samples distributed equally across all classes. TINYIMAGENET [35] dataset contains 120,000
+colored images of size 64 × 64 from 200 classes with 600 images per each class. IMAGENET [58]
+dataset contains 1281167 colored images of size 224 × 224 from 1000 classes. For IMAGENET
+dataset, we report the accuracy on the validation set as test accuracy in this work. For experiments on
+datasets from specialized domains, we use ORGANCMNIST [70, 71] and DERMAMNIST [70, 71]
+datasets. ORGANCMNIST dataset contains AbdominalCT gray images of size 32 × 32 from 11
+classes. DERMAMNIST dataset contains dermatoscope images of size 32 × 32 from 7 classes.
+Dataset
+#Classes
+#Train
+#Validation
+#Test
+CIFAR10
+10
+45000
+5000
+10000
+CIFAR100
+100
+45000
+5000
+10000
+TINYIMAGENET
+200
+100000
+10000
+10000
+IMAGENET
+100
+1281167
+50000
+ORGANCMNIST
+11
+13000
+2392
+8268
+DERMAMNIST
+7
+7007
+1003
+2005
+Table 4: Number of classes, Number of instances in Train, Validation and Test split in Image datasets
+For both CIFAR10 and CIFAR100 datasets, 10% of the training data is used for validation (seed value
+= 42). In Table 4, we summarize the number of classes and the number of instances in each split in
+the image datasets.
+G
+Additional Experimental Details
+G.1
+GPU Resources
+We performed experiments on an 80GB A100 GPU cluster. To be fair in timing computation, we ran
+MILO and all other baselines for a particular setting on the same GPU server.
+G.2
+Experimental Details for Model Training
+We compare MILO with RANDOM: randomly sample a fixed subset of the same size subset used by
+MILO from the training data, ADAPTIVE-RANDOM: adaptively sample a random subset of the same
+21
+Comparison
+ 
+of Configurations
+Choice of
+
+Hyper-parameters
+Repeat until the required number of
+hyper-parameters are evaluated
+DSS based model
+training loop using
+the selected
+configuration
+DSS based model
+training loop using
+the selected
+configuration
+DSS based model
+training loop using
+the selected
+configuration
+Component-1
+Hyper-parameter
+search algorithm
+Model's
+Validation set
+performance
+Model's
+Validation set
+performance
+Model's
+Validation set
+performance
+Component-3
+Hyper-parameter
+scheduler
+MODEL TRAINING WITH MILO
+Promoted
+Configurations
+Component-2
+Configuration-1
+Configuration-2
+Configuration-n
+Initial
+parameters
+Stochastic-
+Greedy
+Exploration
+Selected
+Subsets
+Training Dataset
+Graph-cut
+ Function: 
+Disparity-Min
+Function: 
+Weighted 
+Random
+Exploration
+Probability
+Distribution
+Pre-Processing Step
+ 
+Sample
+Subset 
+using  
+Mini-batch SGD
+on 
+ for 
+epochs, 
+ 
+Mini-batch
+SGD on 
+ for 
+ epochs, 
+ 
+True
+True
+Model Training on Representative (Easy)
+Samples for 
+ Epochs
+Model Training on Diverse(Hard)
+Samples from Epoch 
+ to Epoch 
+Need to be done only once for each dataset
+Figure 8: Block Diagram of MILO for hyper-parameter tuning where each individual configuration
+training is done using MILO instead of training on the full dataset.
+size subset used by MILO from the training data every R epochs, FULL: using the entire training data
+for model training and tuning, FULL-EARLYSTOP: where we do an early stop to full training to match
+the time taken (or energy used) by MILO, and adaptive gradient-based subset selection strategies
+for efficient learning where a new subset is selected every R epochs, namely CRAIGPB: the faster
+per-batch version of CRAIG [47] shown in Killamsetty et al. [27], GLISTER [28], GRAD-MATCHPB:
+the per-batch version of GRAD-MATCH [27]. Our experiments use a R value of 1 (i.e., subset
+selection every epoch) for MILO and ADAPTIVE-RANDOM. We empirically observed that using
+R = 1 results in better model performance with MILO. In order to achieve comparable efficiency
+with other adaptive baselines, including CRAIGPB, GRADMATCHPB, and GLISTER, we use an R
+value of 10 for vision experiments and a R value of 3 for text experiments.
+Sepcific Details of Text Experiments For text datasets, we use the LSTM model (from PyTorch) with
+trainable GloVe embeddings [52] of dimension 300 as input and the BERT+MLP model consisting of
+BERT-BASE [10] model with an added two layer MLP for classification. We train the LSTM model
+for 24 epochs and the BERT model for 12 epochs using a batch size of 16. For text datasets using
+the LSTM model, we use the Adam optimizer [31] with a learning rate of 0.001. For BERT model
+finetuning, we use the AdamW optimizer [44] with a learning rate of 5e-5.
+Specific Details of Image Experiments For vision datasets, we use the ResNet18 [17] and
+ResNet101 [17] models. We train the ResNet [17] models for 200 epochs using a batch size of 128.
+For training ResNet models with MILO and baselines, we use Nesterov’s accelerated SGD optimizer
+with a learning rate of 0.05, weight decay of 5e-4, momentum of 0.9, and a cosine annealing [43]
+learning rate scheduler for all the experiments.
+G.3
+Experimental Details for Hyper-Parameter Tuning
+We follow the experimental setup of AUTOMATA [30], an efficient hyperparameter tuning framework
+using GRAD-MATCHPB and replace the subset selection strategy with MILO˙Figure 8 gives a pictorial
+depiction of the hyper-parameter tuning pipeline with MILO ˙As discussed in AUTOMATA [30],
+the hyper-parameter tuning pipeline contains three major components: a) hyper-parameter search
+algorithms - that returns the list of hyper-parameter configurations that need to be evaluated; b)
+configuration evaluations involving subset based model training runs - where for each configuration,
+we train a model using the selected configuration on the subsets selected by MILO , c) hyper-
+parameter schedulers - that decides the resources allocated for each configuration evaluation and
+what configurations to be discarded early. We evaluate the effectiveness of MILO for hyperparameter
+tuning, by performing subset-based configuration evaluations using RANDOM, FULL, ADAPTIVE-
+RANDOM, and AUTOMATA(GRAD-MATCHPB) as subset selection baselines. For tuning with FULL
+datasets, the entire dataset is used to train the model during hyperparameter tuning. But for other
+baselines, we use a subset of the dataset to train various models during tuning. In addition, the subset
+selection techniques used are adaptive, which means that the model is trained on a different subset
+every few epochs. We empirically observed that using R = 1 results in better model performance with
+22
+MILO. In order to achieve comparable efficiency with other adaptive baselines, including CRAIGPB,
+and GRADMATCHPB, we use an R value of 10 for vision experiments and a R value of 3 for text
+experiments. We experiment with the combination of a) Random Search [53] and Hyperband [38]
+scheduler; and b)TPE Search [3] and Hyperband [38]. We only test with Hyperband [38] scheduler
+because we use Wandb [4] for running hyper-parameter optimization algorithms, and wandb provides
+the support for Hyperband [38] only. We use Wand for hyper-parameter to accurately compute the
+tuning times, which we found difficult with Ray [40] due to its high internal communication times.
+Specific Details of Text Experiments For text datasets, we use the LSTM model (from PyTorch)
+with trainable GloVe embeddings [52] of dimension 300 as input. The hyper-parameter space for
+experiments on text datasets includes learning rate, hidden size & number of layers of LSTM, and
+batch size of training. In some experiments (with TPE search algorithm) where the best configuration
+among 108 configurations are found, the hyper-parameter space is learning rate: [0.001,0.1], LSTM
+hidden size: {64,128,256, 512}, number of layers in LSTM: {1, 2}, batch size: {16,32,64}.
+Specific Details of Image Experiments For vision datasets, we use the ResNet18 [17] model. The
+hyper-parameter search space for tuning experiments on image datasets includes a choice between the
+Momentum method and Nesterov Accelerated Gradient method, a choice of learning rate scheduler
+and their corresponding parameters, and four different group-wise learning rates, lr1 for layers of the
+first group, lr2 for layers of intermediate groups, lr3 for layers of the last group of ResNet model,
+and lr4 for the final fully connected layer. For the learning rate scheduler, we change the learning
+rates during training using either a cosine annealing schedule or decay it linearly by γ after every
+20 epochs. Best configuration for most experiments is selected from 108 configurations where the
+hyper-parameter space is lr1: [0.001, 0.01], lr2: [0.001, 0.01], lr3: [0.001, 0.01], lr4: [0.001, 0.01],
+Nesterov: {True, False}, learning rate scheduler: {Cosine Annealing, Linear Decay}, γ: [0.05, 0.5].
+H
+Additional Experimental Results
+H.1
+Results on Specialized Domain Datasets
+In MILO, pre-trained models serve a key role in capturing pairwise interactions between data samples
+in zero-shot setting. The resulting pairwise similarity matrix is then employed for subset selection and
+probability distribution construction. Notably, these pre-trained models (ALL-DISTILROBERTA-V1,
+DINO (CLS)), which have been previously trained on natural images or a general text corpus, have
+demonstrated a certain degree of success in recognizing these interactions, even within specialized
+domain samples. This can be attributed to the training approach of the pre-trained transformer models
+utilized in this work. They are trained using either a contrastive or denoising objective, which enables
+them to identify low-level features in examples from specialized domains, thereby facilitating the
+capturing of interactions between data samples.
+Empirically, we observed that pre-trained transformer models generalize well to datasets from
+different domains for subset selection. This was demonstrated through a series of experiments on
+specialized domain datasets. For vision datasets, we conducted experiments on the ORGANCMNIST
+dataset using the EfficientNetB0 model [64], and the DERMAMNIST dataset using the MobileNet
+model [19], for subset sizes of 5% and 10%. The EfficientNet model was suitably adapted for
+single-channel images. For text datasets, we carried out experiments on the AdeCorpusV2 dataset
+using an LSTM model for subset sizes of 5% and 10%. We adhered to the training details outlined in
+Appendix G.
+Figure 9 presents scatter plots that demonstrate the trade-off between accuracy degradation and
+computational speed-up for MILO. These results were obtained using general pre-trained transformer
+models as feature encoders and compared against baseline models on specialized domain datasets.
+The subsets utilized for these models constituted 5% and 10% of the full dataset, using ALL-
+DISTILROBERTA-V1 as the text feature encoder and DINO (CLS) as the image feature encoder.
+The results clearly show that MILO consistently outperforms the baselines in achieving an optimal
+balance between efficiency and performance, even when general pre-trained models are used.
+Moreover, the risk of model overfitting to a small subset and not generalizing well is significantly
+higher when a fixed data subset is used. However, MILO allows the downstream model to explore
+the entire dataset through Stochastic-Greedy Exploration (SGE) and Weighted Random Exploration
+(WRE). This approach reduces the risk of model overfitting to a small data subset and improves
+23
+RANDOM
+ADAPTIVE-RANDOM
+FULL
+FULL-Earlystop
+MILO (Fixed)
+MILO
+CRAIGPB
+GRAD-MATCHPB
+GLISTER
+10
+20
+30
+Speed Up →
+0
+5
+10
+15
+Acc. Degradation →
+(a) AdeCorpusV2 (LSTM)
+10
+20
+Speed Up →
+0
+5
+10
+15
+20
+Acc. Degradation →
+(b) ORGANCMNIST (EfficientNetB0)
+10
+20
+30
+Speed Up →
+0
+5
+10
+15
+Acc. Degradation →
+(c) DERMAMNIST (MobileNet)
+Figure 9: Comparison of MILO to baselines using 5%, 10% subsets of specialized domain datasets for model
+training with general pre-trained transformer models as feature encoders.
+generalization performance. Our empirical findings suggest that MILO closely approximates optimal
+full data training performance and experiences minimal performance degradation compared to the
+baselines. We argue, therefore, that MILO offers a viable approach for training downstream models
+that exhibit strong generalization, even when using pre-trained encoders.
+H.2
+Results using Proxy Model
+As demonstrated in Appendix H.1, the pre-trained models (ALL-DISTILROBERTA-V1, DINO (CLS))
+utilized in this work have exhibited generalization capabilities to datasets from unseen or specialized
+domains. However, there might be cases where these models’ performance is suboptimal, which
+can be conveniently assessed through linear probing accuracies. In these instances, a smaller proxy
+model, such as ResNet18, can be trained to convergence and used as a feature encoder for MILO,
+potentially improving performance.
+Although training a proxy model increases pre-processing costs, it’s worth noting that MILO’s data
+pre-processing only needs to be performed once per dataset. Thus, despite an initial increase in
+pre-processing costs, these can be amortized over time when training multiple downstream models.
+To demonstrate MILO’s effectiveness when using proxy models, we conducted a series of experiments
+on the CIFAR100 and ORGANCMNIST datasets. Using ResNet18 as a proxy model, and the inputs
+to the final fully connected layer as sample features, we generated subsets and probability distributions
+as part of the pre-processing using MILO’s data exploration strategies. To evaluate the efficiency
+and generalizability of MILO in the context of using a proxy model for training, we conducted
+experiments with ResNet101, EfficientNetB0, and DenseNet121 models. These models were trained
+using subsets of the CIFAR100 and ORGANCMNIST datasets, selected by MILO and the considered
+baselines, with subset sizes of 1%, 5%, 10%, and 30%.
+Figure 10 presents scatter plots illustrating the trade-off between accuracy degradation and computa-
+tional speed-up for MILO, using the ResNet18 proxy model as a feature encoder, and comparing it
+to baseline models on the CIFAR100 and ORGANCMNIST datasets. The results clearly show that
+MILO consistently outperforms the baselines in achieving an optimal balance between efficiency
+and performance, even when utilizing proxy models. These results indicate that MILO is not heavily
+dependent on pre-trained transformer models and can effectively utilize any informative feature
+encoders. The primary conclusion drawn from these experiments is that the MILO framework is
+highly adaptable and can be readily applied across a wide range of scenarios for efficient model
+training.
+H.3
+Data Pre-processing Time
+The preprocessing time for MILO, utilizing pre-trained transformer models as feature encoders, on a
+machine equipped with 500 GB RAM and an A100 GPU with 80GB memory, for several datasets, is
+as follows:
+24
+RANDOM
+ADAPTIVE-RANDOM
+FULL
+FULL-Earlystop
+MILO (Fixed)
+MILO
+CRAIGPB
+GRAD-MATCHPB
+GLISTER
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(a) CIFAR100 (ResNet101)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(b) CIFAR100 (EfficientNetB0)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(c) CIFAR100 (DenseNet121)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(d) ORGANCMNIST (ResNet101)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(e) ORGANCMNIST (EfficientNetB0)
+3.5
+10
+30
+80
+Speed Up →
+0
+20
+40
+60
+Acc. Degradation →
+(f) ORGANCMNIST (DenseNet121)
+Figure 10: Comparison of MILO to baselines using 1%, 5%, 10%, and 30% subsets of CIFAR100 and
+ORGANCMNIST datasets for model training with the ResNet18 proxy model as the feature encoder.
+1. CIFAR10 DATASET: 5 minutes
+2. CIFAR100 DATASET: 5 minutes
+3. IMAGENET DATASET: 20 minutes
+The preprocessing times for MILO, using pre-trained transformer models as feature encoders, are
+relatively minimal compared to the full training times for models of varying sizes. Specifically, the
+preprocessing times amount to between 3% and 5% of the full training times for a medium-sized
+model like ResNet18, and less than 3% of the full training time for a larger model like ResNet101 on
+the datasets considered. Importantly, this preprocessing step is independent of the model used for
+training and can be shared across any model being trained on these datasets. Therefore, it only needs
+to be done once per dataset and subset size.
+However, when using proxy models, the preprocessing costs do increase because the training time of
+the proxy model also needs to be taken into account. For instance, when using a ResNet18 as a proxy
+model, the preprocessing times can equate to between 103% and 105% of the full training times.
+Despite this increase, these preprocessing costs can be amortized over multiple model trainings,
+maintaining the time-efficiency of MILO for training models on large datasets.
+H.4
+Test-Accuracies, Training times and Standard deviations for Model Training
+Experiments
+Table 5, Table 7 shows the top-1 test accuracies and training times taken by MILO and the other
+baselines considered for single model training on CIFAR10, CIFAR100, TINYIMAGENET, TREC6,
+IMDB, Rotten Tomaotes datasets for different subset sizes of 1%, 5%, 10%, and 30% respectively.
+Furthermore, Table 6, Table 8 gives the standard deviation numbers of MILO and other baselines for
+single model training on CIFAR10, CIFAR100, TINYIMAGENET, TREC6, IMDB, Rotten Tomaotes
+datasets for different subset sizes of 1%, 5%, 10%, and 30% respectively.
+25
+Model Training Results on Vision Datasets
+Top-1 Test accuracy of the Model(%)
+Model Training time(in hrs)
+Budget(%)
+1%
+5%
+10%
+30%
+1%
+5%
+10%
+30%
+Dataset
+Model
+Selection Strategy
+CIFAR10
+ResNet18
+FULL (skyline for test accuracy)
+95.19
+95.19
+95.19
+95.19
+1.72736889
+1.72736889
+1.72736889
+1.72736889
+RANDOM (skyline for training time)
+39.91
+63.52
+77.47
+89.62
+0.01646028
+0.08030361
+0.1722375
+0.50628667
+ADAPTIVE-RANDOM (skyline for training time)
+63.71
+88.2
+91.09
+94.05
+0.01632191
+0.08136123
+0.1776311
+0.5068371
+GLISTER
+38.2
+79.02
+90.67
+93.04
+0.08538972
+0.16018167
+0.23015611
+0.57614889
+CRAIGPB
+64.11
+84.35
+88.97
+92.99
+0.13940694
+0.19342472
+0.26544833
+0.60756111
+GRADMATCHPB
+61.59
+85.34
+89.67
+93.71
+0.08093056
+0.13492361
+0.21210222
+0.52081639
+MILO (Fixed)
+38.17
+64.17
+78.06
+89.21
+0.01667131
+0.0821212
+0.172141
+0.50281731
+MILO
+68.56
+88.37
+91.11
+94.12
+0.0163121
+0.0808317
+0.1702131
+0.50645219
+CIFAR10
+ResNet101
+FULL (skyline for test accuracy)
+95.01
+95.01
+95.01
+95.01
+2.607
+2.607
+2.607
+2.607
+RANDOM (skyline for training time)
+31.49
+54.35
+69.99
+88.51
+0.02820806
+0.14013056
+0.27079694
+0.85268889
+ADAPTIVE-RANDOM (skyline for training time)
+21.72
+80.25
+88.13
+94.2
+0.0270875
+0.13807778
+0.2795975
+0.82271222
+GLISTER
+10.46
+62.41
+83.79
+92.47
+0.12346444
+0.24328889
+0.38844556
+1.05459139
+CRAIGPB
+33.74
+74.07
+85.4
+92.44
+0.16501306
+0.27757139
+0.41062028
+0.9307625
+GRADMATCHPB
+27.23
+71.71
+86.35
+93.39
+0.13171083
+0.23819667
+0.36952333
+0.89125889
+MILO (Fixed)
+31.14
+52.73
+66.53
+87.87
+0.0269
+0.1321025
+0.28677639
+0.850435
+MILO
+43.37
+81.63
+88.72
+94.24
+0.026376
+0.1321091
+0.28635171
+0.8503878
+CIFAR100
+ResNet18
+FULL (skyline for test accuracy)
+77.03
+77.03
+77.03
+77.03
+1.52
+1.52
+1.52
+1.52
+RANDOM (skyline for training time)
+8.937
+21.74
+35.03
+61.93
+0.0152
+0.0836
+0.1554
+0.449
+ADAPTIVE-RANDOM (skyline for training time)
+29.99
+61.86
+69.14
+74.82
+0.016
+0.0757
+0.1532
+0.4491
+GLISTER
+2.72
+52.17
+65.72
+72.59
+0.0872
+0.1553
+0.2362
+0.5717
+CRAIGPB
+23.38
+51.56
+59.6
+70.25
+0.1344
+0.193
+0.2679
+0.5568
+GRADMATCHPB
+24.4
+54.42
+65.93
+73.57
+0.07873
+0.1384
+0.2125
+0.4876
+MILO (Fixed)
+9.133
+22.57
+36.03
+61.97
+0.0183
+0.0797
+0.1576
+0.449
+MILO
+35.34
+64.4
+69.28
+74.95
+0.0173
+0.082
+0.1506
+0.4442
+CIFAR100
+ResNet101
+FULL (skyline for test accuracy)
+78.46
+78.46
+78.46
+78.46
+2.6034
+2.6034
+2.6034
+2.6034
+RANDOM (skyline for training time)
+5.18
+17.81
+30.17
+57.93
+0.02952
+0.14524
+0.2879
+0.825375
+ADAPTIVE-RANDOM (skyline for training time)
+6.199
+39.11
+60.02
+73.21
+0.03112
+0.14523
+0.2879
+0.825175
+GLISTER
+1.634
+36.76
+56.37
+73.7
+0.12156
+0.24377
+0.39149
+1.17212
+CRAIGPB
+6.8
+36.68
+50.92
+69.02
+0.1697
+0.2727
+0.40612
+0.912357
+GRADMATCHPB
+6.653
+38.23
+55.82
+74.35
+0.136
+0.246
+0.3665
+0.91235
+MILO (Fixed)
+6.064
+17.17
+31.73
+59.05
+0.02952
+0.14523
+0.28797
+0.82537
+MILO
+12.99
+49.89
+66.11
+75.28
+0.030778
+0.145234
+0.28797
+0.8253
+TinyImageNet
+ResNet18
+FULL (skyline for test accuracy)
+52.44
+52.44
+52.44
+52.44
+15.411
+15.411
+15.411
+15.411
+RANDOM (skyline for training time)
+3.21
+13
+19.61
+35.68
+0.171
+0.874
+1.82
+4.99
+ADAPTIVE-RANDOM (skyline for training time)
+0.62
+27.34
+38.73
+50.3
+0.168
+0.832
+1.82
+5.12
+GLISTER
+0.9667
+25.53
+36.41
+46.86
+1.375
+2.061
+2.823
+5.968
+CRAIGPB
+1.31
+22.31
+34.21
+4.31
+1.98
+2.56
+3.241
+6.42
+GRADMATCHPB
+3.21
+28.41
+35.64
+50.34
+1.68
+2.02
+2.674
+5.954
+MILO (Fixed)
+4.517
+13.83
+20.03
+35.79
+0.1795
+0.79
+1.82
+4.89
+MILO
+16.33
+31.7
+39.99
+50.56
+0.1701
+0.81
+1.81
+4.97
+TinyImageNet
+ResNet101
+FULL (skyline for test accuracy)
+56.32
+56.32
+56.32
+56.32
+17.2387
+17.2387
+17.2387
+17.2387
+RANDOM (skyline for training time)
+2.84
+10.52
+17.57
+35.68
+0.150245
+0.91737
+1.826483
+5.437941
+ADAPTIVE-RANDOM (skyline for training time)
+0.6067
+15.99
+33.19
+53.3
+0.1710
+0.91737
+1.82648
+5.43794
+GLISTER
+0.6255
+16.3
+30.47
+50.11
+1.47556
+2.18824
+3.17468
+7.099
+CRAIGPB
+2.54
+16.23
+28.43
+46.42
+1.7016
+2.348
+3.32867
+7.42342
+GRADMATCHPB
+2.15
+16.84
+33.25
+52.31
+1.53448
+2.1209
+3.0624
+7.03117
+MILO (Fixed)
+2.76
+11.25
+18.97
+35.79
+0.150245
+0.91737
+1.82648
+5.4379
+MILO
+4.64
+24.39
+35.16
+55.02
+0.19173
+0.91737
+1.82648
+5.4379
+Table 5: Data Selection Results for CIFAR10, CIFAR100 and TINYIMAGENET datasets
+26
+Test Accuracy Standard Deviation Results on Vision Datasets
+Test Accuracy Standard Deviation(for 5 runs)
+Budget(%)
+1%
+5%
+10%
+30%
+Dataset
+Model
+Selection Strategy
+CIFAR10
+ResNet18
+FULL (skyline for test accuracy)
+0.43
+0.43
+0.43
+0.43
+RANDOM (skyline for training time)
+0.187
+0.127
+0.173
+0.154
+ADAPTIVE-RANDOM (skyline for training time)
+1.981
+0.218
+1.87
+0.0837
+GLISTER
+0.76
+1.872
+5.8721
+0.863
+CRAIGPB
+9.31
+4.831
+4.313
+0.2841
+GRADMATCHPB
+2.041
+1.0841
+0.7631
+0.0736
+MILO (Fixed)
+1.471
+4.31
+4.12
+2.191
+MILO
+0.762
+1.712
+0.0821
+0.037
+CIFAR10
+ResNet101
+FULL (skyline for test accuracy)
+0.3606
+0.3606
+0.3606
+0.3606
+RANDOM (skyline for training time)
+0.141
+0.1527
+0.1424
+0.077
+ADAPTIVE-RANDOM (skyline for training time)
+1.295
+0.198
+1.28
+0.063
+GLISTER
+0.51
+10.27
+5.56
+0.37
+CRAIGPB
+3.804
+5.996
+2.729
+0.2051
+GRADMATCHPB
+2.086
+0.5374
+0.02
+0.16
+MILO (Fixed)
+3.84
+5.64
+6.13
+1.01
+MILO
+2.093
+3.691
+0.03
+0.02
+CIFAR100
+ResNet18
+FULL (skyline for test accuracy)
+0.3986
+0.3986
+0.3986
+0.3986
+RANDOM (skyline for training time)
+0.2848
+0.9871
+0.637
+0.7168
+ADAPTIVE-RANDOM (skyline for training time)
+0.539
+0.2546
+0.176
+0.3915
+GLISTER
+0.516
+1.32
+0.1473
+0.08
+CRAIGPB
+0.5798
+0.8132
+0.3323
+0.1626
+GRADMATCHPB
+0.7637
+0.3536
+1.039
+0.6293
+MILO (Fixed)
+0.049
+0.56
+0.69
+0.84
+MILO
+0.8211
+0.3353
+0.1041
+0.39
+CIFAR100
+ResNet101
+FULL (skyline for test accuracy)
+0.31
+0.31
+0.31
+0.31
+RANDOM (skyline for training time)
+0.2716
+1.213
+1.273
+0.891
+ADAPTIVE-RANDOM (skyline for training time)
+0.831
+0.628
+0.583
+0.846
+GLISTER
+0.631
+1.172
+0.31
+1.23
+CRAIGPB
+0.831
+1.731
+0.347
+0.541
+GRADMATCHPB
+0.642
+0.24
+0.53
+0.62
+MILO (Fixed)
+0.192
+0.0931
+0.041
+0.47
+MILO
+1.013
+0.764
+0.453
+0.036
+TinyImageNet
+ResNet18
+FULL (skyline for test accuracy)
+0.51
+0.51
+0.51
+0.51
+RANDOM (skyline for training time)
+0.53
+0.872
+0.41
+0.73
+ADAPTIVE-RANDOM (skyline for training time)
+0.41
+0.763
+0.31
+0.63
+GLISTER
+0.125
+0.45
+0.45
+0.17
+CRAIGPB
+2.31
+0.47
+0.51
+0.21
+GRADMATCHPB
+0.73
+0.23
+0.46
+0.53
+MILO (Fixed)
+0.32
+0.43
+0.24
+0.53
+MILO
+0.53
+0.41
+0.32
+0.41
+TinyImageNet
+ResNet101
+FULL (skyline for test accuracy)
+0.34
+0.34
+0.34
+0.34
+RANDOM (skyline for training time)
+0.65
+0.43
+0.41
+0.53
+ADAPTIVE-RANDOM (skyline for training time)
+0.64
+0.31
+0.24
+0.41
+GLISTER
+0.53
+0.741
+0.452
+0.371
+CRAIGPB
+0.872
+0.735
+0.472
+0.531
+GRADMATCHPB
+0.764
+0.31
+0.42
+0.53
+MILO (Fixed)
+0.736
+0.24
+0.43
+0.45
+MILO
+0.41
+0.24
+0.41
+0.431
+Table 6: Standard Results for CIFAR10, CIFAR100 and TINYIMAGENET datasets
+H.5
+Hyper-parameter Ordering Retention Analysis
+We evaluate the effectiveness of MILO and the considered subset selection baselines in preserving
+original hyper-parameter ordering by full data tuning. In a nutshell, we are trying to determine
+whether the original order of the hyper-parameters is maintained, despite using small subsets for
+model training runs involved in hyper-parameter tuning. To examine this, we experiment on the
+Trec6 [39, 18] dataset using an LSTM model. Hyper-parameter search for the TREC6 dataset includes
+a grid search over 108 configurations of the learning rate, optimizer, LSTM hidden size, training
+batch size, and the number of final fully connected layers. Table 9 shows the Kendall Tau correlation
+values between the hyper-parameter ordering obtained using 1%, 5%, and 10% subsets selected by
+MILO, RANDOM, ADAPTIVE-RANDOM, AUTOMATA, and CRAIGPB and Full data hyper-parameter
+ordering on TREC6 [39, 18] dataset. Results in Table 9 demonstrate that MILO is more effective than
+the baselines considered in preserving hyper-parameter ordering even when using small subsets.
+27
+Model Training Results on Text Datasets
+Top-1 Test accuracy of the Model(%)
+Model Training time(in secs)
+Budget(%)
+1%
+5%
+10%
+30%
+1%
+5%
+10%
+30%
+Dataset
+Model
+Selection Strategy
+TREC6
+LSTM
+FULL (skyline for test accuracy)
+86.6
+86.6
+86.6
+86.6
+101.835
+101.835
+101.835
+101.835
+RANDOM (skyline for training time)
+40.2
+62.93
+72.27
+80.93
+1.61
+5.83
+10.185
+31.23
+ADAPTIVE-RANDOM (skyline for training time)
+28.13
+61.0
+81.53
+85.03
+1.623
+5.82
+10.171
+31.46
+GLISTER
+24.52
+65.45
+84.21
+86.21
+12.621
+17.825
+19.452
+46.742
+CRAIGPB
+25.53
+52.87
+83.47
+85.43
+33.83
+39.841
+43.957
+60.742
+GRADMATCHPB
+23.04
+69.93
+85.0
+87.0
+8.621
+14.363
+18.553
+43.848
+MILO (Fixed)
+34.2
+66.07
+69.26
+81.05
+1.614
+5.72
+10.174
+31.22
+MILO
+46.87
+76.13
+84.3
+87.97
+1.613
+5.81
+10.182
+31.21
+IMDB
+LSTM
+FULL (skyline for test accuracy)
+89.03
+89.03
+89.03
+89.03
+613.553
+613.553
+613.553
+613.553
+RANDOM (skyline for training time)
+50.01
+50.01
+79.14
+84.42
+6.789
+37.07
+63.86
+192.587
+ADAPTIVE-RANDOM (skyline for training time)
+49.99
+60.04
+88.13
+88.29
+6.673
+37.14
+63.88
+193.632
+GLISTER
+50.02
+61.25
+85.21
+86.81
+110.242
+137.256
+166.839
+300.512
+CRAIGPB
+50.02
+66.73
+87.54
+87.7
+118.553
+137.256
+166.839
+295.567
+GRADMATCHPB
+50.02
+58.99
+84.66
+85.75
+99.116
+137.256
+166.839
+347.057
+MILO (Fixed)
+50.03
+66.54
+81.3
+85.06
+6.791
+37.06
+63.86
+192.59
+MILO
+50.02
+69.15
+88.45
+88.56
+6.81
+37.1
+63.89
+192.57
+Rotten Tomatoes
+LSTM
+FULL (skyline for test accuracy)
+79.54
+79.54
+79.54
+79.54
+177.656
+177.656
+177.656
+177.656
+RANDOM (skyline for training time)
+52.43
+67.39
+69.08
+73.82
+2.305
+9.274
+18.159
+56.883
+ADAPTIVE-RANDOM (skyline for training time)
+49.91
+68.44
+78.22
+79.47
+1.8730
+9.258
+18.163
+56.914
+GLISTER
+50.01
+50.54
+65.43
+78.13
+10.23
+14.23
+26.24
+110.31
+CRAIGPB
+50.04
+50.81
+62.45
+77.21
+12.84
+16.94
+29.31
+124.21
+GRADMATCHPB
+49.99
+50.0
+63.24
+78.08
+9.641
+13.184
+25.623
+102.789
+MILO (Fixed)
+50.7
+67.13
+72.43
+74.38
+1.87
+9.28
+18.2
+56.90
+MILO
+50.93
+73.76
+78.31
+79.52
+1.89
+9.74
+18.34
+56.781
+IMDB
+BERT+MLP
+FULL (skyline for test accuracy)
+93.27
+93.27
+93.27
+93.27
+5695.329
+5695.329
+5695.329
+5695.329
+RANDOM (skyline for training time)
+51.25
+228.316
+601.866
+1672.21
+87.362
+89.58
+90.33
+91.91
+ADAPTIVE-RANDOM (skyline for training time)
+51.25
+228.316
+601.866
+1672.21
+89.813
+92.18
+92.41
+92.93
+GLISTER
+86.25
+91.21
+92.01
+92.43
+721.43
+789.21
+898.31
+1802.74
+CRAIGPB
+86.31
+90.46
+91.85
+91.99
+868.42
+925.32
+981.321
+1831.31
+GRADMATCHPB
+86.54
+90.42
+91.99
+91.83
+682.987
+758.215
+892.21
+1792.43
+MILO (Fixed)
+86.15
+89.27
+90.87
+91.458
+51.25
+228.316
+601.866
+1672.21
+MILO
+90.76
+92.06
+92.6
+93.144
+51.25
+228.316
+601.866
+1672.21
+Table 7: Model Training Results for TREC6, IMDB and Rotten Tomatoes datasets
+28
+Test Accuracy Standard Deviation on Text Datasets
+Standard deviation of the Model(for 5 runs)
+Budget(%)
+1%
+5%
+10%
+30%
+Dataset
+Model
+Selection Strategy
+TREC6
+LSTM
+FULL (skyline for test accuracy)
+0.77
+0.77
+0.77
+0.77
+RANDOM (skyline for training time)
+3.41
+1.23
+0.57
+1.34
+ADAPTIVE-RANDOM (skyline for training time)
+3.2
+0.43
+1.31
+0.43
+GLISTER
+2.45
+0.74
+0.31
+0.54
+CRAIGPB
+0.791
+0.462
+1.821
+0.861
+GRADMATCHPB
+1.7265
+0.8762
+0.472
+0.876
+MILO (Fixed)
+0.352
+0.62
+0.454
+0.726
+MILO
+0.25
+0.36
+0.21
+0.31
+IMDB
+LSTM
+FULL (skyline for test accuracy)
+0.3
+0.3
+0.3
+0.3
+RANDOM (skyline for training time)
+0.21
+0.31
+0.41
+1.2
+ADAPTIVE-RANDOM (skyline for training time)
+1.241
+0.21
+0.41
+0.21
+GLISTER
+0.862
+0.21
+0.21
+0.1
+CRAIGPB
+0.731
+1.21
+0.451
+0.41
+GRADMATCHPB
+0.817
+0.441
+0.41
+1.22
+MILO (Fixed)
+1.51
+0.42
+0.34
+0.51
+MILO
+0.45
+0.21
+0.104
+0.05
+Rotten Tomatoes
+LSTM
+FULL (skyline for test accuracy)
+0.34
+0.34
+0.34
+0.34
+RANDOM (skyline for training time)
+1.21
+1.41
+1.97
+0.31
+ADAPTIVE-RANDOM (skyline for training time)
+0.0871
+0.16
+0.31
+0.21
+GLISTER
+0.761
+0.43
+0.34
+0.31
+CRAIGPB
+0.826
+0.12
+0.43
+0.41
+GRADMATCHPB
+0.52
+0.2
+0.21
+0.12
+MILO (Fixed)
+0.7761
+0.31
+0.1
+0.31
+MILO
+0.71
+0.41
+0.1
+0.21
+IMDB
+BERT+MLP
+FULL (skyline for test accuracy)
+0.14
+0.14
+0.14
+0.14
+RANDOM (skyline for training time)
+0.38
+0.981
+1.31
+0.21
+ADAPTIVE-RANDOM (skyline for training time)
+0.21
+0.24
+0.31
+0.51
+GLISTER
+0.871
+0.31
+0.53
+0.72
+CRAIGPB
+0.87
+0.66
+0.2
+0.731
+GRADMATCHPB
+0.54
+0.53
+0.23
+0.61
+MILO (Fixed)
+0.21
+0.21
+0.12
+0.3
+MILO
+0.43
+0.12
+0.3
+0.12
+Table 8: Standard Deviation Results for TREC6, IMDB and Rotten Tomatoes datasets
+Hyper-parameter Ordering Retention Capabilit
+Kendall Tau Values
+Dataset
+Model
+Budget
+Strategy
+TREC6
+LSTM
+1%
+MILO
+0.4321
+RANDOM
+0.0679
+ADAPTIVE-RANDOM
+0.313
+AUTOMATA
+0.3484
+CRAIGPB
+0.325
+5%
+MILO
+0.521
+RANDOM
+0.199
+ADAPTIVE-RANDOM
+0.440
+AUTOMATA
+0.4764
+CRAIGPB
+0.4521
+10%
+MILO
+0.6342
+RANDOM
+0.2605
+ADAPTIVE-RANDOM
+0.5313
+AUTOMATA
+0.4742
+CRAIGPB
+0.4531
+Table 9: Mean test set accuracy of ResNet18 trained on CIFAR100 dataset for subset sizes of 10%,
+and 30% selected using MILO for 200 epochs for different values of R.
+H.6
+Test-Accuracies, Training times, and Standard deviations for Hyper-Parameter Tuning
+Experiments
+Table 10 shows the top-1 test accuracies and tuning times taken by MILO and the other baselines
+considered for single model training on CIFAR10, TREC6 datasets for different subset sizes of 1%,
+5%, 10%, and 30% respectively.
+29
+Hyper-parameter Tuning Results
+Top-1 Test accuracy of the Model(%)
+Tuning time(in hrs)
+Budget(%)
+1%
+5%
+10%
+30%
+1%
+5%
+10%
+30%
+Dataset
+Model
+Search+Scheduler
+Selection Strategy
+TREC6
+LSTM
+Random+HB
+FULL (skyline for test accuracy)
+86.8
+86.8
+86.8
+86.8
+0.64
+0.64
+0.64
+0.64
+RANDOM (skyline for training time)
+40.8
+60.2
+78.0
+85.5
+0.01
+0.03
+0.07
+0.18
+ADAPTIVE-RANDOM (skyline for training time) 45.76
+49.43
+74.32
+86.6
+0.01
+0.03
+0.06
+0.18
+CRAIGPB
+41.33
+64.33
+77.0
+82.0
+0.02
+0.07
+0.08
+0.19
+AUTOMATA
+47.3
+66.2
+82.0
+86.6
+0.01
+0.06
+0.09
+0.21
+MILO (Fixed)
+54.32
+79.83
+85.51
+86.43
+0.01
+0.04
+0.06
+0.18
+MILO
+76.2
+86.6
+86.54
+86.6
+0.01
+0.03
+0.06
+0.18
+TREC6
+LSTM
+TPE+HB
+FULL (skyline for test accuracy)
+84.4
+84.4
+84.4
+84.4
+0.64
+0.64
+0.64
+0.64
+RANDOM (skyline for training time)
+40.8
+60.2
+78
+85.5
+0.01
+0.03
+0.06
+0.18
+ADAPTIVE-RANDOM (skyline for training time)
+52.32
+64.32
+79.2
+83.42
+0.01
+0.04
+0.06
+0.18
+CRAIGPB
+41.33
+64.33
+77
+82
+0.02
+0.07
+0.08
+0.19
+AUTOMATA
+47.2
+66.2
+82
+86.6
+0.01
+0.06
+0.09
+0.21
+MILO (Fixed)
+54.32
+79.83
+82.51
+85.43
+0.01
+0.03
+0.06
+0.18
+MILO
+68.2
+84.26
+84.34
+86.46
+0.01
+0.03
+0.06
+0.18
+CIFAR10
+ResNet18
+Random+HB
+FULL (skyline for test accuracy)
+95.35
+95.35
+95.35
+95.35
+36.11
+36.11
+36.11
+36.11
+RANDOM (skyline for training time)
+87.21
+88.95
+90.21
+94.21
+0.4779
+1.8681
+3.7917
+10.900
+ADAPTIVE-RANDOM (skyline for training time)
+93.1
+94.32
+94.78
+95.21
+0.47790
+1.86814
+3.79172
+10.9002
+CRAIGPB
+92.43
+93.5
+94.2
+94.3
+0.5434
+1.92925
+3.83061
+11.06829
+AUTOMATA
+93.7
+93.8
+94.21
+95.31
+0.67548
+1.91481
+3.81394
+11.0127
+MILO (Fixed)
+86.21
+88.95
+94.21
+95.21
+0.47790
+1.868144
+3.791
+10.909
+MILO
+94.34
+95.34
+95.21
+95.34
+0.4778
+1.8644
+3.796
+10.9889
+CIFAR10
+ResNet18
+TPE+HB
+FULL (skyline for test accuracy)
+95.24
+95.24
+95.24
+95.24
+36.12
+36.12
+36.12
+36.12
+RANDOM (skyline for training time)
+86.38
+89.32
+92.21
+94.21
+0.48
+1.87
+3.79
+10.9
+ADAPTIVE-RANDOM (skyline for training time)
+93.12
+93.72
+94.78
+95.21
+0.49
+1.89
+3.78
+11.1
+CRAIGPB
+92.23
+93.5
+94.2
+94.3
+0.54
+1.93
+3.83
+11.07
+AUTOMATA
+93.7
+93.98
+94.21
+95.31
+0.68
+1.91
+3.81
+11.01
+MILO (Fixed)
+87.11
+90.21
+94.21
+95.21
+0.48
+1.87
+3.79
+10.9
+MILO
+93.24
+94.28
+95.1
+95.21
+0.52
+1.89
+3.77
+10.89
+Table 10: Hyper-parameter Tuning Results
+30
+I
+Ablation Studies
+I.1
+Performance Comparison of Existing Pre-trained Transformer Models as Feature
+Encoders
+0
+250
+Epochs →
+0
+10
+20
+Test Accuracy →
+DINO (CLS)
+DINO
+VIT (CLS)
+VIT
+CLIP
+(a) Comparison of Vision Transformers for Subset
+Selection
+0
+20
+Epochs →
+25
+50
+Test Accuracy →
+all-distilroberta-v1
+all-mpnet-base-v2
+(b) Comparison of Language Models for Subset Selec-
+tion
+Figure 11: Sub-figure (a) shows the performance of the ResNet18 model trained on a fixed 5% subset of
+the CIFAR100 dataset selected by maximizing Facility Location function using different pre-trained vision
+transformer models. Sub-figure (b) shows the performance of the LSTM model trained on a fixed 5% subset of
+the TREC6 dataset selected by maximizing the Facility Location function using different pre-trained language
+models.
+In this ablation study, we evaluate the effectiveness of various existing pre-trained transformer models
+as feature encoders for subset selection.
+Optimal Feature Encoders for Vision Datasets:
+For vision datasets, we test with DINO-
+VITB16 [6], VIT-LARGE-PATCH16-224-IN21K [11], and CLIP-VIT-L-14 [56] models available
+from the HuggingFace [69] as the feature encoder. For CLIP model, we use CLIP VIT’s final
+projection layer output embedding as the feature representation. For both DINO and VIT models, we
+test with two different types of embeddings as feature vectors: a) we use the final layer CLS token
+embedding output as the feature representation; b) we use the average of the final layer output embed-
+dings of the constituent patches as the feature representation. We denote the DINO model using CLS
+token output as a feature representation vector by DINO (CLS). Similarly, we denote the VIT model
+using CLS token output as a feature representation vector by VIT (CLS). Sub-figure 11a shows the
+performance of the ResNet18 model trained on a fixed 5% subset of the CIFAR100 dataset selected
+by maximizing the facility location function using different pre-trained vision transformer models as
+the feature encoder. In this experiment, we used the facility location set function because when using
+fixed subsets of small subset sizes, facility location yielded optimal results (See Sub-figure 4a). The
+results presented in Sub-figure 11a indicate that the DINO model using the final layer CLS token
+embedding as the feature representation gave the best model performance. Hence, in our experiments,
+we use the DINO model and compute the feature representations for images by using the final layer
+CLS token output embedding.
+Optimal Feature Encoders for Text Datasets: For text datasets, we test with ALL-DISTILROBERTA-
+V1 [41], and ALL-MPNET-BASE-V2 [61] models available from the the Sentence Transformers [57]
+as the feature encoder. We employ pre-trained models from the Sentence Transformers package, as
+they have been fine-tuned to produce improved representations that accurately compute the similarity
+between phrases for natural language inference (NLI) tasks. Similar to the SBERT [57] work, we
+compute the sentence representations by taking the average of the final layer output embeddings
+of all the constituent tokens. Sub-figure 11a shows the performance of the LSTM model trained
+on a fixed 5% subset of the TREC6 dataset selected by maximizing the facility location function
+using different pre-trained language models as the feature encoder. In this experiment, we used
+the facility location set function because when using fixed subsets of small subset sizes, facility
+31
+location yielded optimal results (See Sub-figure 4a). Results presented in the Sub-figure 11b show that
+ALL-DISTILROBERTA-V1 resulted in better model performance compared to ALL-MPNET-BASE-V2.
+Hence, in our experiments, we use the ALL-DISTILROBERTA-V1 as the feature encoder for text
+datasets.
+I.2
+Optimal Similarity Metric Analysis
+In this experiment, we aim to analyze the performance of different similarity metrics for the com-
+putation of similarity between data samples. As part of our experiment, we evaluate the following
+similarity metrics:
+Cosine Similarity: Given two data samples e1, e2 having feature representations r1, r2, the similarity
+between the data samples using the cosine-similarity is as follows:
+Cosine-Similarity(r1, r2) = 0.5 + 0.5 ·
+r1 · r2
+||r1||||r2||
+(10)
+We perform additive scaling of the cosine similarity to obtain non-negative similarity values.
+Dot Product: Given two data samples e1, e2 having feature representations r1, r2, the similarity
+between the data samples using the dot-product is r1 · r2. We also perform additive scaling to the
+obtained dot product values to ensure that all the pair-wise similarity values are non-negative.
+RBF Kernel: Given two data samples e1, e2 having feature representations r1, r2, the similarity
+between the data samples using the RBF kernel is as follows:
+RBF-Kernel(r1, r2) = exp (−
+||r1 −r2||2
+kw ∗mean_dist)
+(11)
+In the above equation, the parameter kw is a hyper-parameter that controls the saturation of the
+similarity between data samples and the parameter mean_dist is the mean distance of the pair-wise
+distance between all the samples in the dataset. In the case of small kw values, the similarity between
+samples of data drops dramatically with even a small increase in distance between them. In contrast
+with high kw values, the similarity between samples of data drops slowly with an increase in distance
+between them. We also test with different kw values of 0.01, 0.05, 0.1, 0.5, and 1 in this experiment.
+Similarity Metric for Vision Datasets: Table 11 shows the test accuracies of a ResNet18 model
+trained on a 5% fixed CIFAR100 subset selected by maximizing the facility location function using the
+DINO model with final layer CLS token outputs as feature representations using different similarity
+metrics. Results demonstrate that with DINO model using cosine-similarity resulted in a better-
+performing model compared to other similarity metrics. Hence in our work for vision experiments,
+we use cosine-similarity as the similarity metric. We do not show results with dot-product in Table 11
+as the CLS token embedding outputs of the DINO model are normalized because of which both
+dot-product and cosine similarity gives the same similarity values.
+Similarity Metric
+Test Accuracy
+Cosine Similarity
+28.68 ± 0.1103
+RBF Kernel (kw=0.01)
+27.14 ± 0.2051
+RBF Kernel (kw=0.05)
+27.88 ± 0.8132
+RBF Kernel (kw=0.1)
+28.11 ± 0.1499
+RBF Kernel (kw=0.5)
+27.61 ± 0.601
+RBF Kernel (kw=0.1)
+27.62 ± 0.6576
+Table 11: Comparison of accuracies of ResNet18 model trained on a 5% fixed CIFAR100 subset
+selected by maximizing the facility location function using the DINO model with CLS token outputs
+as feature representations using different similarity metrics.
+Similarity Metric for Text Datasets:
+Table 12 shows the test accuracies of the LSTM model
+trained on a 5% fixed TREC6 subset selected by maximizing the facility location function using
+the ALL-DISTILROBERTA-V1 as the feature encoder using different similarity metrics. Results
+demonstrate that with ALL-DISTILROBERTA-V1 model using cosine-similarity resulted in better
+performing model compared to other similarity meterics. Hence in our work for text experiments, we
+use cosine-similarity as the similarity metric.
+32
+Similarity Metric
+Test Accuracy
+Cosine Similarity
+72.1 ± 2.1508
+Dot Product
+70.38 ± 4.5514
+RBF Kernel (kw=0.01)
+63.58 ± 9.8051
+RBF Kernel (kw=0.05)
+67.58 ± 2.561
+RBF Kernel (kw=0.1)
+66.92 ± 2.715
+RBF Kernel (kw=0.5)
+70.7 ± 2.291
+RBF Kernel (kw=0.1)
+70.54 ± 4.518
+Table 12: Comparison of accuracies of LSTM model trained on a 5% fixed TREC6 subset selected by
+maximizing the facility location function using the ALL-DISTILROBERTA-V1 as the feature encoder
+using different similarity metrics.
+I.3
+SGE (Graph-Cut) vs SGE (Facility Location)
+Figure 12 shows the model convergence curves trained using SGE with Graph-Cut and SGE with
+Facility Location on various datasets using different subset sizes. Results show that SGE with
+Graph-Cut achieves faster initial convergence than SGE with Facility Location across all the datasets
+considered and for different subset sizes. The reason why SGE with Graph-Cut gives superior initial
+model convergence compared to SGE with Facility Location is that the sum-sum formulation in
+graph-cut( Equation (7)), as opposed to the sum-max formulation in facility location( Equation (6)),
+results in the selection of more number of easy samples. More specifically, with the sum-max
+formulation for facility location, having a single representative sample of data from each cluster in the
+dataset is sufficient to achieve a high facility location value for that cluster and having a representative
+sample from all the clusters in the dataset leads to further maximization of facility location values.
+This prevents the selection of samples only from densely populated regions while achieving broader
+coverage of the selected dataset in the facility location. Whereas, with the sum-sum formulation
+of the graph-cut function, selecting more samples from dense regions, leads to the high graph-cut
+function values. Thus, graph-cut can result in the selection of subsets consisting of higher number of
+easy samples from very dense regions in the dataset than facility location.
+I.4
+SGE (Graph-Cut) vs. WRE (Graph-Cut)
+Figure 13 shows the model convergence curves trained using SGE with Graph-Cut and WRE with
+Graph-Cut on various datasets using different subset sizes. Results show that SGE with Graph-Cut
+achieves faster initial convergence than WRE with Graph-Cut across all the datasets considered
+and for different subset sizes. The reason why SGE with Graph-Cut gives superior initial model
+convergence compared to WRE with Graph-Cut is that SGE emphasizes more exploitation than
+WRE. More specifically, SGE results in selecting subsets with high set function values because of the
+approximation guarantees of the stochastic-greedy algorithm [46]. Whereas with WRE, there is no
+guarantee that the sampled subsets using the constructed probability distribution p have set function
+values. Since subsets with higher Graph-Cut function values correspond to subsets with more easy
+samples, SGE with Graph-Cut achieves superior model convergence than SGE with Facility Location.
+Tuning of the hyper-parameter: κ
+Mean Test Accuracy of the Model(for 5 runs)
+Graphcut Interval
+0
+1
+12
+1
+10
+1
+8
+1
+6
+1
+4
+1
+2
+1
+Dataset
+Model
+Budget
+CIFAR100
+ResNet101
+1%
+4.116%
+9.27 %
+11.795 %
+12.135%
+12.985%
+10.68%
+11.11%
+3.48%
+5%
+45.19%
+45.7%
+45.43%
+47.15%
+49.885%
+49.01%
+48.77%
+35.76%
+10%
+60.4%
+64.08%
+64.07%
+64.84%
+66.11%
+64.97%
+62.43%
+53.41%
+30%
+74.28%
+74.39%
+75.24%
+74.27%
+75.28%
+74.68%
+73.18%
+71.48%
+CIFAR10
+ResNet101
+1%
+38.18%
+39.23%
+34.61%
+38.25%
+43.37%
+43.92%
+38.885%
+38.76%
+5%
+71.77%
+74.13%
+77.98%
+75.14%
+81.63%
+77.87%
+75.18%
+63.9%
+10%
+87.21%
+85.74%
+87.32%
+87.96%
+88.72%
+88.17%
+86.61%
+83.25%
+30%
+93.79%
+93.82%
+93.52%
+93.75%
+94.24%
+93.73%
+93.5%
+91.23%
+Table 13: Mean test set accuracy of ResNet101 trained on CIFAR10 and CIFAR100 dataset with
+different subset sizes (of 1%, 5%, 10%, and 30%) and 200 epochs using curriculum-based data
+exploration with various curriculum intervals.
+33
+0
+250
+Time taken (in Secs) →
+0
+50
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+25
+50
+10
+15
+20
+25
+30
+(a) CIFAR100(5%)
+ResNet18
+0
+200
+Time taken (in Secs) →
+0
+50
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+25
+50
+30
+35
+40
+45
+50
+55
+(b) CIFAR10(5%)
+ResNet18
+0
+2000
+Time taken (in Secs) →
+0
+20
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+(c) TINYIMAGENET(5%)
+ResNet18
+0
+20
+Time taken (in Secs) →
+0
+50
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+(d) TREC6(30%)
+LSTM
+0
+100
+Time taken (in Secs) →
+20
+40
+60
+80
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+20
+40
+60
+50
+60
+70
+80
+(e) IMDB (30%)
+LSTM
+0
+10
+Time taken (in Secs) →
+20
+40
+60
+80
+Test Accuracy →
+SGE
+(Graph-Cut)
+SGE
+(Facility Location)
+2
+4
+6
+50
+55
+60
+65
+70
+(f) Rotten Tomatoes (10%)
+LSTM
+Figure 12: Comparison of initial convergence of SGE with Graph-Cut and SGE with Facility Location on a
+variety of datasets using different subset sizes. Results show that SGE with Graph-Cut achieves faster initial
+convergence compared to SGE with Facility Location across all the datasets considered and for different subset
+sizes.
+I.5
+Advantages of using a Curriculum for Data Exploration
+Results given in Table 13 show that κ = 0 (WRE with disparity-min) and κ = 1 (SGE with graph-cut)
+perform poorly compared to using a curriculum κ > 0, thereby proving the efficiency of curriculum-
+based data exploration over WRE in achieving better-performing models. Further, we also showcase
+the efficiency of curriculum-based data exploration in achieving faster convergence by showing
+the convergence curves of the ResNet18 model trained on the TINYIMAGENET, CIFAR10 datasets
+using 5% subsets in Figure 14. The convergence curves show that curriculum-based data exploration
+converges faster than WRE with disparity-min while achieving better performance than SGE with the
+graph-cut function.
+I.5.1
+Finding Optimal Curriculum for Data Exploration
+In order to find the optimal value of κ, we test for a number of different values that represent the
+fraction of the total number of epochs for which the model is initially trained using SGE with the
+graph-cut function. We present the mean test accuracies of the ResNet101 model trained for 200
+epochs on different subset sizes of the CIFAR10 and CIFAR100 datasets in Table 13. Based on our
+observations, κ = 1
+6 is the optimal value and results in higher model accuracy. In Table 13, the results
+given in column κ = 0 correspond to the ResNet101 model trained by simply using WRE with the
+disparity-min set function without any curriculum. At the same time, using very large values of κ
+prioritizes more SGE and results in poor performance as SGE is shown to be less effective than WRE
+based on the results given in Sub-figure 5.
+I.6
+Optimal R analysis
+In order to find the optimal R value(R signifies how frequently we select a new subset using MILO ),
+we experiment with R values of [1, 2, 5, 10] on the CIFAR100 dataset using ResNet18 model for
+subsets sizes of 10%, and 30%. Mean-test accuracy of the ResNet18 model obtained using different
+R values is presented in Table 14. Results show that using R = 1,i.e., selecting a new subset every
+34
+0
+250
+Time taken (in Secs) →
+0
+50
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+(a) CIFAR100(5%)
+ResNet18
+0
+200
+Time taken (in Secs) →
+0
+50
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+10 20 30
+25
+30
+35
+40
+45
+50
+(b) CIFAR10(5%)
+ResNet18
+0
+2000
+Time taken (in Secs) →
+0
+20
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+(c) TINYIMAGENET(5%)
+ResNet18
+0
+20
+Time taken (in Secs) →
+0
+50
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+(d) TREC6(30%)
+LSTM
+0
+100
+Time taken (in Secs) →
+20
+40
+60
+80
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+20
+40
+60
+50
+60
+70
+80
+(e) IMDB (30%)
+LSTM
+0
+10
+Time taken (in Secs) →
+20
+40
+60
+80
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Graph-Cut)
+(f) Rotten Tomatoes (10%)
+LSTM
+Figure 13: Comparison of initial convergence of SGE with Graph-Cut and WRE with Graph-Cut on a variety of
+datasets using different subset sizes. Results show that SGE with Graph-Cut achieves faster initial convergence
+compared to WRE with Graph-Cut across all the datasets considered and for different subset sizes.
+0
+200
+Time taken (in Secs) →
+50
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Disparity-Min)
+MILO
+(κ = 1
+6)
+(a) ResNet18 Convergence on CIFAR10 using 5% sub-
+sets
+0
+2000
+Time taken (in Secs) →
+0
+50
+100
+Test Accuracy →
+SGE
+(Graph-Cut)
+WRE
+(Disparity-Min)
+MILO
+(κ = 1
+6)
+(b) ResNet18 Convergence on TINYIMAGENET using
+5% subsets
+Figure 14: Sub-figure (a) shows the convergence rate of the ResNet18 model on CIFAR10 dataset using 5%
+subsets selected by SGE with Graph-Cut, WRE with Disparity-Min, and MILO with curriculum exploration.
+Sub-figure (b) shows the convergence rate of the ResNet18 model on TINYIMAGENET dataset using 5% subsets
+selected by SGE with Graph-Cut, WRE with Disparity-Min, and MILO with curriculum exploration.
+epoch, results in a better-performing model than using higher values of R. Further, with small subset
+sizes, the gap between the model’s performance obtained using R = 1 and other values of R is even
+more significant. This shows that it is paramount to select new subsets as frequently as possible when
+using small subset sizes to achieve the best possible performance.
+35
+Tuning of the hyper-parameter: R
+Mean Test Accuracy of the Model(for 5 runs)
+R
+1
+2
+5
+10
+Dataset
+Model
+Budget
+CIFAR100
+ResNet18
+10%
+69.28% ± 0.1041
+69.21% ± 3.82
+66.63% ± 3.38
+64.07% ± 3.32
+30%
+74.95% ± 0.39
+74.13% ± 0.36
+73.55% ± 0.16
+72.72% ± 0.01
+Table 14: Mean test set accuracy of ResNet18 trained on CIFAR100 dataset for subset sizes of 10%,
+and 30% selected using MILO for 200 epochs for different values of R.
+I.7
+Effectiveness of WRE
+In our previous discussions, we delved into how Stochastic Greedy Exploration (SGE) tends to
+favor subsets with near-optimal values, providing room for a modest degree of exploration. In stark
+contrast, Weighted Random Exploration (WRE) advocates for a more thorough exploration of data
+while simultaneously prioritizing the inclusion of highly informative samples.
+In a bid to reinforce the effectiveness of WRE, we carry out an empirical comparison with a variant
+of SGE, particularly one that promotes increased exploration. The operational procedure of this
+SGE variant is as follows: We earmark a subset size k
+′ to be selected by SGE, where k
+′ ≤k and k
+symbolize the overall budget. The balance of the samples are selected at random. As the training
+sequence progresses, the size of the subset chosen by SGE (k
+′) is steadily reduced, thereby facilitating
+a broader scope for exploration.
+Dataset
+Model
+Fraction
+Strategy
+Test Accuracy
+CIFAR100
+ResNet18
+0.05
+MILO
+64.4
+SGE Variant (more exploration)
+59.02
+0.1
+MILO
+69.28
+SGE Variant (more exploration)
+66.24
+Table 15: Comparison of Test Accuracy Between MILO and SGE Variant (that favors more explo-
+ration) on CIFAR100 with ResNet18 Model to validate the effectiveness of WRE in MILO
+Dataset
+Model
+Fraction
+Strategy
+Test Accuracy
+CIFAR10
+ResNet18
+0.05
+MILO
+88.37
+SGE Variant (more exploration)
+84.38
+0.1
+MILO
+91.11
+SGE Variant(more exploration)
+88.88
+Table 16: Comparison of Test Accuracy Between MILO and SGE Variant (that favors more explo-
+ration) on CIFAR10 with ResNet18 Model to validate the effectiveness of WRE in MILO
+We contrast the performance of WRE with the aforementioned SGE variant, which integrates samples
+chosen by SGE with randomly selected samples. In the case of the SGE variant, we utilize a cosine
+decay rate, allowing the ratio of SGE-chosen samples to total samples to decay from 1 to 0 over the
+course of the training period.
+The results obtained from the CIFAR100 and CIFAR10 for both WRE and the SGE variant are
+presented in Tables 15 and 16. The outcomes suggest that WRE proves to be more effective in
+comparison to SGE, even when the latter allows for increased exploration. Consequently, we provide
+empirical evidence to suggest that WRE serves as a critical component of the MILO, contributing
+significantly to enhanced convergence.
+I.8
+Comparison with Self-supervised Data Pruning Metric
+The self-supervised data pruning metric [62] is applied to prune a static subset from the entire dataset.
+As stated previously in Section 3, the utilization of such fixed data subsets necessitates selecting
+larger proportions in order to approach optimal performance levels, akin to full data training. This
+requirement, unfortunately, compromises efficiency.
+36
+Dataset
+Model
+Fraction
+Strategy
+Test Accuracy
+SpeedUp
+CIFAR100
+ResNet18
+0.3
+MILO
+74.95
+3.4
+0.3
+Self-Supervised Metric
+60.41
+3.4
+0.7
+Self-Supervised Metric
+74.31
+1.4
+Table 17: Comparison of MILO with self-supervised pruning metric [62] on the CIFAR100 dataset
+using ResNet18 model.
+We proceed to detail the results obtained from the CIFAR100 dataset using the ResNet18 model, in
+which we compare MILO and the self-supervised data pruning metric [62]. The findings, presented
+in Table 17, indicate a more substantial loss in performance when utilizing a 30% fixed subset as
+determined by the self-supervised data pruning metric, as compared to using MILO.
+Moreover, to attain performance levels similar to those achieved by MILO using a 30% subset, it
+becomes necessary to select a 70% subset via the self-supervised data pruning metric. This, in turn,
+results in forfeiting the speedups achieved.
+37

@@ -1,0 +1,771 @@
+An Information Extraction Study: Take In Mind the
+Tokenization!
+Christos Theodoropoulos1,2 and Marie-Francine Moens1,2
+1 KU Leuven, Oude Markt 13, 3000 Leuven, Belgium
+christos.theodoropoulos@kuleuven.be, sien.moens@kuleuven.be
+2 Language Intelligence and Information Retrieval Lab, Celestijnenlaan 200A,
+3001 Leuven, Belgium
+Abstract. Current research on the advantages and trade-offs of using charac-
+ters, instead of tokenized text, as input for deep learning models, has evolved
+substantially. New token-free models remove the traditional tokenization step;
+however, their efﬁciency remains unclear. Moreover, the effect of tokenization is
+relatively unexplored in sequence tagging tasks. To this end, we investigate the
+impact of tokenization when extracting information from documents and present
+a comparative study and analysis of subword-based and character-based models.
+Speciﬁcally, we study Information Extraction (IE) from biomedical texts. The
+main outcome is twofold: tokenization patterns can introduce inductive bias that
+results in state-of-the-art performance, and the character-based models produce
+promising results; thus, transitioning to token-free IE models is feasible.
+Keywords: Information Extraction · Tokenization · Inductive Bias.
+1
+Introduction
+Currently, neural network models are replacing traditional Natural Language Process-
+ing (NLP) pipelines, as their ability to learn abstract and meaningful representations
+improves the performance. Hence, the complex and error-prone handcrafted feature en-
+gineering has been substantially reduced. However, the word-level or subword-level
+tokenization step remains, being carried over from the traditional era of NLP systems.
+Designing a custom tokenizer based on linguistic characteristics is time-consuming,
+expensive, and language speciﬁc and requires feature engineering and linguistic-related
+expertise. To alleviate these issues, data-driven approaches, such as WordPiece [35],
+Byte Pair Encoding [27], and SentencePiece [15], tokenize the text by splitting the
+strings based on frequent words and subwords (word pieces) given a corpus. Nonethe-
+less, these algorithms struggle to handle special linguistic morphologies [5] and their
+impact in sequence tagging tasks, such as Named Entity Recognition (NER), is rela-
+tively unexplored. The open research discussion on the tokenization step motivates the
+ﬁrst research question of the study:
+– How does the tokenization step affect the performance in the IE task? (RQ1)
+In this paper, we conduct a tokenization analysis and inductive bias study to explore
+the existence of potential patterns, related to the tokenization step, by solving the IE
+task in the biomedical domain using subword-based models. We refer to the general
+deﬁnition of inductive bias in AI models, as the set of assumptions that the learner uses
+to predict outputs of given inputs that it has not encountered [20]. We base our study
+on Partition Filter Network (PFN) [37], which solves the NER [21,10] and Relation
+Extraction (RE) [28,23] tasks jointly by modeling the interaction between the tasks and
+learning independent and shared representations. We choose this model because it lever-
+ages the Language Model (LM) representations by design. Hence, we can experiment
+with different LMs and explore their effectiveness. The main outcome of the analysis is
+arXiv:2303.15100v2  [cs.CL]  1 Apr 2023
+2
+C. Theodoropoulos, M.F. Moens
+that the tokenization patterns introduce inductive bias in the IE task. Additionally, the
+similarity analysis of the learned entity representations probes the existence of inductive
+bias. Following this key ﬁnding, we explore the capabilities of a tokenization bias-free
+model and answer the second research question:
+– Can a transition to character-level models be carried out without signiﬁcant perfor-
+mance degradation? (RQ2)
+Recently, new character-based models [9,6,36,30] that directly process sequences
+of characters have been released, and transitioning to this kind of model by replacing
+subword-based models without losing performance has become a focus of research.
+Hence, we conduct a comparative study for the IE task, including subword-based and
+character-based models. Additionally, we present a hyphenation analysis to detect pos-
+sible linguistic characteristics, by exploring patterns of subwords with a length of 4
+characters, and probe the hypothesis that character-based models are more capable of
+capturing special text morphology.
+In summary, the key contributions are as follows:
+– We present an extensive analysis to investigate the effect of tokenization in the IE
+task for the biomedical domain and raise awareness.
+– We identify the existence of inductive bias when speciﬁc tokenization patterns
+are detected, which leads to new state-of-the-art (SOTA) performance in the ADE
+dataset [11].
+– We present a comparative study, including subword-based and character-based mod-
+els, and draw insights supported by the hyphenation analysis.
+2
+Tokenization Analysis - Datasets
+In this section, we conduct a tokenization analysis for the dataset used in the study. We
+choose the biomedical (ADE) dataset to explore the effect of tokenization in a special
+domain. The ADE dataset contains entities of Drugs and Adverse Effects (AE) and has
+labels for the relations between them. The tokenizer of cased BERT [7] and bioclinical
+BERT (b-BERT) [2] is based on the WordPiece algorithm, while ALBERT [16] adopts
+the SentencePiece algorithm.
+In Tab. 2, we present the effect of tokenization on the average sentence length, in
+terms of word pieces (subwords), for each dataset. The sentence length increases by
+approximately 12 tokens, up to 58%, after the tokenization in the biomedical domain.
+To further explore the number of word pieces per entity type, we isolate the unique
+entities3. Then, we ﬁnd the unique words that are part of each entity type and tokenize
+the unique entities and words using the different tokenizers to notice the difference in
+the length and the addition of the word pieces. In Tab. 1 the last column represents the
+average tokenized word length per entity type, and the Out type describes the words
+that are not part of an entity of interest. In the ADE dataset, the length of the drug
+and AE entities increases substantially, and the drug entities are split into more word
+pieces. Particularly, a word that is part of a drug entity is split into approximately 4
+word pieces, on average, when using the tokenizer of cased BERT and b-BERT. The
+tokenizer of ALBERT tends to split the entities of interest into fewer pieces.
+3 We note that the set of unique entities for the case and uncased text processing is different,
+which is why the initial average entity length might be different.
+An Information Extraction Study: Take In Mind the Tokenization!
+3
+Table 1. Average Entity Length - ADE dataset
+Tokenizer
+Type Entity Tokenized Entity1Word
+cased BERT
+Drug
+1.37
+4.78 (+248.9%) 3.92
+b-BERT
+1.37
+4.79 (+249.6%) 3.93
+ALBERT
+1.42
+4.37 (+207.7%) 3.38
+cased BERT
+AE
+2.66
+6 (+125.6%)
+2.81
+b-BERT
+2.66
+5.9 (+121.8%)
+2.77
+ALBERT
+2.72
+5.29 (+94.5%)
+2.38
+cased BERT
+Out
+–
+–
+2.11
+b-BERT
+–
+–
+2.06
+ALBERT
+–
+–
+2.09
+1 (+ x %): percentage increase
+Table 2. Average Sentence Length
+Tokenizer
+Dataset Sentence Tokenized Sentence1
+cased BERT
+ADE
+21.23
+33.56 (+58.1%)
+b-BERT
+33.1 (+55.9%)
+ALBERT
+33.25 (+56.6%)
+1 (+ x %): percentage increase
+3
+Inductive Bias
+In this section, we answer the ﬁrst research question (RQ1). Following the observations
+of the tokenization analysis, we conduct a study to investigate whether tokenization
+patterns introduce inductive bias in the IE task.
+3.1
+Experimental Setup
+The overall model architecture of this paper is presented in Fig. 1. The sentence is
+processed by an LM, followed by an aggregation step that constructs the word-level
+embeddings by calculating the summed and averaged representations. When the aggre-
+gation step is not used, the model operates in the subword level as the PFN module
+directly processes the output of the LM. The PFN module models a two-way inter-
+action between the NER and RE tasks, as it leverages the representations of the LM
+and segments the neurons into two task partitions (independent representations) and
+one shared partition (inter-task interaction). PFN consists of a partition ﬁlter encoder, a
+NER unit, and a RE unit [37]. The partition ﬁlter encoder is a recurrent feature encoder
+that stores information in intermediate memories. In each step, the neurons of the en-
+coder are divided into three partitions: the relation, entity, and shared partitions. Then
+the encoder combines these partitions for task-speciﬁc feature generation and ﬁlters out
+irrelevant, for each task, information [37]. The NER-speciﬁc and RE-speciﬁc features
+are the input of the NER and RE units respectively. In this section, we focus on the
+subword-based LMs (cased BERT, b-BERT, ALBERT XLL) and run experiments with
+and without the aggregation step to explore differences in performance. The models are
+trained end-to-end.
+We train the PFN module4 (Fig. 1) using the hyperparameters that are selected in
+the ofﬁcial paper of the model [37] to solve the joint IE task. The training epochs are
+set to 100, the batch size is 20, and the learning rate is 2e-5. We use ADAM [14] as the
+optimizer and keep the best model based on the performance in the development set in
+each run. For the ADE dataset, 10-fold cross-validation5 is applied [18,4,8], and 15%6
+of the training set is used as the development set. We use strict evaluation of the IE task
+4 All the experiments are executed using a GeForce RTX 3090 24GB GPU.
+5 We use the same split as [8].
+6 Random split with the same seed for a fair comparison.
+4
+C. Theodoropoulos, M.F. Moens
+[4,29]. An entity is predicted correctly if the boundaries and the type are detected. A
+relation is correct if the type and the two involved entities are predicted correctly. We
+conduct a statistical t-test (p-value ≤0.05) of the evaluation results to draw conclusions
+in a more robust manner7. The results of the statistical t-test are available in the Ap-
+pendix section. We highlight that the inductive bias study is based on the intra-model
+comparison, as we focus on the effect of the aggregation step.
+Language Model
+PFN
+Aggregation
+Cased BERT
+Bioclinical BERT
+ALBERT XXL
+CharacterBERT
+Average
+Summation
+Baseline setup: offline
+Advanced setup: online
+NER
+RE
+Sentence
+Fig. 1. Model Architecture: The input sentence passes through the language model and then the
+embeddings are aggregated if needed. Finally, the representations are the input of the PFN module
+and the ﬁnal predictions for the NER and RE task are extracted.
+3.2
+Results - Discussion
+Table 3. End-to-end training - Results
+Language Model Aggregation
+NER
+RE
+cased BERT
+-
+89.2 ± 1.3 80.2 ± 2.6
+Average
+89.7 ± 1.1 80.5 ± 2.3
+Summation 89.9 ± 1.1 80.5 ± 2
+ALBERT XXL
+-
+90.8 ± 0.9 83.2 ± 2.1
+Average
+91.5 ± 0.8 83.9 ± 1.6
+Summation 91.2 ± 0.8 83 ± 1.3
+b-BERT
+-
+89.6 ± 1 81.1 ± 2.2
+Average
+90.1 ± 1.1 81.3 ± 2.1
+Summation 90.5 ± 0.9 81.9 ± 2.1
+CharacterBERT
+-
+91.2 ± 1 83.2 ± 1.8
+For every model, the aggregation is beneﬁcial as it improves the performance in
+both NER and RE tasks (Tab. 3). More precisely, the addition of summed aggrega-
+tion improves the performance by 0.7%, 0.9% (NER task), and 0.3%, 0.8% (RE task)
+for the cased BERT-based and b-BERT-based models respectively, compared to the
+aggregation-free models. For the ALBERT-based model the averaged aggregation boosts
+the performance by 0.7% in both tasks. Coupling this ﬁnding with the tokenization anal-
+ysis (Tab. 2), the pattern of word-piece splitting for words of interest (Drugs and AE)
+acts as inductive bias when aggregation is used. The intra-model comparison reveals
+the existence of inductive bias since the only difference lies in the addition of the ag-
+gregation step. Even if the aggregation layer (simple summation and averaging) is not
+7 The code and trained models are publicly available in the repository of the paper for repro-
+ducibility and to facilitate further research. https://github.com/christos42/inductive bias IE
+An Information Extraction Study: Take In Mind the Tokenization!
+5
+trainable, the incoming gradient (backpropagation, [25]) from the PFN module appears
+to be more informative for the IE task.
+3.3
+Similarity Analysis
+An entity can consist of multiple words, and the entity boundaries should be detected
+correctly by the model. Hence, the initial and the end words of the entity are impor-
+tant. An entity can be split into multiple word pieces. For example, the drug sodium
+polystyrene sulfonate (3 words) is split into sodium p-oly-sty-rene su-lf-ona-te (9 word
+pieces) when the tokenizer of BERT is used. When the aggregation step is not used, the
+model should detect the initial word (sodium) and the end token (su) of the entity. In the
+inference step, the correctly detected entity can be reconstructed with detokenization.
+To more deeply investigate the inductive bias phenomenon, we conduct a cosine
+similarity analysis for the different entities. The hypothesis is that the detected induc-
+tive bias in the biomedical text can increase the similarity and robustness of the entity
+representations. We use the trained LM of each run of the inductive bias study, with and
+without aggregation, and extract the representations of the test set. Then, we separate
+the words of the entities based on the entity type and the ordering of the words (start/end
+words). Hence, we have two groups per entity. One contains the start words, and another
+contains the end words. The Joint group consists of both the start and end words. The
+average similarity of each group is calculated. As we run the experiments using 10-fold
+cross-validation for the ADE dataset, we average the averaged similarity scores across
+the different splits. The results discussion is based on the intra-model comparison.
+In the ADE dataset (Tab. 4), generally, the averaged entity similarity is increased
+when aggregation is used. Hence, the detected inductive bias, which is correlated with
+the tokenization patterns, results in more similar entity representations. In particular, the
+summed representations of cased BERT and b-BERT are more or almost equally similar
+compared to the averaged and the aggregation-free representations for both entity types.
+Especially, for the Drug entity, the similarity increment is up to 10.5%, 3%, and 14.5%
+for the Start-word, End-word, and Joint groups respectively, when aggregation is used.
+Accordingly, for the Adverse-Effect entity, the similarity increase is up to 11.5%, 4%,
+and 13.5%. For the ALBERT XXL language model, where the tokenization patterns
+are less profound (Tab. 2), the similarity slightly increases, when aggregation is used,
+in most cases. However, the increment is signiﬁcantly lower than that detected with the
+representations of cased BERT and b-BERT.
+Table 4. Similarity Analysis: Average cosine similarity scores per entity group. The total average
+scores across the different experimental runs are presented.
+Language Model Aggregation
+Drugs
+Adverse Effects
+Start
+End Joint Start
+End Joint
+cased BERT
+–
+67.43 82.65 56.84 51.43 78.24 40.44
+Average
+68.3 85.73 61.15 56.78 82.5 49.75
+Summation 78.02 84.5 71.11 61.54 81.18 50.89
+b-BERT
+–
+67.76 84.51 57.06 53.86 79.92
+41
+Average
+68.91 86.01 63.3 60.84 83.07 53.85
+Summation 78.12 85.52 70.87 65.23 81.55 54.63
+ALBERT XXL
+–
+65.41 82.06 57.23 55.46 77.79 44.62
+Average
+65.89 81.03 57.88 55.18 78.46 46.11
+Summation 67.53 77.06 59.93 53.44 73.42 43.68
+6
+C. Theodoropoulos, M.F. Moens
+4
+Comparative Study
+The existence of inductive bias that is related to the initial tokenization of the text moti-
+vates the second research question (RQ2) of the paper. When tokenization patterns are
+present and the likelihood of splitting a word of interest (part of an entity) into multiple
+word pieces is higher, the addition of an aggregation step increases the performance and
+the robustness of the entity representations. Since the improved performance is corre-
+lated with this kind of inductive bias, a comparison with character-based models that
+do not include a tokenization step is important.
+4.1
+Baseline Setup: Frozen Embeddings
+As we want to explore how feasible the transition to tokenizer-free models is, we
+categorize the LMs into two categories based on the way they handle the input text:
+subword-based and character-based models. In the comparative study, we use bioclin-
+ical BERT for the ADE dataset8 to represent the subword-based set of models and we
+select CharacterBERT [9] as character-based representative. CharacterBERT processes
+the initial text at the character level and removes the tokenization step by incorporating
+the character-CNN module [22] to learn representations at the word level. Since we in-
+tend to evaluate the signiﬁcance of tokenization, we include CharacterBERT and BERT
+models in the study, as their main architecture is identical and their difference lies in
+the tokenization step.
+In the baseline setup, we want to directly evaluate the quality of the ”off-the-shelf”
+representations of different LMs when solving the IE task. As we directly evaluate the
+pretrained representations, it is important to mention the corpus that was used for pre-
+training the different LMs. Bioclinical BERT was initialized with BioBERT (pretrained
+on PubMed abstracts and PMC OA 9) [17] parameters and pretrained on MIMIC III
+notes [13]. The medical version of CharacterBERT was retrained on MIMIC III notes
+and PMC OA biomedical article abstracts. Hence, the medical version of Character-
+BERT and b-BERT were pretrained with almost identical data and a comparison be-
+tween these groups of LMs is safe.
+First, we extract the word representations of each LM of the study ofﬂine. We ag-
+gregate the subword-level embeddings (b-BERT) and construct the word-level embed-
+dings by calculating the averaged and summed representations. CharacterBERT extracts
+word-level representations by design. The overall experimental setup (hyperparameter)
+is the same as the inductive bias study setting. The only difference is that the LM is
+frozen (Fig. 1).
+Table 5. Baseline Setup - Results
+Language Model Aggregation
+NER
+RE
+b-BERT
+Average
+85.6 ± 0.7 75.7 ± 1.7
+Summation 85.7 ± 0.7 75.1 ± 1.7
+CharacterBERT
+-
+87.5 ± 0.8 77.9 ± 1.5
+The model that leverages the representations of medical CharacterBERT performs
+signiﬁcantly better, as it outperforms the model that uses the b-BERT representations
+8 We use the Transformers library [34].
+9 PubMed Central Open Access: https://www.ncbi.nlm.nih.gov/pmc/tools/openftlist/
+An Information Extraction Study: Take In Mind the Tokenization!
+7
+by around 2% in both RE and NER tasks (Tab. 5). This ﬁnding illustrates that med-
+ical CharacterBERT is more capable of exploring and learning the special linguistic
+characteristics of biomedical text, as it produces more meaningful representations than
+b-BERT. For the subword-based LM, the two aggregation strategies result in similar
+performance.
+4.2
+Advanced Setup: End-to-end Training
+In the advanced setup, we conduct experiments with end-to-end training to also ﬁne-
+tune the LMs and make comparisons on the ﬁnal performance. To this end, we extend
+the setup of the inductive bias study and incorporate the character-based model of the
+comparative study. The CharacterBERT-based model achieves very competitive results
+and outperforms the b-BERT-based models in the advanced setup. The performance
+improvement is 0.7% (NER task) and 1.3% (RE task) (Tab. 3). This is an additional
+indication that CharacterBERT is more capable of detecting special linguistic charac-
+teristics of medical-related text, despite the suggestion that the subword-based LMs can
+independently learn the essential character compositions [12].
+4.3
+Hyphenation Analysis
+The comparative study reveals that the model that leverages CharacterBERT is very
+competitive in the biomedical text. Following this main observation, we conduct a hy-
+phenation analysis to explore possible special linguistic characteristics in the biomedi-
+cal domain. The hypothesis is that the CharacterBERT-based model performs very well
+because there is domain-speciﬁc linguistic morphology in the biomedical text. We ﬁnd
+the unique words for each entity type and then we extract all subwords with a length of
+4 characters and calculate the frequency of each subword per entity type.
+Figs. 2 and 3 present the 25 most frequent subwords, excluding those that are in
+the 50 most frequent subwords of the out-of-entity words10, for the Drug and Adverse-
+Effect entities respectively. A special morphology is noticeable for both entity types.
+Speciﬁcally, the words that are part of the Drug and the Adverse-Effect entity have
+11 (e.g. amin, mine, mide, etc.) and 19 (itis, osis, emia, etc.) subwords accordingly,
+with frequencies higher than 20. These ﬁndings conﬁrm the initial hypothesis of the
+hyphenation analysis.
+amin
+mine
+mide
+azol
+meth
+amid
+zole
+phen
+line
+chlo
+hlor
+zine
+pine
+azin
+myci
+ycin
+sulf
+dine
+rine
+hydr
+acin
+lami
+ethy
+tami
+rami
+Subwords
+0
+5
+10
+15
+20
+25
+30
+35
+40
+Frequency
+ADE dataset: Drug entity
+Fig. 2. Drug entity: 25 most frequent subwords with a length of 4 characters
+10 The unique words that are not a part of any entity type of the dataset.
+8
+C. Theodoropoulos, M.F. Moens
+itis
+osis
+emia
+hype
+yper
+hypo
+path
+ocyt
+opat
+erat
+ular
+athy
+cyto
+neur
+teri
+thro
+oxic
+mato
+cula
+toxi
+euro
+ardi
+trop
+card
+rosi
+Subwords
+0
+10
+20
+30
+40
+50
+60
+Frequency
+ADE dataset: Adverse-Effect entity
+Fig. 3. Adverse-Effect entity: 25 most frequent subwords with a length of 4 characters
+Tab. 6 presents the number of entity subwords with frequencies equal to or higher
+than a set of thresholds. Noticeable patterns can be detected in the biomedical domain
+where all of the 25 most frequent subwords for both entities (Drug and Adverse-Effect)
+have a higher than 10 frequency.
+Table 6. Number of entity subwords with frequency higher than a speciﬁc threshold, subword
+length: 4 characters
+Entity type
+Threshold
+≥40 ≥30 ≥20 ≥10
+Drug
+0
+3
+11
+25
+Adverse-Effect
+5
+8
+19
+25
+5
+Comparison With SOTA Models
+For comparison, we choose models that are trained on the same dataset without extra
+external data. In the ADE dataset, we outperform the SOTA models. More precisely,
+the ALBERT XLL-based model with average aggregation improves the performance
+by 0.7% and 0.2% in the RE and NER task respectively (Tab. 7). The inductive bias that
+is introduced by the tokenization patterns and is exploited with the aggregation layer
+boosts the performance.
+Table 7. Comparative Results - SOTA
+Dataset Model
+NER RE
+ADE
+Eberts and Ulges (2020) [8]
+89.3 79.2
+Theodoropoulos et al. (2021) [31] 88.3 80.0
+Wang and Lu (2020) [33]
+89.7 80.1
+Zhao et al. [39]
+89.4 81.1
+Yan et al. [37]
+91.3 83.2
+ALBERT XXL (Avg. Aggr.), PFN 91.5 83.9
+6
+Related Work
+´Acs et al. (2021) [1] explore the effect of subword pooling on three tasks: morpholog-
+ical probing, POS, and NER tagging. Zhang and Tan (2021) [38] present a comparison
+of different textual representations for cross-lingual information retrieval. Traditional
+An Information Extraction Study: Take In Mind the Tokenization!
+9
+token [26], subword [32] and character-level representations are compared for the Ger-
+man, French and Japanese languages. The main outcome is that leveraging the tra-
+ditional token representations results in the best performance, and combining subword
+representations can be beneﬁcial in some cases. In our study, we compare the pretrained
+representations of subword-based and character-based LMs in the IE task. In addition,
+we explore the performance of the different models in an end-to-end training setup.
+Itzhak and Levy (2021) [12] discuss models that implicitly learn at the character
+level even when they are trained on the subword level. More precisely, they explore
+the capabilities of RoBERTa-base and Large [19], GPT2-medium [24], and AraBERT-
+large [3] in word spelling. The main results indicate that the embedding layer of the
+subword-level LMs contains considerable information about the character composition
+of the tokens. The study does not include character-based LMs (e.g. CharacterBERT)
+by design. In contrast, we compare subword-based and character-based LMs in the IE
+task and implicitly explore the capabilities of the models on capturing special linguistic
+morphology (biomedical text) by presenting a hyphenation analysis.
+To the best of our knowledge, there is no related work for the ﬁrst research question
+of our paper and the revealing of inductive bias in the IE task when tokenization patterns
+are present.
+7
+Conclusion
+This paper identiﬁes the existence of inductive bias in the IE task that is correlated
+with tokenization patterns, where the words of interest are more likely to be split into
+subwords. We highlight the introduction of inductive bias in the biomedical domain,
+supported by a similarity analysis based on entity representations. Additionally, we
+conduct a comparative study, including subword-based and character-based models,
+pointing out that the transition to token-free IE models is achievable. In future work,
+we intend to explore the effect of tokenization in other sequence tagging problems.
+Limitations
+A limitation of the paper is that the dataset is relatively small. Nevertheless, this is a
+common problem in the IE ﬁeld, and in our case, it is beneﬁcial in the sense that we can
+experiment quickly and run multiple experiments to draw conclusions. If the dataset
+is large, the computational power needed for the study will increase by a considerable
+factor. Potentially, additional language models can be incorporated into the comparative
+study [6,36] but retraining with identical data is needed to alleviate the inﬂuence of
+the different pretraining corpora. Isolating and exploring the effect of tokenization in a
+comparative inter-model setup is challenging because other factors, such as the different
+architecture of the language models, can affect the performance. We highlight that, for
+this reason, we incorporate BERT and CharacterBERT in the comparative study as these
+models have the same architecture and their only difference lies in the tokenization step.
+Acknowledgments
+This work is supported by the Research Foundation – Flanders (FWO). The authors
+are afﬁliated with Leuven.AI - KU Leuven institute for AI, B-3000, Leuven, Belgium.
+This preprint has not undergone any post-submission improvements or corrections. The
+10
+C. Theodoropoulos, M.F. Moens
+Version of Record of this contribution will be published in Lecture Notes in Computer
+Science (LNCS). The DOI will be mentioned when the publication is ﬁnished.
+References
+1. ´Acs, J., K´ad´ar,
+´A., Kornai, A.: Subword pooling makes a difference. In: Proceed-
+ings of the 16th Conference of the European Chapter of the Association for Compu-
+tational Linguistics: Main Volume. pp. 2284–2295. Association for Computational Lin-
+guistics, Online (Apr 2021). https://doi.org/10.18653/v1/2021.eacl-main.194, https://
+aclanthology.org/2021.eacl-main.194
+2. Alsentzer, E., Murphy, J., Boag, W., Weng, W.H., Jindi, D., Naumann, T., McDermott,
+M.: Publicly available clinical BERT embeddings. In: Proceedings of the 2nd Clinical
+Natural Language Processing Workshop. pp. 72–78. Association for Computational Lin-
+guistics, Minneapolis, Minnesota, USA (Jun 2019). https://doi.org/10.18653/v1/W19-1909,
+https://aclanthology.org/W19-1909
+3. Antoun, W., Baly, F., Hajj, H.: AraBERT: Transformer-based model for Arabic language
+understanding. In: Proceedings of the 4th Workshop on Open-Source Arabic Corpora
+and Processing Tools, with a Shared Task on Offensive Language Detection. pp. 9–15.
+European Language Resource Association, Marseille, France (May 2020), https://
+aclanthology.org/2020.osact-1.2
+4. Bekoulis, G., Deleu, J., Demeester, T., Develder, C.: Joint entity recognition and relation
+extraction as a multi-head selection problem. Expert Systems with Applications 114, 34–45
+(2018). https://doi.org/https://doi.org/10.1016/j.eswa.2018.07.032
+5. Clark, J.H., Garrette, D., Turc, I., Wieting, J.: Canine: Pre-training an efﬁcient
+tokenization-free encoder for language representation. arXiv preprint arXiv:2103.06874
+arXiv:2103.06874 (Mar 2021)
+6. Clark, J.H., Garrette, D., Turc, I., Wieting, J.: Canine: Pre-training an efﬁcient tokenization-
+free encoder for language representation. Transactions of the Association for Computational
+Linguistics 10, 73–91 (2022), https://aclanthology.org/2022.tacl-1.5
+7. Devlin, J., Chang, M.W., Lee, K., Toutanova, K.: BERT: Pre-training of deep bidi-
+rectional transformers for language understanding. In: Proceedings of the 2019 Con-
+ference of the North American Chapter of the Association for Computational Linguis-
+tics: Human Language Technologies, Volume 1 (Long and Short Papers). pp. 4171–
+4186. Association for Computational Linguistics, Minneapolis, Minnesota (Jun 2019).
+https://doi.org/10.18653/v1/N19-1423, https://aclanthology.org/N19-1423
+8. Eberts, M., Ulges, A.: Span-based joint entity and relation extraction with trans-
+former pre-training. In: ECAI 2020, pp. 2006–2013. IOS Press, Online (2020).
+https://doi.org/10.3233/FAIA200321
+9. El Boukkouri, H., Ferret, O., Lavergne, T., Noji, H., Zweigenbaum, P., Tsujii, J.: Char-
+acterBERT: Reconciling ELMo and BERT for word-level open-vocabulary representa-
+tions from characters. In: Proceedings of the 28th International Conference on Computa-
+tional Linguistics. pp. 6903–6915. International Committee on Computational Linguistics,
+Barcelona, Spain (Online) (Dec 2020). https://doi.org/10.18653/v1/2020.coling-main.609,
+https://aclanthology.org/2020.coling-main.609
+10. Florian, R., Pitrelli, J., Roukos, S., Zitouni, I.: Improving mention detection robustness to
+noisy input. In: Proceedings of the 2010 Conference on Empirical Methods in Natural Lan-
+guage Processing. pp. 335–345. Association for Computational Linguistics, Cambridge, MA
+(Oct 2010), https://aclanthology.org/D10-1033
+An Information Extraction Study: Take In Mind the Tokenization!
+11
+11. Gurulingappa, H., Rajput, A.M., Roberts, A., Fluck, J., Hofmann-Apitius, M., Toldo, L.:
+Development of a benchmark corpus to support the automatic extraction of drug-related
+adverse effects from medical case reports. Journal of Biomedical Informatics 45(5), 885–
+892 (2012). https://doi.org/https://doi.org/10.1016/j.jbi.2012.04.008
+12. Itzhak, I., Levy, O.: Models in a spelling bee: Language models implicitly learn the character
+composition of tokens. arXiv preprint arXiv:2108.11193 arXiv:2108.11193 (Aug 2021)
+13. Johnson,
+A.E.,
+Pollard,
+T.J.,
+Shen,
+L.,
+Lehman,
+L.w.H.,
+Feng,
+M.,
+Ghas-
+semi,
+M.,
+Moody,
+B.,
+Szolovits,
+P.,
+Anthony
+Celi,
+L.,
+Mark,
+R.G.:
+Mimic-
+iii, a freely accessible critical care database. Scientiﬁc data 3(1),
+1–9 (2016).
+https://doi.org/https://doi.org/10.1038/sdata.2016.35
+14. Kingma, D.P., Ba, J.: Adam: A method for stochastic optimization. arXiv preprint
+arXiv:1412.6980 arXiv:1412.6980 (Dec 2014)
+15. Kudo, T., Richardson, J.: Sentencepiece: A simple and language independent subword
+tokenizer and detokenizer for neural text processing. In: Proceedings of the 2018 Con-
+ference on Empirical Methods in Natural Language Processing: System Demonstrations.
+pp. 66–71. Association for Computational Linguistics, Brussels, Belgium (Nov 2018).
+https://doi.org/10.18653/v1/D18-2012, https://aclanthology.org/D18-2012
+16. Lan, Z., Chen, M., Goodman, S., Gimpel, K., Sharma, P., Soricut, R.: Albert: A lite bert
+for self-supervised learning of language representations. arXiv preprint arXiv:1909.11942
+arXiv:1909.11942 (Sep 2019)
+17. Lee, J., Yoon, W., Kim, S., Kim, D., Kim, S., So, C.H., Kang, J.: Biobert: a pre-trained
+biomedical language representation model for biomedical text mining. Bioinformatics (Ox-
+ford, England) 36(4), 1234–1240 (2020). https://doi.org/10.1093/bioinformatics/btz682
+18. Li, F., Zhang, M., Fu, G., Ji, D.: A neural joint model for entity and relation extraction from
+biomedical text. BMC bioinformatics 18(1), 1–11 (2017). https://doi.org/10.1186/s12859-
+017-1609-9
+19. Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., Levy, O., Lewis, M., Zettlemoyer,
+L., Stoyanov, V.: Roberta: A robustly optimized bert pretraining approach. arXiv preprint
+arXiv:1907.11692 arXiv:1907.11692 (Aug 2019)
+20. Mitchell, T.M.: The need for biases in learning generalizations. Department of Computer
+Science, Laboratory for Computer Science Research, Rutgers Univ. (1980)
+21. Nadeau, D., Sekine, S.: A survey of named entity recognition and classiﬁcation. Lingvisticae
+Investigationes 30(1), 3–26 (2007). https://doi.org/https://doi.org/10.1075/li.30.1.03nad
+22. Peters, M.E., Neumann, M., Iyyer, M., Gardner, M., Clark, C., Lee, K., Zettlemoyer, L.:
+Deep contextualized word representations. In: Proceedings of the 2018 Conference of the
+North American Chapter of the Association for Computational Linguistics: Human Lan-
+guage Technologies, Volume 1 (Long Papers). pp. 2227–2237. Association for Compu-
+tational Linguistics, New Orleans, Louisiana (Jun 2018). https://doi.org/10.18653/v1/N18-
+1202, https://aclanthology.org/N18-1202
+23. Plank, B., Moschitti, A.: Embedding semantic similarity in tree kernels for domain adap-
+tation of relation extraction. In: Proceedings of the 51st Annual Meeting of the Associa-
+tion for Computational Linguistics (Volume 1: Long Papers). pp. 1498–1507. Association
+for Computational Linguistics, Soﬁa, Bulgaria (Aug 2013), https://aclanthology.
+org/P13-1147
+24. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al.: Language models
+are unsupervised multitask learners. OpenAI blog 1(8), 9 (2019)
+25. Rumelhart,
+D.E.,
+Hinton,
+G.E.,
+Williams,
+R.J.:
+Learning
+representa-
+tions
+by
+back-propagating
+errors.
+nature
+323(6088),
+533–536
+(Oct
+1986).
+https://doi.org/https://doi.org/10.1038/323533a0
+12
+C. Theodoropoulos, M.F. Moens
+26. Sasaki, S., Sun, S., Schamoni, S., Duh, K., Inui, K.: Cross-lingual learning-to-rank with
+shared representations. In: Proceedings of the 2018 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technolo-
+gies, Volume 2 (Short Papers). pp. 458–463. Association for Computational Linguistics,
+New Orleans, Louisiana (Jun 2018). https://doi.org/10.18653/v1/N18-2073, https://
+aclanthology.org/N18-2073
+27. Sennrich, R., Haddow, B., Birch, A.: Neural machine translation of rare words with sub-
+word units. In: Proceedings of the 54th Annual Meeting of the Association for Compu-
+tational Linguistics (Volume 1: Long Papers). pp. 1715–1725. Association for Compu-
+tational Linguistics, Berlin, Germany (Aug 2016). https://doi.org/10.18653/v1/P16-1162,
+https://aclanthology.org/P16-1162
+28. Sun, A., Grishman, R., Sekine, S.: Semi-supervised relation extraction with large-scale word
+clustering. In: Proceedings of the 49th Annual Meeting of the Association for Computa-
+tional Linguistics: Human Language Technologies. pp. 521–529. Association for Computa-
+tional Linguistics, Portland, Oregon, USA (Jun 2011), https://aclanthology.org/
+P11-1053
+29. Taill´e, B., Guigue, V., Scoutheeten, G., Gallinari, P.: Let’s stop error propagation in the
+end-to-end relation extraction literature! In: Proceedings of the 2020 Conference on Em-
+pirical Methods in Natural Language Processing (EMNLP 2020). pp. 3689–3701. Asso-
+ciation for Computational Linguistics, Online (2020), https://www.aclweb.org/
+anthology/2020.emnlp-main.301.pdf
+30. Tay, Y., Tran, V.Q., Ruder, S., Gupta, J., Chung, H.W., Bahri, D., Qin, Z., Baumgartner,
+S., Yu, C., Metzler, D.: Charformer: Fast character transformers via gradient-based subword
+tokenization. arXiv preprint arXiv:2106.12672 arXiv:2106.12672 (Jun 2021)
+31. Theodoropoulos, C., Henderson, J., Coman, A.C., Moens, M.F.: Imposing relation struc-
+ture in language-model embeddings using contrastive learning. In: Proceedings of the 25th
+Conference on Computational Natural Language Learning. pp. 337–348. Association for
+Computational Linguistics, Online (Nov 2021). https://doi.org/10.18653/v1/2021.conll-1.27,
+https://aclanthology.org/2021.conll-1.27
+32. Tiedemann, J., Thottingal, S., et al.: Opus-mt–building open translation services for the
+world. In: Proceedings of the 22nd Annual Conference of the European Association for
+Machine Translation. European Association for Machine Translation (2020), https://
+aclanthology.org/2020.eamt-1.61
+33. Wang, J., Lu, W.: Two are better than one: Joint entity and relation extraction with table-
+sequence encoders. In: Proceedings of the 2020 Conference on Empirical Methods in Nat-
+ural Language Processing (EMNLP). pp. 1706–1721. Association for Computational Lin-
+guistics, Online (Nov 2020). https://doi.org/10.18653/v1/2020.emnlp-main.133, https:
+//aclanthology.org/2020.emnlp-main.133
+34. Wolf, T., Debut, L., Sanh, V., Chaumond, J., Delangue, C., Moi, A., Cistac, P., Rault, T.,
+Louf, R., Funtowicz, M., Davison, J., Shleifer, S., von Platen, P., Ma, C., Jernite, Y., Plu, J.,
+Xu, C., Le Scao, T., Gugger, S., Drame, M., Lhoest, Q., Rush, A.: Transformers: State-of-
+the-art natural language processing. In: Proceedings of the 2020 Conference on Empirical
+Methods in Natural Language Processing: System Demonstrations. pp. 38–45. Association
+for Computational Linguistics, Online (Oct 2020). https://doi.org/10.18653/v1/2020.emnlp-
+demos.6, https://aclanthology.org/2020.emnlp-demos.6
+35. Wu, Y., Schuster, M., Chen, Z., Le, Q.V., Norouzi, M., Macherey, W., Krikun, M., Cao,
+Y., Gao, Q., Macherey, K., et al.: Google’s neural machine translation system: Bridg-
+ing the gap between human and machine translation. arXiv preprint arXiv:1609.08144
+arXiv:1609.08144 (Sep 2016)
+An Information Extraction Study: Take In Mind the Tokenization!
+13
+36. Xue, L., Barua, A., Constant, N., Al-Rfou, R., Narang, S., Kale, M., Roberts, A., Raf-
+fel, C.: ByT5: Towards a token-free future with pre-trained byte-to-byte models. Trans-
+actions of the Association for Computational Linguistics 10, 291–306 (2022), https:
+//aclanthology.org/2022.tacl-1.17
+37. Yan, Z., Zhang, C., Fu, J., Zhang, Q., Wei, Z.: A partition ﬁlter network for joint entity and
+relation extraction. In: Proceedings of the 2021 Conference on Empirical Methods in Nat-
+ural Language Processing. pp. 185–197. Association for Computational Linguistics, Online
+and Punta Cana, Dominican Republic (Nov 2021). https://doi.org/10.18653/v1/2021.emnlp-
+main.17, https://aclanthology.org/2021.emnlp-main.17
+38. Zhang, H., Tan, L.: Textual representations for crosslingual information retrieval. In: Pro-
+ceedings of The 4th Workshop on e-Commerce and NLP. pp. 116–122 (2021), https:
+//aclanthology.org/2021.ecnlp-1.14.pdf
+39. Zhao, S., Hu, M., Cai, Z., Liu, F.: Modeling dense cross-modal interactions for
+joint entity-relation extraction. In: Bessiere, C. (ed.) Proceedings of the Twenty-
+Ninth International Joint Conference on Artiﬁcial Intelligence, IJCAI-20. pp. 4032–
+4038. International Joint Conferences on Artiﬁcial Intelligence Organization, Online
+(Jul 2020). https://doi.org/10.24963/ijcai.2020/558, https://doi.org/10.24963/
+ijcai.2020/558

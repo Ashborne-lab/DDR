@@ -1,0 +1,40 @@
+PATIENT MEDICAL REPORT
+Date: October 24, 2025
+Time: 14:30
+
+CHIEF COMPLAINTS:
+Patient presents with severe migraine headache persisting for 3 days, accompanied by nausea and sensitivity to light. Reports difficulty sleeping and mild anxiety.
+
+CURRENT SYMPTOMS:
+- Intense throbbing headache, primarily on left side
+- Persistent nausea, especially in the morning
+- Photophobia (light sensitivity)
+- Fatigue and weakness
+- Mild dizziness when standing
+- Decreased appetite
+- Anxiety symptoms
+- Mild skin rash on arms
+
+RECENT MEDICAL HISTORY:
+Patient started experiencing these symptoms shortly after beginning new blood pressure medication. The skin rash developed approximately 2 days ago. Patient also notes taking over-the-counter sleep aids occasionally.
+
+ADDITIONAL OBSERVATIONS:
+- Blood Pressure: 135/85
+- Temperature: 37.2°C
+- Patient appears fatigued and shows signs of discomfort
+- Rash appears as small, red, itchy patches
+
+CURRENT MEDICATIONS:
+- Recently prescribed blood pressure medication (started 1 week ago)
+- OTC sleep medication (occasional use)
+- Multivitamin supplements
+
+ALLERGIES:
+- No known drug allergies
+- Seasonal allergies (pollen)
+
+NOTES:
+Patient's symptoms suggest possible medication side effects. The temporal relationship between starting new blood pressure medication and onset of symptoms is noteworthy. Consider evaluation of current medication regimen.
+
+FOLLOW-UP:
+Recommended review of current medications and possible adjustment of blood pressure medication dosage or alternative treatment options.

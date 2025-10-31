@@ -1,0 +1,2108 @@
+Findings of the Association for Computational Linguistics: EMNLP 2021, pages 714–729
+November 7–11, 2021. ©2021 Association for Computational Linguistics
+714
+Learn Continually, Generalize Rapidly:
+Lifelong Knowledge Accumulation for Few-shot Learning
+Xisen Jin§
+Bill Yuchen Lin§
+Mohammad Rostami†
+Xiang Ren§
+§University of Southern California, †Information Sciences Institute
+{xisenjin, yuchen.lin, xiangren}@usc.edu
+{mrostami}@isi.edu
+Abstract
+The ability to continuously expand knowledge
+over time and utilize it to rapidly generalize to
+new tasks is a key feature of human linguis-
+tic intelligence. Existing models that pursue
+rapid generalization to new tasks (e.g., few-
+shot learning methods), however, are mostly
+trained in a single shot on ﬁxed datasets,
+unable to dynamically expand their knowl-
+edge; while continual learning algorithms are
+not speciﬁcally designed for rapid generaliza-
+tion. We present a new learning setup, Con-
+tinual Learning of Few-Shot Learners (CLIF),
+to address the challenges of both learning
+settings in a uniﬁed setup.
+CLIF assumes
+a model learns from a sequence of diverse
+NLP tasks arriving sequentially, accumulating
+knowledge for improved generalization to new
+tasks, while also retaining performance on the
+tasks learned earlier. We examine how the gen-
+eralization ability is affected in the continual
+learning setup, evaluate a number of continual
+learning algorithms, and propose a novel regu-
+larized adapter generation approach. We ﬁnd
+that catastrophic forgetting affects generaliza-
+tion ability to a lesser degree than performance
+on seen tasks; while continual learning algo-
+rithms can still bring considerable beneﬁt to
+the generalization ability1.
+1
+Introduction
+The ability to recall acquired knowledge for learn-
+ing new tasks quickly and efﬁciently over time has
+been seen as a crucial metric of general linguistic
+intelligence (Yogatama et al., 2019). Progress on
+this research problem has led to remarkable im-
+provements in recent works on few-shot learning
+(Brown et al., 2020; Gao et al., 2021). However,
+these methods have primarily focused on learning
+from a static set of tasks (datasets) in an ofﬂine man-
+ner, without dynamically expanding the acquired
+1Code and data are publicly available at https://
+github.com/INK-USC/CLIF
+Task 1
+Task 2
+Task 3
+…
+Predicting on 
+seen tasks
+Adapting to
+new tasks 
+Training
+Evaluation
+CoLA
+SST-2
+MRPC
+e.g., GLUE tasks
+Without adaptation
+With few-shot adaption
+Figure 1: Overview of the Training and Evaluation
+setup in CLIF. The model learns over a number of
+training tasks sequentially and is evaluated over all the
+seen tasks. We also evaluate its ability to adapt to new
+tasks with only a small number of labeled examples.
+knowledge over time. This training scheme is in
+contrast with the way humans process natural lan-
+guage (Chomsky, 2002; Montague, 1970): humans
+are able to process novel meanings by retaining
+past knowledge, combining/decomposing chunks
+of language into prior learned language compo-
+nents, and avoid learning from scratch.
+Motivated by this observation, we study whether
+NLP models could accumulate generalizable
+knowledge continuously over a sequence of tasks
+and learn to generalize to new tasks rapidly (i.e.,
+with few examples). This problem has not been
+investigated in the existing works — a related line
+of efforts that look to learn from sequentially ar-
+riving tasks, known as continual learning (CL) or
+lifelong learning (Robins, 1995; Sun et al., 2020;
+de Masson d’Autume et al., 2019), mainly focus on
+retaining the performance on seen tasks when the
+model is continuously updated on new tasks (i.e.,
+to overcome the catastrophic forgetting issue).
+To study this ability, we propose the Continual
+LearnIng of Few-shot Learners (CLIF) setup (il-
+lustrated in Figure 1) to simulate the challenge:
+In CLIF, the model learns over a sequence of NLP
+tasks (arriving one by one; without revisiting), and
+then evaluated in terms of (i) generalization to new
+715
+(few-shot learning) tasks; and (ii) preserving its
+performance on solving seen tasks. We train and
+evaluate over a diverse set of NLP tasks, spanning
+over entity typing, sentiment analysis, natural lan-
+guage inference, and other classiﬁcation tasks.
+With the CLIF setup, we conduct a series of
+experiments on existing models, in order to under-
+stand the relationship between continuous knowl-
+edge accumulation and few-shot generalization.
+Our ﬁrst analysis is to understand how the gen-
+eralization ability evolves during continual train-
+ing, and whether catastrophic forgetting affects the
+acquisition of generalization ability. We ﬁnd a neg-
+ative effect of catastrophic forgetting on the gener-
+alization ability, and a stronger negative effect on
+the performance over the seen tasks.
+In a follow-up analysis, we ﬁnd most exist-
+ing CL methods hardly beneﬁt models’ general-
+ization ability, even they are shown to alleviate
+catastrophic forgetting. This implies some non-
+trivial challenges for accumulating knowledge that
+can help model generalization.
+Inspired by re-
+cent research on Hypernetworks for few-shot learn-
+ing (Requeima et al., 2019) and continual learn-
+ing approach using Hypernetworks (von Oswald
+et al., 2020), we propose Bi-level Hypernetworks
+for Adapters with Regularization to address chal-
+lenges of the CLIF. We evaluate these approaches
+extensively by varying the number of training ex-
+amples and the orders of tasks at training.
+To summarize, the main contribution of this
+work is threefold (1) we propose CLIF setup, its
+data streams and protocols to comprehensively eval-
+uate lifelong knowledge accumulation in NLP, and
+(2) we compare existing algorithms to demonstrate
+weaknesses of these algorithms (3) and propose
+Bi-level Hypernetworks for Adapters with Regular-
+ization as a solution to inspire future works.
+2
+Problem Formulation
+2.1
+The CLIF Problem
+We assume there is an NLP model f trained con-
+tinually on different tasks over time (i.e., continual
+learning), and then rapidly generalizes to many un-
+seen tasks with few-shot examples (i.e., few-shot
+adaptation). In the continual learning stage, the
+model encounters an ordered list of Nu upstream
+tasks: [T 1
+u , . . . , T Nu
+u
+], where each task has its own
+training and test sets. To test the few-shot learning
+ability of the sequentially trained model f, we then
+adapt it on a set of Nv few-shot tasks individually
+Task 1
+Task 2
+Task 3
+Task 4
+…
+Evaluate ②
+Evaluate ①
+Evaluate ③
+Few-shot 
+Task 1
+Few-shot 
+Task 2
+Few-shot 
+Task K
+①- few shot performance ②- instant performance ③- final performance
+…
+Figure 2: Evaluations setups in CLIF. (1) and (2)
+measure generalization ability to new tasks; while (3)
+indicate forgetting on seen tasks.
+{T i
+v }Nv
+i=1, where only a few training examples are
+available for each unseen task. We name this learn-
+ing setting as CLIF, which stands for continual
+learning for few-shot adaptation. In addition to the
+traditional objective in CL to preserve performance
+on seen tasks, in CLIF it is also crucial to retain
+generalizable knowledge to achieve better few-shot
+learning performance at the end of training.
+Evaluation Protocol
+As illustrated in Figure 2,
+there are three major aspects for evaluating a
+method to the CLIF setting: few-shot performance,
+ﬁnal performance, and instant performance.
+1) Few-shot Performance. First, we evaluate the
+continually trained model f on a set of unseen
+tasks, by ﬁne-tuning it for each task T i
+v individ-
+ually with a few annotated examples when the
+training over upstream tasks T 1
+u ..T Nu
+u
+ends. Thus,
+we can assess the few-shot generalization ability.
+We note the few-shot accuracy for a task T i
+v as
+si
+FS = F(Yi
+v, ˆYi
+v), where ˆYi
+v is the predictions over
+the test examples of task T i
+v , Yi
+v is the set of ground
+truth labels, and F is the metric function (e.g., ac-
+curacy). We report sFS averaged over all few-shot
+tasks, i.e., sFS =
+1
+Nv
+PNv
+i=1 si
+FS. We also compute a
+relative improvement ∆FS = sFS−s′
+FS
+s′
+FS
+over the per-
+formance s′
+FS of the models separately trained on
+each few-shot task.
+2) Instant Performance. We evaluate the perfor-
+mance of an upstream task T i
+u right after the model
+f ﬁnishes the learning on it. We note the set of
+model prediction on the test set of task T i
+u right
+after the model f learns the task j as ˆYi,j
+u . The
+instant performance over task T i
+u is deﬁned as
+si
+inst. = F(Yi
+u, ˆYi,i
+u ). For example, we evaluate
+the performance of f on T 2
+u after the model f is
+trained on the data of T 1
+u and T 2
+u , before further
+train it on T 3
+u . The performance of f on T 2
+u now
+can thus tell us how well the model transfers its
+knowledge from learning T 1
+u to learn T 2
+u — using
+716
+Learning Stage
+Tasks
+# Tasks
+CLIF-26
+Continual (Tu)
+GLUE (Wang et al., 2019a)
+Nu =9
+Few-shot (Tv)
+DivFSL (Bansal et al., 2020)
+Nv =17
+CLIF-55
+Continual (Tu)
+SuperGLUE-RTE,
+TweetEval-
+Sentiment, Scicite, GLUE-MRPC,
+Scitail, KILT-Fever, ...
+Nu =45
+Few-shot (Tv)
+SuperGLUE-CB,
+Dbpedia-14,
+Wiki-QA,
+emo,
+Yelp-Polarity,
+ethos-religion, tab-fact, ﬁnancial-
+phrasebank, ANLI, ethos-race
+Nv =10
+Table 1:
+Overview of datasets employed for up-
+stream continual training and few-shot learning.
+We include the full list of tasks in Appendix A.
+the performance when f is trained only on T 2
+u as
+a reference. We compute average instant perfor-
+mance of all upstream tasks, sinst. =
+1
+Nu
+PNu
+i=1 si
+inst.
+We additionally compute a relative improvement
+∆Inst. =
+sinst.−s′
+inst.
+s′
+inst.
+over the performance s′
+inst. of
+models separately trained on each upstream task to
+indicate beneﬁt of upstream learning.
+3) Final Performance. We also evaluate the perfor-
+mance of f at the end of the continual learning over
+upstream tasks to know how much the model f for-
+gets the knowledge about the task after it learns to
+solve more tasks. The ﬁnal accuracy si
+ﬁnal of a task
+T i
+u is deﬁned as F(Yi
+u, ˆYi,Nu
+u
+). Similarly, we report
+the averaged ﬁnal accuracy over all tasks, noted as
+sﬁnal =
+1
+Nu
+PNu
+i=1 si
+ﬁnal.. For a single model, the
+forgetting can be quantiﬁed as sinst −sﬁnal.
+Challenges
+The CLIF setting is particularly chal-
+lenging for existing few-shot learning methods.
+Most few-shot learning methods assume that the
+upstream training datasets for all tasks are always
+available and there is no temporal order for learning.
+Hence, the upstream tasks can be learned jointly in
+a multi-task learning setting. However, the CLIF
+problem follows a continual learning setup, where
+the tasks are visited sequentially without revisiting.
+Thus, methods relying on random sampling from a
+task distribution are not applicable.
+2.2
+Tasks and Data Streams
+To push the CLIF challenge to a more practical
+setup, we consider a diverse set of NLP tasks to
+perform CL and few shot learning. We consider
+two dataset combinations, referred to as CLIF-26
+and CLIF-55 tasks, summarized in Table 1. In the
+ﬁrst combination, following Bansal et al. (2020),
+we use the GLUE (Wang et al., 2019a) bench-
+mark as our upstream tasks for CL stage for ex-
+periments which consists of Nu = 9 tasks. We
+then evaluate the few-shot learning ability over
+Nv = 17 DivFSL (Bansal et al., 2020) tasks,
+spanning over diverse NLP tasks including sen-
+timent analysis, entity typing and natural language
+inference.
+In CLIF-55, we train and test the
+model over Nu = 45 and Nv = 10 tasks selected
+from Huggingface datasets library2. The selected
+datasets span over a broad family of NLP tasks,
+including natural language inference, emotion clas-
+siﬁcation, topic classiﬁcation, fact checking, hate
+speech detection, paraphrasing, and others.
+To adopt it for our learning setting, we specify
+an order on the tasks presented to the model for
+CLIF-26 and CLIF-55 (details in Appendix A).
+We also consider alternative task orders in our ex-
+periments. The model sequentially visits each task
+during training.
+We limit the number of train-
+ing examples in each GLUE task in CLIF-26 to
+10,000 to avoid overly imbalanced datasets. For
+CLIF-55, we use 90 examples per class for con-
+tinual learning. We use k = 16 examples per
+class in few-shot learning tasks for both CLIF-26
+and CLIF-55 if not speciﬁed, and include more
+setups of k in the experiments. As the test labels
+for GLUE are not publicly available, we report per-
+formance on validation sets. We convert regression
+tasks (e.g. STS-B) to binary classiﬁcation tasks by
+setting the threshold in the middle of the maximum
+and minimum regression scores.
+All examples are converted into sequence-
+to-sequence question-answering formats follow-
+ing (McCann et al., 2018) to allow a single model
+to solve all tasks. We consider exact match be-
+tween the generated answer span and the ground-
+truth span as a correct prediction. For both the
+upstream tasks and few-shot tasks in CLIF-26
+and CLIF-55, we use the prediction accuracy as
+the metric function.
+3
+Method
+This section presents baseline methods to set up
+the lower bounds for the CLIF problem, and ap-
+proaches to improve the performance. We view an
+approach by its base model and the learning algo-
+rithm. We ﬁrst introduce the base models in our
+study (Sec. 3.1); Then, we introduce a few existing
+methods for continual learning and continual meta-
+learning (Sec. 3.2). Finally, we present a novel
+2https://huggingface.co/datasets
+717
+regularized bi-level adapter generation framework
+to better address the CLIF problem (Sec. 3.3).
+3.1
+Base NLP Models
+BART and BART-Adapter.
+As we formulate
+the NLP tasks in the CLIF problem in a uniﬁed
+text-to-text format, we use pre-trained language
+models (LMs) as the architecture of the model
+f and ﬁne-tune the entire model during train-
+ing. We mainly use the BART-base (Lewis et al.,
+2020) model for our experiments. We also include
+Adapter training (Houlsby et al., 2019) as an alter-
+native to ﬁne-tuning the entire BART model. Here,
+adapters (Houlsby et al., 2019) are two-layer Multi-
+Layer Perceptrons (MLPs) plugged after each layer
+of BART. Given the output hℓat the ℓ-th layer of
+the transformer, the adapted output is computed as
+h′
+ℓ= hℓ+ fa
+ℓ(hℓ), where fa
+ℓis the adapter layer
+at layer ℓ. Only adapters are learned during train-
+ing, while the BART model is frozen. We note
+two approaches BART and BART-Adapter re-
+spectively.
+Hyper-Networks for Adapter Generation.
+In
+addition to BART and BART Adapter, we also
+use consider a HyperNetwork (HNet) architecture.
+The hypernetwork, noted as g, takes a task repre-
+sentation z as input and generates model parameter
+of another prediction model, noted as f to solve the
+task. In few-shot learning, z is usually computed as
+the average representation of training examples of
+the task, z =
+1
+|Di
+tr|
+P
+(xj,yj)∈Di
+tr fe(xj, yj), where
+Di
+tr is the training set of the task T i and fe in an
+encoder model. In our case, we use a BART model
+as fe and feed it the concatenation of x and label
+y in text format to obtain the task representation
+z. As the model allows ﬂexible control of model
+parameters with training examples, it is broadly ap-
+plied for few-shot learning (Requeima et al., 2019;
+Gidaris and Komodakis, 2018); besides, z can also
+be randomly initialized and end-to-end learned (Ha
+et al., 2017). As the parameter space of large-
+scale PTLMs like BART is huge, following (Ye
+and Ren, 2021), we generate model parameters
+only for adapters.
+In summary, we consider BART ﬁne-tuning,
+BART-Adapter learning and HNet for adapter
+generalization as three base NLP models. In sec-
+tion 3.2, we introduce algorithms to learn these
+models in the CLIF setting.
+3.2
+Baseline Learning Algorithms
+Single Task Learning
+To understand the refer-
+ence performance of a base model on an upstream
+task without any knowledge transfer, we apply the
+single task learning (STL) method, which trains
+and tests a model f on the dataset of each task in
+isolation. In this case, we ignore the sequential
+nature of the CLIF problem so we can use this STL
+performance to assess the effectiveness of different
+continual methods (introduced below). Ideally, a
+valid CL algorithm should have a better few-shot
+accuracy than STL results, meaning that it accu-
+mulates knowledge and effectively transfer it for
+learning. Similarly, to know the reference perfor-
+mance of the few-shot tasks, we learn a model f
+for each few-shot task on the given examples, with-
+out any upstream training, so that we can use such
+performance to assess how well a CLIF method
+improves the generalization ability.
+Continual Learning Algorithms
+As a straight-
+forward baseline method, we use Vanilla to
+denote simply training the model f sequentially
+on the upstream tasks. Speciﬁcally, it trains the
+model f on T i
+u until its performance converges
+and then continually train f on the data of T i+1
+u
+.
+Note that the access of the data on previous tasks
+is not allowed in CL. We also consider CL al-
+gorithms such as EWC (Kirkpatrick et al., 2017),
+MbPA++ (de Masson d’Autume et al., 2019) and
+meta-MbPA (Wang et al., 2020) in our experi-
+ments. We use an online variant of EWC (Schwarz
+et al., 2018). EWC regularizes the change of im-
+portant model parameters during training. The
+MbPA++ method performs test-time adaptation
+over a few training examples stored in the memory.
+The meta-MbPA method includes a meta-learning
+objective to adapt fast.
+As a comparator that does not suffer from for-
+getting, we also report the results of multi-task
+learning over upstream tasks (MTL) for reference.
+Hyper-Networks for CL.
+von Oswald et al.
+(2020) proposed a hypernetwork-based continual
+learning algorithm, where the high-level idea of
+mitigating catastrophic forgetting is to penalize the
+hypernetwork for the change of generated model
+weights for previous tasks when it learns a new task.
+While the original work generates entire parameters
+of a model, we adapt it to PTLMs by generating
+the weights of adapters only. We note the approach
+as HNet-Reg.
+718
+Speciﬁcally, when the model has just ﬁnished
+learning the task T i−1
+u
+and right before learning
+the task T i
+u in the continual learning stage, we com-
+pute the adapter weights generated by our current
+hypernetwork for all prior tasks T 1
+u ..T i−1
+u
+, noted
+as {ˆθi−1
+1
+, ˆθi−1
+2
+, . . . , ˆθi−1
+i−1} — where the generation
+is controlled by applying the hypernetwork h on
+the stored task representations of previous tasks
+1..i −1, noted as M = {z1
+h, . . . , zi−1
+h
+}. Here,
+the task representation zi for task T i
+u is randomly
+initialized before learning the task and optimized
+jointly while learning the task. Then, in each step
+of learning T i
+u, we randomly sample a prior task
+T j
+u (j < i) to regularize the hypernetwork learning.
+It penalizes the ℓ2 distance between the adapter
+weights generated at the current step θj and the
+pre-computed one, i.e., ||θj −ˆθi−1
+j
+||2
+2. Therefore,
+we avoid the hypernetwork g changes its output for
+a prior task too much during the continual learning
+stage, so that the knowledge accumulation is better
+guaranteed for the learned model.
+Limitations.
+EWC and HNET-Reg are not well-
+designed for the CLIF problem, which addition-
+ally tries to improve the few-shot generalization on
+unseen tasks after continual learning. While the
+test-time adaptation in MbPA and meta-MbPA may
+beneﬁt few-shot learning, such ability is not studied
+in these works. Besides, as these two algorithms
+store real examples of previous training tasks, it
+is not applicable in privacy sensitive applications
+where data from earlier task is no longer accessible,
+which is a typical scenario in continual learning.
+3.3
+Our Extension: Bi-level Hypernetworks
+for Adapters with Regularization
+Inspired by hypernetwork approaches for few-shot
+learning and continual learning, we extend the
+hypernetwork-based CL methods for CLIF. We
+present a novel method, Bi-level Hypernetwork
+for Adapters with Regularization (BiHNet+Reg),
+which learns to use the bi-level task representa-
+tions to generate adapter weights for learning a
+fast adaptive model over a sequence of tasks, while
+mitigating the forgetting effect via regularization.
+As shown in Figure 3, the proposed method con-
+sists of three components: (1) a context predic-
+tor to generate bi-level task representations (i.e.,
+high-resource and few-shot representations) from
+training examples, (2) a hypernetwork to generate
+weights of adapters given the task representations,
+and (3) a regularization term to discourage weight
+𝑇!"
+𝑇!#
+𝑓𝑥→𝑦
+…
+𝑇!"
+𝑇!#
+𝑓! 𝑥→𝑦
+…
+𝑧$
+"
+𝑔𝑧!, 𝑧"
+→𝜃!, 𝜃"
+Bi-Level Task Rep. 
+(high-res./few-shot)
+𝑧%
+"
+𝑧$
+#
+𝑧%
+#
+𝑀={𝑧!
+#, 𝑧!
+$,…}
++ Regularization
+𝑇&
+𝑧%
+Vanilla CL
+𝑇&
+Upstream continual-learning tasks 
+𝑇!
+"
+𝑇#
+A few-shot, unseen task to adapt
+𝑓𝑥→𝑦
+𝑇&
+𝑇!"
+𝑇!#
+…
+replay
+Memory
+(stored examples)
+retrieve
+Memory-Based CL (MbPA++)
+HyperCL (Our BiHNet+Reg)
+Adapter Generation
+Figure 3:
+A comparison between different typi-
+cal continual methods to the CLIF problem. The
+Vanilla CL method simply trains the model on a se-
+quence of tasks Tu. Memory-based methods such as
+MbPA++ (de Masson d’Autume et al., 2019) store
+a small set of examples of prior tasks and then re-
+play them during learning. Our BiHNet+Reg method
+uses a hypernetwork to generate the weights of model
+adapters according to bi-level (high-resource and few-
+shot) task representations.
+changes of seen tasks to avoid forgetting follow-
+ing (von Oswald et al., 2020). We discuss each
+individual component below.
+Context Predictor.
+We propose to generate two
+task representations for each task t to model it
+in the high-resource and few-shot cases respec-
+tively, denoted as zt
+h and zt
+f, with a frozen BART
+model.
+The high-resource representations are
+used to encourage the knowledge transfer dur-
+ing continual learning; the few-shot task repre-
+sentations help us mimic the few-shot tasks in
+the few-shot learning stage for better generaliza-
+tion, similar to meta-learning. Speciﬁcally, we
+use an LM (e.g., BART) as the context represen-
+tation model R for encoding an example (x, y):
+we feed x and y to the encoder and the decoder
+of the model R, and use the latent representation
+from this last-layer activation. The high-resource
+task representation is then computed as the av-
+erage of all examples’ representations in task t,
+noted as zt
+h =
+1
+|Dt|
+P
+(xi,yi)∈Dt R(xi, yi); while
+the few-shot task representation zt
+f uses the aver-
+age of a limited number (say, K) of sampled exam-
+ples zt
+f =
+1
+K
+P
+(xi,yi)∈Γ(Dt,K) R(xi, yi), where
+Γ(Dt, K) means sampled K examples in Dt.
+Note that the high-resource representations of
+upstream tasks are stored in a memory module over
+time during the continual learning, M = {zt
+h|t ∈
+{T i
+u}Nu
+i=1} . In the few-shot learning stage, we set
+K as the number of given examples, so the zh =
+719
+zf for any tasks.
+Adapter-Wise Hypernetworks.
+Following the
+practice introduced in Sec. 3.1, we use a hypernet-
+work g to generate weights of adapters between the
+layers of the frozen BART model f. During train-
+ing, we use high-resource and sampled task repre-
+sentations zt
+h and zt
+f to generate adapter weights
+separately, noted as θh
+t and θf
+t . We optimize the
+prediction loss with both adapters.
+Regularization.
+Given that the HyperNetwork is
+the only trainable part in our model, we impose
+regularization on generated adapters to mitigate
+forgetting following HNet+Reg introduced in 3.2.
+While our BiHNet is trained to generate adapters
+from both high-resource and low-resource task rep-
+resentations, we ﬁnd it sufﬁcient to only store and
+regularize outputs from high-resource task repre-
+sentations.
+Summary and Highlights
+To sum up, our pro-
+posed method ﬁrst generates bi-level task repre-
+sentations for training adapter-wise hypernetworks
+with a regularization term dedicated for avoiding
+forgetting over time. Unlike replay-memory based
+CL approaches (e.g., MbPA (de Masson d’Autume
+et al., 2019)), our method does not store any real
+training examples. Instead, it uses task representa-
+tions for storing the memory, and thus allows the
+method to be applied in privacy-sensitive scenarios.
+4
+Results and Analysis
+We address our two major research questions in this
+section: (1) how models accumulate generalizable
+knowledge over time in a CL setup compared to
+ofﬂine setups given potential catastrophic forget-
+ting, and (2) whether continual learning approaches
+reduce catastrophic forgetting of both seen-task per-
+formance and generalizable knowledge. We experi-
+ment with various combinations of model architec-
+tures in 3.1 and learning algorithms 3.2. We note a
+method by its model architecture and CL algorithm
+applied, e.g., BART-Vanilla, BiHNet-EWC. We in-
+clude details of implementation in Appendix A.
+4.1
+Examining Knowledge Accumulation
+In this section, we present analysis of model’s abil-
+ity to acquire generalizable knowledge in ofﬂine
+and CL setup. We note BiHNet methods, which cor-
+respond to learning to generate adapters, should be
+compared with BiHNet-Single and BART-Adapter-
+Single, which are zero-knowledge baselines that
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+Seen GLUE Tasks
+52.5
+55.0
+57.5
+60.0
+Few-shot Acc.
+BiHNet-MTL
+BiHNet-Van
+BiHNet-Reg
+Figure 4: Few-shot learning performance on CLIF-26
+test tasks evaluated after each checkpoint of the model
+as the model sequentially visit upstream continual
+learning tasks.
+learns to generate or learn adapters from random
+initialization; similarly, BART methods should be
+compared with BART-Single. We focus on identi-
+fying challenges in CLIF, and leave discussions of
+methodology in the next subsection.
+Q1: Is knowledge from upstream tasks help-
+ful for a model’s few-shot generalization in of-
+ﬂine and continual learning setups?
+To answer
+the question, we compare the performance of
+MTL with learning separate models per few-shot
+task without learning upstream tasks.
+Table 2
+summarizes the results. On both CLIF-26 and
+CLIF-55 datasets, we see BiHNet-MTL could
+outperform zero-knowledge baselines in few-shot
+Acc. by 0.4% and 1.0%, which implies upstream
+tasks are helpful for few-shot generalization in stan-
+dard ofﬂine learning setups. For BART models, we
+notice BART-MTL improves over BART-Single
+on CLIF-55 datasets by 2.5%. However, we no-
+tice the opposite for CLIF-26. Given that the
+entire BART parameters are optimized in these
+models, we hypothesize that BART-MTL may have
+suffered from the forgetting of knowledge in the
+pre-trained BART model itself; while in adapter
+and BiHNet models, the BART model is frozen.
+Therefore, in the rest of the section, we focus more
+on BiHNet approaches.
+Q2: How does the model’s generalization abil-
+ity evolve over time?
+We focus on BiHNet-
+Vanilla and BART-Vanilla approaches and answer
+three sub-questions.
+Is the knowledge being monotonically accumu-
+lated over upstream tasks?
+In comparison to
+two zero-knowledge baselines, we notice BiHNet-
+Vanilla generally improves both Instant Accuracy
+(4.2% on CLIF-26 and 6.8% on CLIF-55) and
+Few-shot Accuracy (0.8% on CLIF-55), except
+3Note that, for single-task learning baselines, “Inst. Acc."
+column is used to refer to the averaged accuracy of individual
+models trained for each upstream task.
+720
+CLIF Dataset
+CLIF 26 (GLUE →DivFSL)
+CLIF 55 (Classiﬁcation)
+Methods ↓Metrics →
+Final Acc.
+Inst. Acc.
+F-S Acc.
+∆Inst.
+∆FS.
+Final Acc.
+Inst. Acc.
+F-S Acc.
+∆Inst.
+∆FS.
+Single Task-Learning
+BART-Single
+-
+79.39±0.7
+60.99±0.5
+-
+-
+-
+69.32±0.3
+68.49±0.7
+-
+-
+BART-Adapter-Single
+-
+74.98±0.7
+59.00±1.9
+-
+-
+-
+65.15±0.5
+65.70±0.8
+-
+-
+BiHNet-Single
+-
+76.67±0.4
+52.66±0.9
+-
+-
+-
+66.44±0.2
+64.57±1.1
+-
+-
+Continual learning
+BART-Vanilla
+19.73±0.2
+79.92±0.2
+58.96±3.2
+0.7%
+-3.3%
+49.46±1.7
+71.26±0.6
+66.08±0.6
+2.8%
+-3.5%
+BART-MbPA++
+59.52±1.0
+77.48±0.5
+56.26±1.4
+-2.4%
+-7.8%
+51.75±1.5
+67.18±1.0
+61.03±3.5
+-3.1%
+-10.9%
+BART-meta-MbPA
+55.69±0.9
+78.63±0.5
+57.88±1.0
+-0.9%
+-5.1%
+51.55±2.3
+67.92±1.2
+61.30±2.0
+-2.0%
+-10.5%
+BiHNet-Vanilla
+53.15±2.1
+79.90±0.2
+58.76±1.6
+4.2%
+-0.4%
+44.03±1.7
+70.97±1.6
+66.23±0.6
+6.8%
+0.8%
+BiHNet-EWC
+56.15±1.6
+78.73±0.3
+58.36±1.7
+2.7%
+-1.1%
+7.15±2.1
+72.43±1.0
+58.08±0.8
+9.0%
+-11.6%
+BiHNet-Reg
+77.22±1.1
+80.24±0.4
+60.09±1.1
+4.7%
+1.8%
+56.16±1.6
+73.04±0.6
+68.46±0.2
+9.9%
+4.2%
+Multi-Task Learning
+BART-MTL
+74.07±0.4
+-
+55.02±2.5
+-
+-9.7%
+63.78±0.0
+-
+70.20±0.4
+-
+2.5%
+BiHNet-MTL
+78.20±0.3
+-
+59.22±0.8
+-
+0.4%
+64.93±0.0
+-
+66.40±3.6
+-
+1.1%
+Majority
+55.22
+-
+47.04
+-
+-
+52.74
+-
+59.52
+-
+-
+Table 2: Final accuracy (Final Acc.) and instant accuracy (Instant Acc.) over upstream tasks and accuracy over
+few-shot learning tasks (Few-shot Acc.) on CLIF-26 and CLIF-55 tasks. We compute relative improvement
+of instant accuracy (∆Inst.) and few-shot accuracy (∆FS) over zero-knowledge baselines (the better one between
+BART-Adapter-Single and BiHNet-Single for BiHNet, and BART-Single for BART approaches).3
+in few-shot Acc. on CLIF-26 (-0.4%). The re-
+sults conﬁrm positive knowledge accumulation to
+some extent. In Figure 4, we plot the few-shot
+accuracy on CLIF-26 when the model sequen-
+tially visits each upstream training task. We note
+the few-shot accuracy of BiHNet-Vanilla does not
+monotonically increase, which implies interference
+between these upstream learning tasks or forgetting
+of generalizable knowledge.
+Does the order of the tasks matter? Figure 5
+present performance of methods under different
+orders of tasks on CLIF-26. We order the tasks
+by increasing and decreasing relevance to few-shot
+learning tasks, where the relevance is deﬁned as
+few shot accuracy when the model transfers from a
+single upstream tasks. The results show in both or-
+ders BiHNet-Vanilla is less competitive than BART-
+Adapter-Single. It implies that in continual learning
+the knowledge accumulation is less robust without
+CL algorithms.
+Q3: Does model’s catastrophic forgetting hin-
+der its knowledge accumulation?
+In Table 2,
+we see clear differences between ﬁnal accuracy
+of Vanilla and MTL approaches (by around 20
+points), which veriﬁes the catastrophic forgetting
+of seen-task performance when training examples
+are not i.i.d. However, we ﬁnd the gap between
+MTL and Vanilla training is close for few-shot
+learning performance, where BART-Vanilla is even
+better than BART-MTL, which can be a positive
+outcome of adequate forgetting for alleviating over-
+ﬁtting (Wang et al., 2020). It indicates the catas-
+Default
+Decreasing Relevance Increasing Relevance
+Task Order
+20
+30
+40
+50
+60
+70
+80
+Few-shot Acc.
+58.8
+57.0
+57.0
+60.1
+60.5
+56.0
+BiHNet-Vanilla
+BiHNet-Reg
+Figure 5: Few-shot learning performance of BiHNet-
+Vanilla and BiHNet-Reg on CLIF-26 tasks when
+training tasks are presented in different orders.
+trophic forgetting inﬂuence generalization ability
+to a lesser degree compared to its effect on seen-
+task performance.
+4.2
+Effect of Continual Learning Algorithms
+With the insights obtained for earlier questions, we
+now analyze whether baseline continual learning
+algorithms and the proposed approach help knowl-
+edge accumulation and improve models’ (few-shot)
+generalization ability.
+Q1:
+Do continual learning algorithms miti-
+gate catastrophic forgetting?
+From Table 2, we
+notice MbPA++, meta-MbPA, EWC clearly im-
+prove ﬁnal accuracy over BART-Vanilla or BiHNet-
+Vanilla on CLIF-26, which conﬁrm positive
+effects on mitigating catastrophic forgetting.
+On CLIF-55, which features much more training
+tasks and less examples per tasks, we ﬁnd baseline
+CL algorithms fail to improve ﬁnal accuracy. For
+memory-based approaches such as MbPA++ and
+meta-MbPA, it can because of signiﬁcant overﬁt-
+721
+CLIF 26
+CLIF 55
+Final Acc.
+Few-shot Acc.
+Final Acc.
+Few-shot Acc.
+BiHNet-Reg
+77.22±1.1
+60.09±1.1
+56.16±1.6
+68.46±0.2
+-Few-shot TR
+78.78±1.3
+59.01±0.6
+55.90±1.4
+68.13±0.5
++Train Embs
+65.50±1.5
+61.60±0.1
+44.87±0.1
+66.14±0.2
+Table 3: Ablation study on BiHNet-Reg: after remov-
+ing few-shot task-representations (-Short-term TR),
+and replacing context predictors with trainable embed-
+dings (+Train Embs.).
+ting to stored examples. In contrast, BiHNet-Reg
+is effective in both datasets.
+Q2:
+Does
+mitigating
+catastrophic
+forget-
+ting better retain generalization ability?
+On
+CLIF-26, by comparing the few-shot accuracy of
+BiHNet-Vanilla and BiHNet-Reg, we notice an rel-
+ative improvement of few-shot accuracy and instant
+accuracy by 2.3% and 0.4% on two datasets. We
+see a similar trend on CLIF-55. From Figure 5,
+we see BiHNet-Reg outperforms BiHNet-Vanilla
+in the default and decreasing relevance order; while
+we observe an outlier in BiHNet-Reg runs in the
+increasing relevance order. From Figure 4, we see
+few-shot learning accuracy improves more stable
+as BiHNet-Reg learns more upstream tasks.
+Q3:
+Does BiHNet-Reg improve over HNet-
+Reg?
+The major differences of BiHNet-Reg com-
+pared to HNet-Reg (von Oswald et al., 2020) are
+(1) few-shot task representations and (2) inferring
+task representations with context predictors instead
+of learning them as trainable embeddings. As an
+ablation study, we progressively replace out two
+components in BiHNet , as shown in Table 3. We
+see removing few-shot task-representation causes
+the few-shot accuracy to drop on both datasets by
+1.08 and 0.33 points; while replacing the context
+predictor with trainable task embedding caused a
+clear drop of ﬁnal accuracy by more than 10 points.
+We notice the few-shot accuracy of trainable em-
+beddings is slightly higher on CLIF-26 by 1.5
+points, but lower on CLIF-55 by 2.3 points which
+has more upstream training tasks.
+Q4: Sensitivity Analysis: how do models per-
+form under various number of few-shot train-
+ing examples.
+Figure 6 summarizes few-shot per-
+formance of different methods under different num-
+ber of training examples per class on CLIF-26
+and CLIF-55. We observe BiHNet-Reg always
+achieves the best performance and the improve-
+ment is generally more signiﬁcant when the train-
+k=4
+k=8
+k=16
+#. Traning examples per class
+20
+30
+40
+50
+60
+70
+80
+Few-shot Acc.
+44.0
+49.3
+59.0
+46.5
+52.9
+58.8
+45.5
+50.7
+59.2
+48.9
+54.0
+60.1
+BART-Vanilla
+BiHNet-Vanilla
+BiHNet-MTL
+BiHNet-Reg
+(a) CLIF-26
+k=4
+k=8
+k=16
+#. Traning examples per class
+20
+30
+40
+50
+60
+70
+80
+Few-shot Acc.
+51.5
+58.7
+66.1
+53.4
+56.3
+66.2
+57.9
+59.2
+66.4
+57.1
+59.6
+68.5
+BART-Vanilla
+BiHNet-Vanilla
+BiHNet-MTL
+BiHNet-Reg
+(b) CLIF-55
+Figure 6: Few-shot learning performance of BART-
+Vanilla, BiHNet-Vanilla, BiHNet-MTL, and BiHNet-
+Reg under different number of training examples per
+class (k = 4, 8, 16) on CLIF-26 and CLIF-55.
+ing sets are smaller.
+Discussion.
+Our results indicate BiHNet-Reg
+could effectively improve knowledge accumula-
+tion over time compared to similar adapter learning
+frameworks (BiHNet-Single and BART-Adapter-
+Single).
+However, BiHNet-Reg does not rival
+BART-Single in terms or few-shot learning accu-
+racy. We believe this is due to the restricted model
+capacity of adapter, as compared to ﬁne-tuning en-
+tire transformer. This opens up future work on
+improving continual learning algorithms that are
+compatible with PTLM ﬁne-tuning.
+5
+Related Work
+Continual Learning
+The primary challenge that
+is addressed in CL literature is overcoming catas-
+trophic forgetting. Generally, existing CL meth-
+ods encompass memory and generative replay-
+based approaches (Robins, 1995; Lopez-Paz and
+Ranzato, 2017; Shin et al., 2017), regulariza-
+tion based approaches (Kirkpatrick et al., 2017;
+Nguyen et al., 2018) and model expansion based
+approaches (Shin et al., 2017). Recently, continual
+learning has drawn attention in the NLP ﬁeld (Sun
+et al., 2020; Wang et al., 2019b; Huang et al., 2021).
+Continual Meta-Learning
+There exists litera-
+ture that studies continual meta-learning outside
+NLP application, with various deﬁnition of the
+722
+problem.
+Some prior works (Xu et al., 2019;
+de Masson d’Autume et al., 2019; Wang et al.,
+2020) aim to develop algorithms that allows fast
+recovery of previous performance when a few train-
+ing examples of an early task are available again
+at the test time. Caccia et al. (2020) proposed a
+setup where models visit a sequence of potentially
+re-occuring tasks and measured online cumulative
+performance as metrics. Antoniou et al. (2020) as-
+sumes the model visits a sequence of few-shot clas-
+siﬁcation tasks while the test tasks consist of seen
+classes at training. The problem setup of Jerfel
+et al. (2019) is most related to ours which learns to
+perform few-shot learning on new tasks better, but
+is only studied for image classiﬁcation tasks with
+much smaller number tasks. To our best knowledge,
+our work is the ﬁrst to study continual knowledge
+accumulation for few-shot learning in diverse NLP
+tasks for large-scale transformer models.
+6
+Conclusion
+We present the Continual Learning of Few-Shot
+Learners (CLIF) challenge to simulate the scenario
+where a learner continually accumulate (general-
+izable) knowledge over a sequence of NLP tasks,
+while retaining its performance on the seen tasks.
+We propose evaluation protocols to study the per-
+formance of existing continual learning algorithm,
+and present our method BiHNet-Reg. We demon-
+strate the potentials of building a NLP system that,
+through continual training, can perform more tasks
+and also become more efﬁcient in mastering new
+tasks. Future works include extending our work
+to task agnostic scenarios where the distribution
+of data may shift continuously and studying al-
+gorithms for continual reﬁnement of large-scale
+pre-trained models with emerging unlabeled data.
+Acknowledgements
+This research is supported in part by the Ofﬁce
+of the Director of National Intelligence (ODNI),
+Intelligence Advanced Research Projects Activity
+(IARPA), via Contract No. 2019-19051600007,
+the DARPA MCS program under Contract No.
+N660011924033, the Defense Advanced Research
+Projects Agency with award W911NF-19-20271,
+NSF IIS 2048211, NSF SMA 1829268, and gift
+awards from Google, Amazon, JP Morgan and
+Sony. We would like to thank all the collabora-
+tors in USC INK research lab for their constructive
+feedback on the work.
+References
+Tiago A. Almeida, José María G. Hidalgo, and Akebo
+Yamakami. 2011. Contributions to the study of sms
+spam ﬁltering: New collection and results. In Pro-
+ceedings of the 11th ACM Symposium on Document
+Engineering, DocEng ’11, page 259–262, New York,
+NY, USA. Association for Computing Machinery.
+Antreas Antoniou, Massimiliano Patacchiola, Mateusz
+Ochal, and Amos Storkey. 2020. Deﬁning bench-
+marks for continual few-shot learning.
+ArXiv
+preprint, abs/2004.11967.
+Trapit Bansal, Rishikesh Jha, and Andrew McCallum.
+2020.
+Learning to few-shot learn across diverse
+natural language classiﬁcation tasks.
+In Proceed-
+ings of the 28th International Conference on Com-
+putational Linguistics, pages 5108–5123, Barcelona,
+Spain (Online). International Committee on Compu-
+tational Linguistics.
+Roy Bar-Haim, Ido Dagan, Bill Dolan, Lisa Ferro,
+Danilo Giampiccolo, Bernardo Magnini, and Idan
+Szpektor. 2006. The second pascal recognising tex-
+tual entailment challenge. In Proceedings of the sec-
+ond PASCAL challenges workshop on recognising
+textual entailment, volume 6, pages 6–4. Venice.
+Francesco Barbieri, Jose Camacho-Collados, Luis Es-
+pinosa Anke, and Leonardo Neves. 2020. TweetE-
+val: Uniﬁed benchmark and comparative evaluation
+for tweet classiﬁcation. In Findings of the Associ-
+ation for Computational Linguistics: EMNLP 2020,
+pages 1644–1650, Online. Association for Computa-
+tional Linguistics.
+Luisa Bentivogli, Peter Clark, Ido Dagan, and Danilo
+Giampiccolo. 2009. The ﬁfth pascal recognizing tex-
+tual entailment challenge. In TAC.
+Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie
+Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind
+Neelakantan, Pranav Shyam, Girish Sastry, Amanda
+Askell,
+Sandhini Agarwal,
+Ariel Herbert-Voss,
+Gretchen Krueger, Tom Henighan, Rewon Child,
+Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu,
+Clemens Winter, Christopher Hesse, Mark Chen,
+Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin
+Chess, Jack Clark, Christopher Berner, Sam Mc-
+Candlish, Alec Radford, Ilya Sutskever, and Dario
+Amodei. 2020. Language models are few-shot learn-
+ers. In Advances in Neural Information Processing
+Systems 33: Annual Conference on Neural Informa-
+tion Processing Systems 2020, NeurIPS 2020, De-
+cember 6-12, 2020, virtual.
+Massimo Caccia, Pau Rodríguez, Oleksiy Ostapenko,
+Fabrice Normandin, Min Lin, Lucas Page-Caccia,
+Issam Hadj Laradji, Irina Rish, Alexandre Lacoste,
+David Vázquez, and Laurent Charlin. 2020. Online
+fast adaptation and knowledge accumulation (OS-
+AKA): a new approach to continual learning.
+In
+Advances in Neural Information Processing Systems
+723
+33: Annual Conference on Neural Information Pro-
+cessing Systems 2020, NeurIPS 2020, December 6-
+12, 2020, virtual.
+Ankush Chatterjee, Kedhar Nath Narahari, Meghana
+Joshi, and Puneet Agrawal. 2019.
+SemEval-2019
+task 3: EmoContext contextual emotion detection in
+text. In Proceedings of the 13th International Work-
+shop on Semantic Evaluation, pages 39–48, Min-
+neapolis, Minnesota, USA. Association for Compu-
+tational Linguistics.
+Wenhu Chen, Hongmin Wang, Jianshu Chen, Yunkai
+Zhang, Hong Wang, Shiyang Li, Xiyou Zhou, and
+William Yang Wang. 2020. Tabfact: A large-scale
+dataset for table-based fact veriﬁcation. In 8th Inter-
+national Conference on Learning Representations,
+ICLR 2020, Addis Ababa, Ethiopia, April 26-30,
+2020. OpenReview.net.
+Noam Chomsky. 2002. Syntactic structures. Walter de
+Gruyter.
+Arman Cohan, Waleed Ammar, Madeleine van Zuylen,
+and Field Cady. 2019.
+Structural scaffolds for ci-
+tation intent classiﬁcation in scientiﬁc publications.
+In Proceedings of the 2019 Conference of the North
+American Chapter of the Association for Compu-
+tational Linguistics: Human Language Technolo-
+gies, Volume 1 (Long and Short Papers), pages
+3586–3596, Minneapolis, Minnesota. Association
+for Computational Linguistics.
+Ido Dagan, Oren Glickman, and Bernardo Magnini.
+2005.
+The pascal recognising textual entailment
+challenge. In Machine Learning Challenges Work-
+shop, pages 177–190. Springer.
+Thomas Davidson, Dana Warmsley, Michael Macy,
+and Ingmar Weber. 2017. Automated hate speech
+detection and the problem of offensive language. In
+Proceedings of the 11th International AAAI Confer-
+ence on Web and Social Media, ICWSM ’17, pages
+512–515.
+Marie-Catherine de Marneffe, Mandy Simons, and Ju-
+dith Tonhauser. 2019. The commitmentbank: Inves-
+tigating projection in naturally occurring discourse.
+Proceedings of Sinn und Bedeutung, 23(2):107–124.
+Cyprien de Masson d’Autume, Sebastian Ruder, Ling-
+peng Kong, and Dani Yogatama. 2019.
+Episodic
+memory in lifelong language learning. In Advances
+in Neural Information Processing Systems 32: An-
+nual Conference on Neural Information Processing
+Systems 2019, NeurIPS 2019, December 8-14, 2019,
+Vancouver, BC, Canada, pages 13122–13131.
+William B. Dolan and Chris Brockett. 2005. Automati-
+cally constructing a corpus of sentential paraphrases.
+In Proceedings of the Third International Workshop
+on Paraphrasing (IWP2005).
+Manaal Faruqui and Dipanjan Das. 2018. Identifying
+well-formed natural language questions. In Proceed-
+ings of the 2018 Conference on Empirical Methods
+in Natural Language Processing, pages 798–803,
+Brussels, Belgium. Association for Computational
+Linguistics.
+Tianyu Gao, Adam Fisch, and Danqi Chen. 2021.
+Making pre-trained language models better few-shot
+learners. In Proceedings of the 59th Annual Meet-
+ing of the Association for Computational Linguistics
+and the 11th International Joint Conference on Nat-
+ural Language Processing (Volume 1: Long Papers),
+pages 3816–3830, Online. Association for Computa-
+tional Linguistics.
+Danilo Giampiccolo, Bernardo Magnini, Ido Dagan,
+and Bill Dolan. 2007. The third PASCAL recogniz-
+ing textual entailment challenge. In Proceedings of
+the ACL-PASCAL Workshop on Textual Entailment
+and Paraphrasing, pages 1–9, Prague. Association
+for Computational Linguistics.
+Spyros Gidaris and Nikos Komodakis. 2018. Dynamic
+few-shot visual learning without forgetting. In 2018
+IEEE Conference on Computer Vision and Pattern
+Recognition, CVPR 2018, Salt Lake City, UT, USA,
+June 18-22, 2018, pages 4367–4375. IEEE Com-
+puter Society.
+Harsha Gurulingappa, Abdul Mateen Rajput, Angus
+Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. 2012. Development of a benchmark
+corpus to support the automatic extraction of drug-
+related adverse effects from medical case reports.
+Journal of Biomedical Informatics, 45(5):885–892.
+Text Mining and Natural Language Processing in
+Pharmacogenomics.
+David Ha, Andrew M. Dai, and Quoc V. Le. 2017.
+Hypernetworks.
+In 5th International Conference
+on Learning Representations, ICLR 2017, Toulon,
+France, April 24-26, 2017, Conference Track Pro-
+ceedings. OpenReview.net.
+Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzebski,
+Bruna Morrone, Quentin de Laroussilhe, Andrea
+Gesmundo, Mona Attariyan, and Sylvain Gelly.
+2019. Parameter-efﬁcient transfer learning for NLP.
+In Proceedings of the 36th International Confer-
+ence on Machine Learning, ICML 2019, 9-15 June
+2019, Long Beach, California, USA, volume 97 of
+Proceedings of Machine Learning Research, pages
+2790–2799. PMLR.
+Eduard Hovy, Laurie Gerber, Ulf Hermjakob, Chin-
+Yew Lin, and Deepak Ravichandran. 2001. Toward
+semantics-based answer pinpointing.
+In Proceed-
+ings of the First International Conference on Human
+Language Technology Research.
+Yufan Huang, Yanzhe Zhang, Jiaao Chen, Xuezhi
+Wang, and Diyi Yang. 2021. Continual learning for
+text classiﬁcation with information disentanglement
+based regularization.
+In Proceedings of the 2021
+Conference of the North American Chapter of the
+Association for Computational Linguistics: Human
+Language Technologies, pages 2736–2746, Online.
+Association for Computational Linguistics.
+724
+Ghassen Jerfel, Erin Grant, Tom Grifﬁths, and Kather-
+ine A. Heller. 2019. Reconciling meta-learning and
+continual learning with online mixtures of tasks. In
+Advances in Neural Information Processing Systems
+32: Annual Conference on Neural Information Pro-
+cessing Systems 2019, NeurIPS 2019, December
+8-14, 2019, Vancouver, BC, Canada, pages 9119–
+9130.
+Chao Jiang, Mounica Maddela, Wuwei Lan, Yang
+Zhong, and Wei Xu. 2020. Neural CRF model for
+sentence alignment in text simpliﬁcation.
+In Pro-
+ceedings of the 58th Annual Meeting of the Asso-
+ciation for Computational Linguistics, pages 7943–
+7960, Online. Association for Computational Lin-
+guistics.
+Tushar Khot, Ashish Sabharwal, and Peter Clark. 2018.
+Scitail: A textual entailment dataset from science
+question answering. In Proceedings of the Thirty-
+Second AAAI Conference on Artiﬁcial Intelligence,
+(AAAI-18), the 30th innovative Applications of Arti-
+ﬁcial Intelligence (IAAI-18), and the 8th AAAI Sym-
+posium on Educational Advances in Artiﬁcial Intel-
+ligence (EAAI-18), New Orleans, Louisiana, USA,
+February 2-7, 2018, pages 5189–5197. AAAI Press.
+James Kirkpatrick, Razvan Pascanu, Neil Rabinowitz,
+and Others. 2017. Overcoming catastrophic forget-
+ting in neural networks. Proceedings of the national
+academy of sciences, 114(13):3521–3526.
+Neema Kotonya and Francesca Toni. 2020.
+Ex-
+plainable automated fact-checking for public health
+claims. In Proceedings of the 2020 Conference on
+Empirical Methods in Natural Language Process-
+ing (EMNLP), pages 7740–7754, Online. Associa-
+tion for Computational Linguistics.
+Jens Lehmann, Robert Isele, Max Jakob, Anja Jentzsch,
+D. Kontokostas, Pablo N. Mendes, Sebastian Hell-
+mann, M. Morsey, Patrick van Kleef, S. Auer, and
+C. Bizer. 2015. Dbpedia - a large-scale, multilingual
+knowledge base extracted from wikipedia. Semantic
+Web, 6:167–195.
+Hector J. Levesque, Ernest Davis, and Leora Morgen-
+stern. 2012. The winograd schema challenge. In
+Proceedings of the Thirteenth International Confer-
+ence on Principles of Knowledge Representation
+and Reasoning, KR’12, page 552–561. AAAI Press.
+Mike
+Lewis,
+Yinhan
+Liu,
+Naman
+Goyal,
+Mar-
+jan Ghazvininejad, Abdelrahman Mohamed, Omer
+Levy, Veselin Stoyanov, and Luke Zettlemoyer.
+2020. BART: Denoising sequence-to-sequence pre-
+training for natural language generation, translation,
+and comprehension. In Proceedings of the 58th An-
+nual Meeting of the Association for Computational
+Linguistics, pages 7871–7880, Online. Association
+for Computational Linguistics.
+Xin Li and Dan Roth. 2002. Learning question clas-
+siﬁers. In COLING 2002: The 19th International
+Conference on Computational Linguistics.
+David Lopez-Paz and Marc’Aurelio Ranzato. 2017.
+Gradient episodic memory for continual learning. In
+Advances in Neural Information Processing Systems
+30: Annual Conference on Neural Information Pro-
+cessing Systems 2017, December 4-9, 2017, Long
+Beach, CA, USA, pages 6467–6476.
+Annie Louis, Dan Roth, and Filip Radlinski. 2020. “I’d
+rather just go to bed”: Understanding indirect an-
+swers. In Proceedings of the 2020 Conference on
+Empirical Methods in Natural Language Process-
+ing (EMNLP), pages 7411–7425, Online. Associa-
+tion for Computational Linguistics.
+Andrew L. Maas, Raymond E. Daly, Peter T. Pham,
+Dan Huang, Andrew Y. Ng, and Christopher Potts.
+2011. Learning word vectors for sentiment analy-
+sis. In Proceedings of the 49th Annual Meeting of
+the Association for Computational Linguistics: Hu-
+man Language Technologies, pages 142–150, Port-
+land, Oregon, USA. Association for Computational
+Linguistics.
+Pekka Malo, Ankur Sinha, Pekka Korhonen, Jyrki Wal-
+lenius, and Pyry Takala. 2014. Good debt or bad
+debt: Detecting semantic orientations in economic
+texts. J. Assoc. Inf. Sci. Technol., 65(4):782–796.
+Marco Marelli, Stefano Menini, Marco Baroni, Luisa
+Bentivogli, Raffaella Bernardi, and Roberto Zampar-
+elli. 2014. A SICK cure for the evaluation of compo-
+sitional distributional semantic models. In Proceed-
+ings of the Ninth International Conference on Lan-
+guage Resources and Evaluation (LREC’14), pages
+216–223, Reykjavik, Iceland. European Language
+Resources Association (ELRA).
+Binny Mathew,
+Punyajoy Saha,
+Seid Muhie Yi-
+mam, Chris Biemann, Pawan Goyal, and Ani-
+mesh Mukherjee. 2020. Hatexplain: A benchmark
+dataset for explainable hate speech detection. ArXiv
+preprint, abs/2012.10289.
+Bryan McCann, Nitish Shirish Keskar, Caiming Xiong,
+and Richard Socher. 2018. The natural language de-
+cathlon: Multitask learning as question answering.
+ArXiv preprint, abs/1806.08730.
+Ioannis Mollas, Zoe Chrysopoulou, Stamatis Karlos,
+and Grigorios Tsoumakas. 2020.
+Ethos: an on-
+line hate speech detection dataset. ArXiv preprint,
+abs/2006.08328.
+Richard Montague. 1970. Universal grammar. 1974,
+pages 222–46.
+Cuong V. Nguyen, Yingzhen Li, Thang D. Bui, and
+Richard E. Turner. 2018. Variational continual learn-
+ing.
+In 6th International Conference on Learn-
+ing Representations, ICLR 2018, Vancouver, BC,
+Canada, April 30 - May 3, 2018, Conference Track
+Proceedings. OpenReview.net.
+725
+Yixin Nie, Adina Williams, Emily Dinan, Mohit
+Bansal, Jason Weston, and Douwe Kiela. 2020. Ad-
+versarial NLI: A new benchmark for natural lan-
+guage understanding. In Proceedings of the 58th An-
+nual Meeting of the Association for Computational
+Linguistics, pages 4885–4901, Online. Association
+for Computational Linguistics.
+Bo Pang and Lillian Lee. 2005.
+Seeing stars: Ex-
+ploiting class relationships for sentiment categoriza-
+tion with respect to rating scales.
+In Proceed-
+ings of the 43rd Annual Meeting of the Association
+for Computational Linguistics (ACL’05), pages 115–
+124, Ann Arbor, Michigan. Association for Compu-
+tational Linguistics.
+Mohammad
+Taher
+Pilehvar
+and
+Jose
+Camacho-
+Collados. 2019. WiC: the word-in-context dataset
+for evaluating context-sensitive meaning represen-
+tations.
+In Proceedings of the 2019 Conference
+of the North American Chapter of the Association
+for Computational Linguistics: Human Language
+Technologies, Volume 1 (Long and Short Papers),
+pages 1267–1273, Minneapolis, Minnesota. Associ-
+ation for Computational Linguistics.
+Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and
+Percy Liang. 2016. SQuAD: 100,000+ questions for
+machine comprehension of text. In Proceedings of
+the 2016 Conference on Empirical Methods in Natu-
+ral Language Processing, pages 2383–2392, Austin,
+Texas. Association for Computational Linguistics.
+James Requeima, Jonathan Gordon, John Bronskill,
+Sebastian Nowozin, and Richard E. Turner. 2019.
+Fast and ﬂexible multi-task classiﬁcation using con-
+ditional neural adaptive processes. In Advances in
+Neural Information Processing Systems 32: Annual
+Conference on Neural Information Processing Sys-
+tems 2019, NeurIPS 2019, December 8-14, 2019,
+Vancouver, BC, Canada, pages 7957–7968.
+Anthony Robins. 1995.
+Catastrophic forgetting, re-
+hearsal and pseudorehearsal.
+Connection Science,
+7(2):123–146.
+Elvis Saravia, Hsien-Chi Toby Liu, Yen-Hao Huang,
+Junlin Wu, and Yi-Shin Chen. 2018. CARER: Con-
+textualized affect representations for emotion recog-
+nition. In Proceedings of the 2018 Conference on
+Empirical Methods in Natural Language Processing,
+pages 3687–3697, Brussels, Belgium. Association
+for Computational Linguistics.
+Jonathan
+Schwarz,
+Wojciech
+Czarnecki,
+Je-
+lena
+Luketina,
+Agnieszka
+Grabska-Barwinska,
+Yee Whye Teh, Razvan Pascanu, and Raia Hadsell.
+2018. Progress & compress: A scalable framework
+for continual learning. In International Conference
+on Machine Learning, pages 4528–4537. PMLR.
+Hanul Shin, Jung Kwon Lee, Jaehong Kim, and Jiwon
+Kim. 2017. Continual learning with deep generative
+replay. In Advances in Neural Information Process-
+ing Systems 30: Annual Conference on Neural In-
+formation Processing Systems 2017, December 4-9,
+2017, Long Beach, CA, USA, pages 2990–2999.
+Damien Sileo, Tim Van De Cruys, Camille Pradel,
+and Philippe Muller. 2019. Mining discourse mark-
+ers for unsupervised sentence representation learn-
+ing.
+In Proceedings of the 2019 Conference of
+the North American Chapter of the Association for
+Computational Linguistics: Human Language Tech-
+nologies, Volume 1 (Long and Short Papers), pages
+3477–3486, Minneapolis, Minnesota. Association
+for Computational Linguistics.
+Richard Socher, Alex Perelygin, Jean Wu, Jason
+Chuang, Christopher D. Manning, Andrew Ng, and
+Christopher Potts. 2013.
+Recursive deep models
+for semantic compositionality over a sentiment tree-
+bank.
+In Proceedings of the 2013 Conference on
+Empirical Methods in Natural Language Processing,
+pages 1631–1642, Seattle, Washington, USA. Asso-
+ciation for Computational Linguistics.
+Fan-Keng Sun, Cheng-Hao Ho, and Hung-Yi Lee.
+2020. LAMOL: language modeling for lifelong lan-
+guage learning. In 8th International Conference on
+Learning Representations, ICLR 2020, Addis Ababa,
+Ethiopia, April 26-30, 2020. OpenReview.net.
+James
+Thorne,
+Andreas
+Vlachos,
+Christos
+Christodoulopoulos,
+and
+Arpit
+Mittal.
+2018.
+FEVER: a large-scale dataset for fact extraction
+and VERiﬁcation.
+In Proceedings of the 2018
+Conference of the North American Chapter of
+the
+Association
+for
+Computational
+Linguistics:
+Human Language Technologies, Volume 1 (Long
+Papers), pages 809–819, New Orleans, Louisiana.
+Association for Computational Linguistics.
+Sowmya Vajjala and Ivana Luˇci´c. 2018.
+On-
+eStopEnglish corpus: A new corpus for automatic
+readability assessment and text simpliﬁcation.
+In
+Proceedings of the Thirteenth Workshop on Innova-
+tive Use of NLP for Building Educational Applica-
+tions, pages 297–304, New Orleans, Louisiana. As-
+sociation for Computational Linguistics.
+Johannes von Oswald, Christian Henning, João Sacra-
+mento, and Benjamin F. Grewe. 2020.
+Contin-
+ual learning with hypernetworks.
+In 8th Inter-
+national Conference on Learning Representations,
+ICLR 2020, Addis Ababa, Ethiopia, April 26-30,
+2020. OpenReview.net.
+Alex Wang, Amanpreet Singh, Julian Michael, Felix
+Hill, Omer Levy, and Samuel R. Bowman. 2019a.
+GLUE: A multi-task benchmark and analysis plat-
+form for natural language understanding.
+In 7th
+International Conference on Learning Representa-
+tions, ICLR 2019, New Orleans, LA, USA, May 6-9,
+2019. OpenReview.net.
+Hong Wang, Wenhan Xiong, Mo Yu, Xiaoxiao Guo,
+Shiyu Chang, and William Yang Wang. 2019b. Sen-
+726
+tence embedding alignment for lifelong relation ex-
+traction. In Proceedings of the 2019 Conference of
+the North American Chapter of the Association for
+Computational Linguistics: Human Language Tech-
+nologies, Volume 1 (Long and Short Papers), pages
+796–806, Minneapolis, Minnesota. Association for
+Computational Linguistics.
+William Yang Wang. 2017. “liar, liar pants on ﬁre”: A
+new benchmark dataset for fake news detection. In
+Proceedings of the 55th Annual Meeting of the As-
+sociation for Computational Linguistics (Volume 2:
+Short Papers), pages 422–426, Vancouver, Canada.
+Association for Computational Linguistics.
+Zirui Wang, Sanket Vaibhav Mehta, Barnabas Poczos,
+and Jaime Carbonell. 2020. Efﬁcient meta lifelong-
+learning with limited memory.
+In Proceedings of
+the 2020 Conference on Empirical Methods in Natu-
+ral Language Processing (EMNLP), pages 535–548,
+Online. Association for Computational Linguistics.
+Alex Warstadt, Amanpreet Singh, and Samuel R. Bow-
+man. 2019. Neural network acceptability judgments.
+Transactions of the Association for Computational
+Linguistics, 7:625–641.
+Adina Williams, Nikita Nangia, and Samuel Bowman.
+2018. A broad-coverage challenge corpus for sen-
+tence understanding through inference. In Proceed-
+ings of the 2018 Conference of the North American
+Chapter of the Association for Computational Lin-
+guistics: Human Language Technologies, Volume
+1 (Long Papers), pages 1112–1122, New Orleans,
+Louisiana. Association for Computational Linguis-
+tics.
+Hu Xu, Bing Liu, Lei Shu, and Philip Yu. 2019. BERT
+post-training for review reading comprehension and
+aspect-based sentiment analysis. In Proceedings of
+the 2019 Conference of the North American Chap-
+ter of the Association for Computational Linguistics:
+Human Language Technologies, Volume 1 (Long
+and Short Papers), pages 2324–2335, Minneapolis,
+Minnesota. Association for Computational Linguis-
+tics.
+Yi Yang, Wen-tau Yih, and Christopher Meek. 2015.
+WikiQA: A challenge dataset for open-domain ques-
+tion answering.
+In Proceedings of the 2015 Con-
+ference on Empirical Methods in Natural Language
+Processing, pages 2013–2018, Lisbon, Portugal. As-
+sociation for Computational Linguistics.
+Qinyuan Ye and X. Ren. 2021. Zero-shot learning by
+generating task-speciﬁc adapters.
+ArXiv preprint,
+abs/2101.00420.
+Dani Yogatama, Cyprien de Masson d’Autume, Jerome
+Connor, Tomás Kociský, Mike Chrzanowski, Ling-
+peng Kong, A. Lazaridou, Wang Ling, L. Yu, Chris
+Dyer, and P. Blunsom. 2019. Learning and evalu-
+ating general linguistic intelligence. ArXiv preprint,
+abs/1901.11373.
+Xiang Zhang, Junbo Jake Zhao, and Yann LeCun. 2015.
+Character-level convolutional networks for text clas-
+siﬁcation. In Advances in Neural Information Pro-
+cessing Systems 28: Annual Conference on Neural
+Information Processing Systems 2015, December 7-
+12, 2015, Montreal, Quebec, Canada, pages 649–
+657.
+Yuan Zhang, Jason Baldridge, and Luheng He. 2019.
+PAWS: Paraphrase adversaries from word scram-
+bling.
+In Proceedings of the 2019 Conference of
+the North American Chapter of the Association for
+Computational Linguistics: Human Language Tech-
+nologies, Volume 1 (Long and Short Papers), pages
+1298–1308, Minneapolis, Minnesota. Association
+for Computational Linguistics.
+727
+Trainable Params
+Total Params
+BART
+139M
+139M
+BART-Adapter
+72M
+212M
+BiHNET
+266M
+405M
+BiHNETd=4
+40M
+180M
+Table 4: Statistics of trainable and total model parame-
+ters in each model to learn 9 GLUE tasks.
+Methods
+Final Acc.
+Inst. Acc.
+F-S Acc.
+BART-Adapter-Single
+-
+74.98±0.7
+59.00 ±1.9
+BiHNetd=4-Reg
+72.50 ±2.3
+79.45 ±0.5
+60.68 ±1.5
+Table 5: Performance when we use a smaller hidden
+dimension (d=4) for the HyperNet in BiHNet-Reg.
+A
+Implementation Details
+We tune hyperparameters except the time steps
+of few-shot training on the validation set of up-
+stream continual learning tasks. We tune the hy-
+perpameters on CLIF-26 and apply the same for
+CLIF-55 for the same approaches. We tune learn-
+ing rates by enumerating over [3e-4, 1e-4, 3e-5,
+1e-5], and ﬁnally use a learning rate of 3e-5 for all
+MTL approaches and ﬁne-tuend BART approaches
+(e.g., BART-EWC, BART-Vanilla), and a learning
+rate of 1e-4 for BiHNet, HNet, and BART-Adapter-
+Single. We use a batch size of 64 across experi-
+ments. We train the model for at most 100 epochs
+for each training task with a patience of 3 epochs
+without validation performance improvement. Be-
+fore training on a new task, we revert the model
+to the checkpoint with the best validation perfor-
+mance in the previous task. In the few-shot learning
+stage, we use the same learning rate and train the
+model for 400 epochs, assuming no validation sets
+to perform early stopping. The number of train-
+ing steps are decided based on the performance of
+BiHNet-Vanilla on airline, conll, and disaster tasks.
+We set the hidden size of adapters inserted between
+layers of BART transformers as 256 and the one in
+the classiﬁcation head as 64. The weight generator
+in BiHNet is implemented as a two-layer MLP with
+a hidden size of 32. For replay based approaches
+(MbPA++ and meta-MbPA), we store all examples
+following these works and randomly draw mini-
+batches to replay every 100 training steps. For
+BiHNet, HNet, and EWC, we set the regulariza-
+tion strength (coefﬁcient before the regularization
+loss term) as 0.01 without further tuning. We use
+a sample size 64 to compute the few-shot task rep-
+resentation on CLIF-26 and 10 for CLIF-55 at
+training. Experiments are run on Nvidia Quadro
+6000 or Quadro 8000 GPUs with cuda version 10.1
+installed. Through out the experiments (including
+the hyperparameter search), we run each method
+with three random seeds.
+Details of Datasets
+. For CLIF-26, we use the
+train, validation, and test split from Bansal et al.
+(2020). For a seen trained model, we evaluate its
+few-shot ability over 5 different partitions of train-
+test splits of a single few-shot task. For CLIF-55,
+we use the train, validation, and test splits provided
+in the datasets library4. The few-shot training and
+validation sets are random samples of the ofﬁcial
+train and validation splits; while we do not sub-
+sample the test split. Similarly, we evaluate few-
+shot learning ability over 5 different samples of
+training and validation examples.
+Details of Task Orders.
+Table 7 summarize the
+list of 45 upstream training tasks and 10 few-shot
+training tasks. Table 6 further shows the order of
+continual learning tasks.
+B
+Parameter Efﬁciency
+We show the statistics of trainable and total param-
+eters in each compared architecture in Table 4 on
+CLIF-26. In our default settings, BiHNet has
+twice as many trainable parameters as BART and
+above three times as BART-Adapter. However, we
+could signiﬁcantly reduce the number of parame-
+ters by setting the hidden size d of the Hypernet-
+work smaller than the number of the tasks. We
+reduce d to 4, and summarize the results in 5. We
+notice the approach achieves instant accuracy and
+few-shot accuracy on par with BiHNet-Reg in the
+standard setup. We notice the approach achieves
+lower ﬁnal accuracy compared to the default setup,
+but the score is still more competitive than base-
+lines, such as BART-MbPA and BART-meta-MbPA,
+and BiHNet-Vanilla.
+4https://huggingface.co/datasets
+728
+Task Order
+Tasks
+CLIF-26
+Default
+cola, sst2, mrpc, qqp, stsb, mnli, qnli, wnli, rte
+Relevance ↓
+mnli, sst2, qqp, qnli, stsb, mrpc, cola, rte, wnli
+Relevance ↑
+wnli, rte, cola, mrpc, stsb, qnli, qqp, sst2, mnli
+CLIF-55
+Default
+ai2_arc, aqua_rat, boolq, codah, commonsense_qa, cosmos_qa, dream, eli5-askh, eli5-asks, eli5-eli5, freebase_qa, hel-
+laswag, jeopardy, kilt_hotpotqa, kilt_nq, kilt_trex, kilt_zsre, lama-conceptnet, lama-google_re, lama-squad, lama-trex,
+math_qa, mc_taco, numer_sense, openbookqa, qasc, quail, quarel, quartz-no_knowledge, quartz-with_knowledge, race-high,
+race-middle, sciq, search_qa, social_i_qa, squad-no_context, superglue-copa, superglue-multirc, swag, web_questions,
+wino_grande, wiqa
+Table 6: Order of continual learning tasks in CLIF-26 and CLIF-55 datasets.
+729
+Task Name
+Task
+Reference
+Upstream tasks
+ade_corpus_v2-classiﬁcation
+other
+Gurulingappa et al. 2012
+circa
+other
+Louis et al. 2020
+discovery
+other
+Sileo et al. 2019
+emotion
+emotion
+Saravia et al. 2018
+ethos-directed_vs_generalized
+hate speech detection
+Mollas et al. 2020
+ethos-disability
+hate speech detection
+Mollas et al. 2020
+ethos-gender
+hate speech detection
+Mollas et al. 2020
+ethos-sexual_orientation
+hate speech detection
+Mollas et al. 2020
+glue-cola
+other
+Warstadt et al. 2019
+glue-mnli
+nli
+Williams et al. 2018
+glue-mrpc
+paraphrase
+Dolan and Brockett 2005
+glue-qnli
+nli
+Rajpurkar et al. 2016
+glue-qqp
+paraphrase
+(link)
+glue-rte
+nli
+Dagan et al. 2005; Bar-Haim et al. 2006
+Giampiccolo et al. 2007; Bentivogli et al. 2009
+glue-sst2
+sentiment analysis
+Socher et al. 2013
+glue-wnli
+nli
+Levesque et al. 2012
+google_wellformed_query
+other
+Faruqui and Das 2018
+hate_speech_offensive
+hate speech detection
+Davidson et al. 2017
+hatexplain
+hate speech detection
+Mathew et al. 2020
+health_fact
+fact checking
+Kotonya and Toni 2020
+imdb
+sentiment analysis
+Maas et al. 2011
+kilt_fever
+fact checking
+Thorne et al. 2018
+liar
+fact checking
+Wang 2017
+onestop_english
+other
+Vajjala and Luˇci´c 2018
+paws
+paraphrase
+Zhang et al. 2019
+rotten_tomatoes
+sentiment analysis
+Pang and Lee 2005
+scicite
+other
+Cohan et al. 2019
+scitail
+nli
+Khot et al. 2018
+sick
+nli
+Marelli et al. 2014
+sms_spam
+other
+Almeida et al. 2011
+superglue-rte
+nli
+Dagan et al. 2005; Bar-Haim et al. 2006
+Giampiccolo et al. 2007; Bentivogli et al. 2009
+superglue-wic
+other
+Pilehvar and Camacho-Collados 2019
+superglue-wsc
+other
+Levesque et al. 2012
+trec
+other
+Li and Roth 2002; Hovy et al. 2001
+trec-ﬁnegrained
+other
+Li and Roth 2002; Hovy et al. 2001
+tweet_eval-emoji
+emotion
+Barbieri et al. 2020
+tweet_eval-emotion
+emotion
+Barbieri et al. 2020
+tweet_eval-irony
+emotion
+Barbieri et al. 2020
+tweet_eval-offensive
+emotion
+Barbieri et al. 2020
+tweet_eval-sentiment
+emotion
+Barbieri et al. 2020
+tweet_eval-stance_abortion
+emotion
+Barbieri et al. 2020
+tweet_eval-stance_climate
+emotion
+Barbieri et al. 2020
+tweet_eval-stance_hillary
+emotion
+Barbieri et al. 2020
+wiki_auto
+other
+Jiang et al. 2020
+yahoo_answers_topics
+topic
+(link)
+Few-shot learning tasks
+superglue-cb
+nli
+de Marneffe et al. 2019
+dbpedia_14
+topic
+Lehmann et al. 2015
+wiki_qa
+other
+Yang et al. 2015
+emo
+emotion
+Chatterjee et al. 2019
+yelp_polarity
+sentiment analysis
+Zhang et al. 2015; (link)
+ethos-religion
+hate speech detection
+Mollas et al. 2020
+ﬁnancial_phrasebank
+sentiment analysis
+Malo et al. 2014
+tab_fact
+fact checking
+Chen et al. 2020
+anli
+nli
+Nie et al. 2020
+ethos-race
+hate speech detection
+Mollas et al. 2020
+Table 7: Datasets and tasks included in CLIF-55 for upstream training and few-shot learning.

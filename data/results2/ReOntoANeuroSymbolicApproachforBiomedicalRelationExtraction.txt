@@ -1,0 +1,1248 @@
+ReOnto: A Neuro-Symbolic Approach for Biomedical Relation Extraction
+Monika Jain1 , Kuldeep Singh2 , Raghava Mutharaju1
+1Knowledgeable Computing and Reasoning (KRaCR) Lab, IIIT-Delhi, India
+2Cerence GmbH and Zerotha Research, Germany
+{monikaja, raghava.mutharaju}@iiitd.ac.in
+kuldeep.singh1@cerence.com
+Abstract
+Relation Extraction (RE) is the task of extracting
+semantic relationships between entities in a sen-
+tence and aligning them to relations defined in a
+vocabulary, which is generally in the form of a
+Knowledge Graph (KG) or an ontology. Various
+approaches have been proposed so far to address
+this task. However, applying these techniques to
+biomedical text often yields unsatisfactory results
+because it is hard to infer relations directly from
+sentences due to the nature of the biomedical re-
+lations.
+To address these issues, we present a
+novel technique called ReOnto, that makes use of
+neuro symbolic knowledge for the RE task. Re-
+Onto employs a graph neural network to acquire the
+sentence representation and leverages publicly ac-
+cessible ontologies as prior knowledge to identify
+the sentential relation between two entities. The
+approach involves extracting the relation path be-
+tween the two entities from the ontology. We eval-
+uate the effect of using symbolic knowledge from
+ontologies with graph neural networks.
+Experi-
+mental results on two public biomedical datasets,
+BioRel and ADE, show that our method outper-
+forms all the baselines (approximately by 3%).
+1
+Introduction
+In recent times, due to the exponential increase in data,
+knowledge bases have gained popularity as a means to effi-
+ciently store and organize information [Fensel et al., 2020].
+Although considerable efforts are invested in updating and
+maintaining knowledge bases, their incompleteness persists
+due to the dynamic nature of facts, which constantly evolve
+over the Web and other sources. Hence, there is a need to
+automate the process of extracting knowledge from text. Re-
+lation Extraction (RE) is task of predicting the relation given
+a sentence and an entity pair [Bastos et al., 2021]. In domains
+such as biomedicine, relation extraction task poses a few crit-
+ical domain-specific challenges. Consider a sentence, atrio
+ventricular (C0018827) conduction defects and arrhythmias
+by selective perfusion of a-v conduction system in the ca-
+nine heart (C0018787), with entities C0018827 (ventricular)
+and C0018787 (heart) linked to UMLS [Bodenreider, 2004].
+Here target relation is hasPhysicalPartOfAnatomicStructure.
+The RE task aims to infer the semantic relationships.
+As
+demonstrated in the example, working with biomedical cor-
+pora poses several challenges. These include: complex input
+sentences that may require extensive parsing and interpreta-
+tion to extract relevant information. Indirectly inferred rela-
+tions between entities in the text, which may require sophisti-
+cated natural language processing techniques. Difficulty ob-
+taining domain knowledge of the specific entities mentioned
+in the text, which may require specialized expertise and ad-
+ditional research. Moreover, in the biomedical domain, enti-
+ties are intricately interlinked, resulting in numerous densely
+linked entities with high degrees and multiple paths connect-
+ing them [Angell et al., 2021]. Hence, inferring the correct
+relation from a given sentence may require reasoning about
+the potential path.
+Limitation of Existing Works and Hypothesis. The ex-
+isting approaches employ various techniques for relation ex-
+traction such as multi-task learning [Crone, 2020], transform-
+ers [Eberts and Ulges, 2020], Graph Neural Network (GNN)
+models [Bastos et al., 2021; Zhu et al., 2019] have been used
+to process complex relationships between entities.
+While
+deep learning models [Nadgeri et al., 2021; T.Y.S.S et al.,
+2021] can incorporate semantic information of entities. Al-
+beit effective, these models employ standard message-passing
+or attention-based approaches (transformers, GNNs) which
+are inherently focused on homophilic signals [Balcilar et al.,
+2020; Bastos et al., 2022] (i.e., only on neighborhood interac-
+tions) and ignore long-range interactions that may be required
+to infer the semantic relationship between two biomedical
+entities. Furthermore, sufficient domain-specific knowledge
+is available in various biomedical ontologies to be used as
+background knowledge for relation extraction. It is also ev-
+ident in the literature that reasoning over ontologies [Bona
+et al., 2019; Winnenburg et al., 2015] allow capturing long-
+range dependencies between two entities [Pan et al., 2019;
+Zhang et al., 2022], which further helps in making predic-
+tions. For instance, in [Hong et al., 2004], ontology infor-
+mation was utilized as a tuple and transformed into a 3-D
+vector for predicting compound relations. Hence, it remains
+an open research question: for biomedical relation extrac-
+tion, can we combine reasoning ability over publicly available
+biomedical ontologies to enrich an underlying deep learning
+model which is inherently homophilic?
+arXiv:2309.01370v1  [cs.CL]  4 Sep 2023
+Contributions: To tackle this research question, to our
+knowledge our approach represents the first neuro-symbolic
+method for extracting relations in the biomedical domain.
+Our method is two-fold.
+Firstly, we aim to aggregate the
+symbolic knowledge in the form of axioms (facts) consist-
+ing of logical constructs and quantifiers such as there exist,
+for all, union and intersection between entities present in
+various public ontologies and build background knowledge.
+In the second step, we incorporate background knowledge
+into a Graph Neural Network (GNN) to enhance its capa-
+bilities to capture long-range dependencies.
+The rationale
+behind using a GNN is to exploit the correlations between
+entities and predicates due to its message-passing ability be-
+tween the nodes.
+Inducing external symbolic knowledge
+makes our approach transparent as we can backtrack the paths
+used for inducing long-range dependencies between entities.
+Hence, we empower the GNN by externally induced sym-
+bolic knowledge to capture long-range interactions needed to
+infer biomedical relations between two given entities and a
+sentence. We name our approach as “ReOnto" containing fol-
+lowing key contributions.
+• Our novel relation extraction method, ReOnto, utilizes
+an ontology model to learn subgraphs containing expres-
+sive axioms connecting the given entities. It consists of a
+symbolic module incorporating domain-specific knowl-
+edge into a GNN, enabling the prediction of required re-
+lations between two entities within a biomedical knowl-
+edge graph.
+• We study the effect of symbolic knowledge on the per-
+formance of the underlying deep learning model by con-
+sidering several key characteristics such as 1) entity
+coverage from ontology, 2) the number of hops, etc.
+We provide conclusive evidence that aggregating knowl-
+edge from various sources to build the symbolic compo-
+nent (instead of using just one ontology for background
+knowledge) has a positive impact on the overall perfor-
+mance.
+• We provide an exhaustive evaluation on two standard
+datasets, and our proposed method outperforms all base-
+lines for biomedical relation extraction.
+2
+Related work
+Muti-instance RE: Multi-instance relation extraction aims
+to utilize previous mentions of entities in a given docu-
+ment to infer the semantic relationship between them. Some
+approaches leverage attention-based convolution neural net-
+work [Shen and Huang, 2016], multi-level CNN atten-
+tion [Wang et al., 2016] and by ranking with CNN to clas-
+sify relation [Santos et al., 2015]. In contrast, alternative ap-
+proaches employ recurrent neural networks for relation clas-
+sification [Zhang and Wang, 2015] and hierarchical RNN
+with attention. Besides this, some works also use entity con-
+text information such as type and descriptions to improve the
+performance [Vashishth et al., 2018]. To deal with the noise
+at the sentence-level and bag level, [Ye and Ling, 2019] pro-
+posed a distant supervision approach incorporating intra-bag
+and inter-bag attentions.
+Sentential and Biomedical RE: GP-GNN [Zhu et al.,
+2019] proposed a graph neural network with generated pa-
+rameters which solves the relational message-passing task
+by encoding natural language as parameters and perform-
+ing propagation from layer to layer. RECON [Bastos et al.,
+2021] is an extended approach which uses the entity details
+like alias, labels, description and instance in an underlying
+GNN model for sentential RE. As discussed in [Nadgeri et
+al., 2021], not all facts contribute to improved performance,
+and therefore, the context must be dynamically selected based
+on the given sentence. However, these works are limited to
+general domain and finds their limitation in the biomedical
+domain. In the biomedical domain, [Crone, 2020] introduced
+a multi-task learning approach that utilizes joint signals from
+entity extraction task to improve relation extraction. [T.Y.S.S
+et al., 2021] enriched the performance of biomedical relation
+extraction by incorporating linguistic information and entity
+types into a BERT model. [Cabot and Navigli, 2021] em-
+ployed an end-to-end seq2seq model for biomedical RE.
+Ontology based RE: The authors of reference [Li and
+Huan, 2008] proposed using an ontology as a hyperlink struc-
+ture for the web to facilitate relation extraction. Authors uti-
+lize the web structure using a breadth-first search for relation
+extraction. [Aghaebrahimian et al., 2022] uses RNN with a
+convolutional neural network to process three features: to-
+kens, types, and graphs.
+Work claim that entity type and
+ontology graph structure provide better representations than
+simple token-based representations for RE. We point readers
+to [Karkaletsis et al., 2011] for details on ontology-powered
+information systems.
+3
+Problem Formulation and Approach
+We define a KG as a tuple KG = (E, R, T +) where E de-
+notes the set of entities (vertices), R is the set of relations
+(edges), and T + ⊆E × R × E is a set of all triples. The
+RE Task aims to find the target relation rc ∈R for a given
+pair of entities ⟨ei, ej⟩within the sentence W. If no rela-
+tion is inferred, it returns NA label. In this section, we first
+discuss the ReOnto framework, which integrates the power
+of the graph neural network (GNN) [Bastos et al., 2021] with
+that of symbolic knowledge. A GNN primarily employs three
+modules, which are encoding, propagation, and classification.
+Symbolic knowledge is integrated with the GNN score in the
+aggregation module (Figure 1).
+3.1
+Symbolic Module
+As a first step, we aggregate symbolic knowledge(SK), avail-
+able in public ontologies for extracting long-range dependen-
+cies between entity pairs. We build a connected graph G of
+the symbolic knowledge derived from ontologies. We define
+G = (V, E, T+) where V has a set of entities such that each
+edge (vs, vo) ∈E and vs, vo ∈V corresponds to a sequence
+s = ss,o
+0 ss,o
+1 ss,o
+2
+. . . ss,o
+l−1 extracted from the text where s, o
+represent the source and destination entities. We also con-
+sider related SK of entity pair SKs,o which consist of path in-
+formation (P pathi
+0;P axiom_pathi
+0) ∈SKs,o where i is
+the number of hops traversed to get the path. Path consists
+of multi hop details, each containing detailed information,
+Figure 1: ReOnto Approach. The role of the symbolic module is
+to aggregate symbolic knowledge. It takes the entity pair and gives
+path information. 1) Encoding module accepts input vectors of sen-
+tence and path information to provide transition matrix. 2) Propa-
+gation module shares the hidden states of generated transition ma-
+trix with its neighbors 3) Classification module provides scores of
+prediction 4) Aggregator module integrates the score of the biased
+relation (from ontology reasoning) with that of the one from GNN
+to calculate loss.
+while the axiom path contains path information enriched with
+expressive axioms. We identify the, directly and indirectly,
+connecting paths between the entities vs and vo (Algorithm
+1).
+Single hop. For retrieving the direct path, we query on
+the ontology using SPARQL to check if a path exists be-
+tween entity pair (es, eo). The study examined the potential
+interactions in a sentence Sandimmun, a medication formu-
+lated as cyclosporin (cya) in cremophor and ethanol, and
+the muscle relaxants atracurium and vecuronium in anes-
+thetized cats. The correct relation label between sandimmun
+and cyclosporin is hasTradename. Upon querying this en-
+tity pair from the ontology, it was found that the direct path
+between given entity pairs is synonymOf relation which is
+similar to the correct relation label hasTradename present
+in the dataset. As depicted in Figure 2, the direct path be-
+tween two given entities (if they exist) is extricated using
+path(y; e) −→
+cui(x; y) ⊓edge(x; z) ⊓cui(z; e), where
+cui is concept unique identifier which uniquely identifies en-
+tity (assuming x is entity1, y is cui of entity1, z is entity2
+and e is cui of entity2). It retrieves the connecting edge be-
+tween two given entities. Once assimilating the path synony-
+mOf between entity pairs, the aggregator module in ReOnto
+computes the similarity between the extracted path and all re-
+lations, assigning the correct label hasTradename as the sim-
+ilarity score reaches its maximum.
+Figure 2: Subgraph of ontology illustrating direct connection be-
+tween two entities
+Algorithm 1: Path generation via ontology
+Input : entity pair (vs,vo), Number of hops (N)
+Output: finalpath
+Initialization:
+i = 1, source= vs, pathi−1, axiom_pathi−1,
+finalpath, adjacent node, hop_pathi, axiom_pathi =
+{}
+finalpath = PathGeneration(vs, vo, N)
+Function PathGeneration(vs, vo, N):
+path, axiom_path, finalpath = {}
+foreach entity pair vs, vo ∈ontology do
+path.append(ExplorePath(vs, vo, N))
+axiom_path.append(ExploreSymbolicPath(vs, vo,
+N))
+end
+finalpath = path ∪axiom_path
+return {finalpath}
+Function ExplorePath(vs, vo, N):
+hop_pathi, adjacent node=
+GetNHopFromSource(vs, 1)
+// calculates 1 hop
+distance from source
+pathi = hop_pathi ∪pathi−1
+if vo ̸= adjacent node and i ̸= N then
+pathi= ExplorePath(adjacent node, vo, N)
+i = i + 1
+end
+return {pathi}
+Function ExploreSymbolicPath(vs, vo, N):
+axiom_pathi, adjacent node =
+GetNHopFromSource(vs, 2)
+// calculates 2 hop
+distance from source containing there exist and
+for all quantifier
+axiom_pathi = hop_pathi ∪axiom_pathi−1
+if vo ̸= adjacent node and i ̸= N then
+axiom_pathi= ExploreSymbolicPath(adjacent
+node, vo, N)
+i = i + 1
+end
+return {axiom_pathi}
+Multi hop.
+Multi-hop path reasoning over the knowl-
+edge base aims at finding a relation path for an entity pair
+by traversing along a path of triples from graph structure
+data [Lv et al., 2021].
+For retrieving indirect path rela-
+tion, we query on the ontology if a n-hop distance path
+exists between entity pair (es, eo) starting from 1-hop dis-
+tance path. Consider the sentence Intravenous azithromycin-
+induced ototoxicity with its relation label as hasAdverseEf-
+fect. From ontologies, we get the path as a concatenation
+of causative agent of, has adverse reaction using path(y;e)−→
+cui(x;y) ⊓edge(x;z) ⊓edge(z;a) ⊓cui(a;e). The aggrega-
+tor module receives this path as input and using a similarity
+score, assigns the target relation label adverseEffect. Refer to
+Figure 3 for details.
+Using axioms. So far, we have considered only shallow
+and transitive relationships among the concepts. However,
+the biomedical domain consists of several complex relations.
+Figure 3: Subgraph of ontology depicting two hop distance between
+two entities
+We argue that those relations can be captured using expres-
+sive axioms from ontology. Expressive axioms consist of log-
+ical quantifiers such as there exist(∃), for all(∀), union(⊔),
+intersection(⊓) which are part of popular biomedical ontolo-
+gies. These expressive axioms enrich an ontology and play
+an essential role in the performance of downstream applica-
+tions [Pan et al., 2019]. Our objective is to determine the
+relation label between two entities by tracing the correspond-
+ing multi-hop triplet path that contains these axioms, starting
+from the first entity in the graph and continuing up to a speci-
+fied distance until we reach the second entity. Note that when
+multiple paths are available between two entities, we have
+taken into account all the paths that are available which con-
+sist of unique keywords Consider the sentence, A 73-year-old
+woman presented with fever and cough 2 weeks after com-
+pleting the third cycle of fludarabine for chronic lymphocytic
+leukemia. Here, correct relation label is adverse effect. From
+the ontology, we get following sub-graph enriched with ax-
+ioms.
+Fludaraline
+causativeAgentOf
+−−−−−−−−→Fludaraline Adverse Reaction
+Fludaraline Adverse Reaction⊑∃hasFinding.Finding
+Cough⊑Finding
+From the above relations, one can see that Fludaraline
+and Fludaraline Adverse Reaction (FADR) has a relation
+causativeAgentOf. Moreover, there exists a hasFinding re-
+lation between FADR and Finding. Therefore, with ontol-
+ogy reasoning, we can interpret that Fludaraline has an ax-
+iom path consisting of causativeAgentOf, hasSomeFinding,
+which is closest to the relation label adverseEffect. Similarly,
+consider another sentence, concentrations were significantly
+related to the degree of apocrine differentiation of the tumour
+and, in a subset of the cancers, capacity to release gcdfp-15
+was positively correlated with incidence of progestogen and
+androgen receptors. The labeled relation for this sentence is
+has nichdParentOf
+Tumor
+qualifierBy
+−−−−−→Diagnostic Imaging
+Diagnostic Imaging
+allowedQualifier
+−−−−−−−−→Neoplasms
+Neoplasms ⊑∃parent.Post-Traumatic Cancer
+Post-Traumatic Cancer ⊑Cancer
+For the above case, the derived path is qualifierBy, al-
+lowedQualifier, subClass and there exist some parent and
+subClass.
+3.2
+Encoding module
+Entity pairs are encoded by concatenating the position em-
+bedding with the word embedding in the sentence (Equa-
+tion 1), represented as En(ss,o
+t ) where st is the word em-
+bedding and ps,o
+t
+is the position embedding at word position
+t relative to the entity pair position (s, o). Similarly, sym-
+bolic path information from the Symbolic Module (SK) is
+encoded by concatenating path (pathi
+0) and axiom path de-
+tails (axiom_pathi
+0) where i represents the number of hops
+reaching destination.
+En(ss,o
+t ) = [st; ps,o
+t ]
+(1)
+En(SKs,o) = [
+X
+pathi
+0;
+X
+axiom_pathi
+0]s,o
+(2)
+The entity pairs representation and path information, after
+encoding with BioBERT are forwarded to a multi layer per-
+ceptron with non linear activation σ (Equation 3 and 4). We
+concatenate them as a shown in Equation 5. Since our dataset
+are from biomedical domain, we have used BioBERT for en-
+coding.
+An
+s,o = MLPn(BioBERT(En(ss,o
+0 ), En(ss,o
+1 ), .., En(sl−1s,o))
+(3)
+SP n
+s,o = MLPn(BioBERT(En(SKs,o)))
+(4)
+M n
+s,o = SP (n)
+s,o + A(n)
+s,o
+(5)
+3.3
+Graph Neural Network
+Propagation module
+In this module, we propagate information among graph nodes
+using equation 6, where given the representation of layer n ,
+representation of layer n + 1 is calculated. Here n represents
+the index, B represents neighbors of vo, and σ is the nonlinear
+activation function.
+hn+1
+s
+=
+X
+vo∈B(vo)
+σ(M (n)
+s,o h(n)
+o )
+(6)
+Classification module
+In the classification module, embeddings of entity pair are the
+input. Now, ReOnto performs element wise multiplication
+on input and then passed into multi layer perceptron using
+equation 7. Here · represent element wise multiplication.
+MLP(vs, vo) = [h(1)
+vs ·h(1)
+vo ]T ; [h(2)
+vs ·h(2)
+vo ]T ; ...; [h(K)
+vs ·h(K)
+vo ]T
+(7)
+Aggregator module
+Path information (pathi
+0; axiom_pathi
+0)∈SKs,o from Sym-
+bolic Module is separately encoded using BioBERT1 model,
+which is pretrained on biomedical text corpora. At first, we
+perform encoding of path information and total relation label
+Ri
+1 where i is the total number of potential relations (refer
+Equation 8 and 9). Then, we evaluate the semantic similar-
+ity between path information and complete labeled relation
+list. We get the relation label with the maximum similarity
+score and add it as a weighted bias as given in Equation 10.
+An important observation to make is that the weights gener-
+ated by the GNN undergo modification by incorporating the
+knowledge of the Symbolic Module. This step is crucial as it
+1https://www.sbert.net/
+Table 1: Ontologies used for Symbolic Knowledge
+Ontology
+Classes
+Properties
+Maximum depth
+DINTO [Bona et al., 2019]
+28,178
+12
+2
+OAE [He et al., 2014]
+10,589
+123
+17
+NDF-RT [Winnenburg et al., 2015]
+36,202
+90
+9
+MEDLINE [Yang, 2003]
+2,254
+12
+2
+NCIt [Kumar and Smith, 2005]
+177,762
+97
+21
+involves combining the symbolic and sub-symbolic compo-
+nents. We employ the softmax function to obtain probabili-
+ties and compute the cross entropy loss (refer Equations 11
+and 12), where S denotes whole corpus and n are total entity
+pairs such that s ̸= o. It is worth noting that if no path ex-
+ists between two entities, the bias score is set to 0, and loss is
+computed accordingly.
+Renc = enc(Ri
+1)
+(8)
+Penc = enc(SKs,o)
+(9)
+biasedscorer = max(cosSim(Renc, Penc))
+(10)
+P(vs, vo) = softmax((MLP(vs, vo) + biasedscorer)
+(11)
+L =
+S
+X
+t=0
+n
+X
+s,o=0
+(logP(vs, vo))t
+(12)
+4
+Experimental Setup
+We conduct our evaluation in response to following research
+questions.
+RQ1: What is the effectiveness of ReOnto that combines
+symbolic knowledge with a neural model in solving biomed-
+ical relation extraction task?
+RQ2: How does knowledge encoded in different ontolo-
+gies impact performance of ReOnto?
+Datasets. Our initial biomedical dataset is BioRel [Xing
+et al., 2020], which includes a total of 533,560 sentences,
+69,513 entities, and 125 relations. The second dataset we use
+is the Adverse Drug Effect (ADE) dataset [Gurulingappa et
+al., 2012]. We treat the RE problem in this dataset as binary
+classification, where sentences are categorized as either pos-
+itive adverse-related or negative adverse-related. Positive ad-
+verse relations are established when drug and reaction entities
+are associated in the given context, while negative relations
+involve drugs that are not accountable for a specific reac-
+tion. The ADE dataset comprises 6,821 labeled adverse sen-
+tences and 16,695 labeled negative adverse sentences, with
+a total of 5,063 entities. We consider two types of relations
+in this dataset: adverse-related and not adverse-related. The
+first entity is viewed as the drug, while the second entity is
+retrieved using named entity recognition. Table 1 provides
+details of the public ontologies utilized for constructing sym-
+bolic knowledge.
+Baseline Models for comparison. We used several com-
+petitive baselines: 1) Multi-instance models such as [Nguyen
+and Grishman, 2015; Zeng et al., 2014; Zeng et al., 2015], 2)
+Sentential RE models such as [Bastos et al., 2022; Zhu et al.,
+Hyper-parameters
+Value
+learning rate
+0.001
+batch size
+50
+dropout ratio
+0.5
+hidden state size
+256
+non linear activation
+relu
+Table 2: Hyper parameter seetings
+2019; Sorokin and Gurevych, 2017]. For Recon [Bastos et al.,
+2022], we used its EAC variant for fair comparison. Please
+note, we adapted these models to biomedical domain by re-
+training and inducing biomedical context needed for these
+models such as entity descriptions and types. 3) Biomed-
+ical relation extraction works such as [Huynh et al., 2016;
+Rawat et al., 2022; Haq et al., 2022; Schlichtkrull et al., 2017;
+Xing et al., 2020]. For biomedical RE works, values are ob-
+tained from original papers, and for other works (sentential
+and multi-instance), if code is available, we executed them
+on both datasets.
+Hyper-parameters and Metrics.
+Table 2 outlines the
+best parameter setting. We employ GloVe embedding of di-
+mension 50 for initialization.
+Since the datasets are from
+the biomedical domain for evaluating semantic similarity, we
+have used BioBERT model2. The size of position embedding
+is also kept at 50. We have used the open-source ontology
+(.owl) from BioPortal to extract the paths using the SPARQL
+query. We have followed [Zhu et al., 2019] for experiment
+settings. We evaluated the accuracy (precision) and F1 score
+for both datasets.
+Table 3: Biomedical Relation Extraction Results. ReOnto outper-
+forms baselines on both datasets. We’ve left precision column blank
+for baselines that does not report it.
+Dataset
+Model
+Accuracy(in%)
+F1 scores
+ADE
+CNN [Nguyen and Grishman, 2015]
+68
+0.71
+PCNN [Zeng et al., 2015]
+76.9
+0.73
+ContextAware [Sorokin and Gurevych, 2017]
+93
+0.93
+RGCN [Schlichtkrull et al., 2017]
+86
+0.83
+GPGNN [Zhu et al., 2019]
+92.1
+0.90
+CRNN [Huynh et al., 2016]
+-
+0.87
+CNN-Embedding [Rawat et al., 2022]
+-
+0.89
+SparkNLP [Haq et al., 2022]
+-
+0.85
+T5 [Raffel et al., 2020]
+92
+0.86
+RECON [Bastos et al., 2021]
+93.5
+0.92
+ReOnto (Ours)
+97
+0.96
+Dataset
+Model
+Accuracy(in%)
+F1 scores
+BioRel
+CNN [Nguyen and Grishman, 2015]
+48
+0.47
+PCNN [Zeng et al., 2015]
+64.6
+0.57
+RGCN [Schlichtkrull et al., 2017]
+72
+0.78
+GPGNN [Zhu et al., 2019]
+85
+0.84
+CNN+ATT [Xing et al., 2020]
+-
+0.72
+PCNN+AVG [Xing et al., 2020]
+-
+0.76
+RNN+AVG [Xing et al., 2020]
+-
+0.74
+ContextAware [Sorokin and Gurevych, 2017]
+89
+0.87
+T5 [Raffel et al., 2020]
+88
+0.86
+RECON [Bastos et al., 2021]
+89.6
+0.86
+ReOnto (Ours)
+92
+0.90
+2https://www.sbert.net/
+5
+Results
+ReOnto outperforms all the baseline models on both datasets
+(From Table 3). These results indicate that our model could
+successfully conduct reasoning with a neuro-symbolic graph
+on the fully connected graph and combine it with the under-
+lying deep learning model (GNN in our case). Observed re-
+sults successfully answer RQ1. Methods such as [Bastos et
+al., 2021; Sorokin and Gurevych, 2017] use contexts such
+as entity types and descriptions. Similarly, RECON and T5
+include additional explicit information of long entity descrip-
+tions, its type that allows offline learning of entity context.
+However, in a real-world setting of the biomedical domain, it
+is viable that such context may not be present for each entity.
+In contrast, our model discards the necessity of available en-
+tity context and learns purely using reasoning over connected
+entity graphs. Furthermore, multi-instance baselines try to
+learn relations using previous occurrences of entities in the
+document. In both cases, missing reasoning to capture long-
+range dependencies of entities hampers their performance.
+One possible reason for CNN and PCNN not performing well
+is that the biomedical sentence is complex and direct adher-
+ence to relation is impossible in this type of text. We can also
+notice that the context-aware model is performing better than
+multi-instance on these datasets because entity contexts are
+helping up to an extent. Presently, we have added context in-
+formation(symbolic knowledge) via ontology into the model.
+If enough context details are given our model can work on
+generalised datasets as well. Figure 4 presents plots a, b, c,
+d, which depict the training and validation F1 scores on both
+datasets, while plots e, f show the loss graph. Our observa-
+tions indicate that ReOnto delivers consistent performance on
+these graphs within the considered timeframe.
+6
+Ablation study
+6.1
+Effectiveness of number of ontologies
+To better understand the contribution of each ontology on Re-
+Onto’s performance, we conducted an ablation study. Table 4
+presents a summary of our findings, which indicate a signif-
+icant decrease in performance when considering individual
+ontologies. This validates our approach of merging knowl-
+edge from multiple ontologies to create symbolic knowledge.
+For the ADE dataset, we have a lesser entity coverage of
+22% using DRON ontology. However, we found that the per-
+formance significantly improves when we increase the entity
+coverage by incorporating the OAE and DINTO ontologies.
+This increase in entity coverage results in corresponding im-
+provements in F1 scores. Similarly, for the BioRel dataset,
+we tested with MEDLINE ontology with entity coverage of
+42% and then NCIt ontology with coverage of 34%, leading
+to corresponding improvements in F1 scores. Results also
+provide conclusive evidence that ReOnto’s performance de-
+pends on the coverage of entities aligned with the dataset and
+combining encoded knowledge has positive impact on overall
+performance (answering RQ2).
+6.2
+Effectiveness of number of hops
+We separately study the effect of the number of hops on the
+performance of ReOnto. Figure 5 shows the impact of the
+Table 4: Effect of ontology on F1 scores
+Dataset
+Ontology
+Entity coverage(approx.)
+F1 scores
+ADE
+DRON [Bona et al., 2019]
+22%
+0.92
+OAE [He et al., 2014]
+34%
+0.93
+DINTO [Herrero-Zazo et al., 2015]
+41%
+0.95
+BioRel
+MEDLINE [Yang, 2003]
+42%
+0.88
+NCIt [Kumar and Smith, 2005]
+34%
+0.84
+number of hops on the model. Increasing hops initially im-
+prove F1 scores until reaching a plateau.
+This is because
+additional hops don’t provide new relevant information. Ta-
+ble 6 summarizes the extracted hops from the MEDLINE on-
+tology, supporting our observation. Interestingly, increasing
+hops leads to redundant information that doesn’t contribute
+to performance. To maintain context and meaningful connec-
+tions, we preserved multi-hop information up to five hops in
+our experiment. Furthermore, Table 5 illustrates the relation-
+ship between ontology size, parsing time, and the number of
+hops, indicating an increase in time as hops increase.
+Table 5: Time taken to parse ontology and evaluate respective path.
+Parsing time increase w.r.t size of ontology
+Ontology
+Size (in KB)
+Time taken (in seconds)
+Parsing
+Direct hop
+One hop
+Two hop
+Axiom path1
+Axiom path2
+OAE
+9286
+6.75
+0.11
+2.73
+7.47
+2.19
+5.92
+NDFRT
+69387
+123.11
+1.21
+0.003
+7.629
+44.79
+103.36
+DINTO
+1,10,865
+137.4
+1.6
+3.8
+8.54
+5.67
+11.32
+MEDLINE
+6975
+2.19
+0.002
+0.0023
+0.003
+3.118
+6.09
+NCI
+5,71,434
+758.9
+1034.5
+1294.5
+3454.1
+2485
+5569
+Table 6: Derived path obtained by connecting “protein" and “dietary
+protein" entity
+Hops
+Path
+path1
+classifies
+path2
+mapped from dietary proteins, classifies
+path3
+classifies proteins, classifies dietary proteins, classifies
+path4
+classifies proteins, classifies dietary proteins, mapped from dietary proteins, classifies
+path5
+classifies proteins, classifies dietary proteins, related to carbs, related to dietary proteins,
+classifies
+path6
+classifies Proteins, classifies dietary proteins, mapped from dietary proteins, related to carbs,
+related to dietary proteins, classifies
+path7
+classifies Proteins, classifies dietary proteins, mapped from dietary proteins, related to carbs,
+related to dietary proteins classifies dietary proteins
+7
+Case study
+Table 7 shows qualitative results that compare the ReOnto
+model with the baseline models.
+We report a few results
+showing ReOnto can surmise the relationship with reasoning.
+ReOnto retrieved the relevant derived path from the ontology
+in the first case. ReOnto implicitly learns from the facts and
+captures the derived path to provide the correct relation label,
+even if it is not explicitly mentioned as isPrimaryAnatomic-
+SiteOfDisease.
+CUI:C0262950
+preferredLabel
+−−−−−−−→Bone
+Bone⊑∃anatomicSiteOfDisease.Rickets
+Rickets
+CUI
+−−→CUI:C0035579
+Bone
+semanticType
+−−−−−−→Anatomic Structure
+In the second case, ReOnto produces the following path by
+utilizing the expressive axiom of the ontology. ReOnto cap-
+Figure 4: For the ADE dataset, Figures a) and b) show the training and validation F1 scores with baseline, respectively. Figure e) illustrates
+the cross-entropy loss for the iteration. For the BioRel dataset, Figures c) and d) show the training and validation F1 scores with baseline,
+respectively. Figure f) illustrates the cross-entropy loss concerning the iteration. ReOnto exhibits consistent and stable performance on both
+datasets, as indicated by the plotted F1 scores and loss.
+Table 7: Sample sentences and predictions of various models. ReOnto using reasoning is able to predict the relations which are not explicitly
+observable from the sentence itself and requires long-range entity interactions.
+Sentence
+Relation
+GPGNN
+Context
+Aware
+ReOnto
+Both compounds are equally potent in the stimulation of
+intestinal calcium transport , bone(C0262950) calcium
+mobilization , in the elevation of serum phosphorus , and
+in the healing of rickets(C0035579) in the rat
+is primary
+anatomic
+site
+of
+disease
+may
+be
+associated
+disease of
+disease
+may
+be
+finding of
+disease
+is primary
+anatomic
+site
+of
+disease
+The ventricular effective refractory period, as well
+as
+the
+vt cycle length(C0042514),
+increased
+after
+propranolol(C0033497) and was further prolonged after
+the addition of a type i agent
+may
+be
+treated by
+may diag-
+nose
+may treat
+may
+be
+treated by
+dsip and clip [acth(18-39)] immunoreactive(ir) neurons
+and fibers were examined in the human(C0086418) hy-
+pophysis and pituitary stalk using immunmohistofluores-
+cence and peroxidase(C4522012) antiperoxidase meth-
+ods
+is
+organ-
+ism source
+of
+gene
+product
+nichd par-
+ent of
+organism
+has gene
+is
+organ-
+ism source
+of
+gene
+product
+Figure 5: Effectiveness of hops on performance
+tures the long-range dependencies between entities and pro-
+vides the correct relation label.
+CUI:C0042514
+preferredLabel
+−−−−−−−→Ventricular Tachycardia
+Ventricular Tachycardia≡Techycardia
+Techycardia⊑∃mayBeTreatedBy.Propranolol
+Propranolol
+CUI
+−−→CUI:C0033497
+In the last case study, several paths are derived from the on-
+tology for the Human entity. It can be observed that ReOnto
+derives and asserts the dependency path between Human and
+Peroxidase, and concludes that the target relation label isOr-
+ganismSourceOfGeneProduct applies, as compared to other
+baseline models. Such complex ontology reasoning provides
+long-range interactions between entities, which is inherently
+not possible in baseline models.
+CUI:C0086418
+preferredLabel
+−−−−−−−→Human
+∃Human⊑geneProductHasOrganismSource.Myeloperoxidase
+Myeloperoxidase
+hasDisposition
+−−−−−−−→Peroxidase(disposition)
+Peroxidase(disposition)
+preferredName
+−−−−−−−→Peroxidase
+Peroxidase
+CUI
+−−→CUI:C4522012
+8
+Conclusion and Future Work
+We proposed a novel neuro-symbolic approach ReOnto that
+leverages path-based reasoning, including expressive axiom
+path with GNN. We apply our model to complex biomedi-
+cal text and compare the approach with baselines. With em-
+pirical results, there are three key takeaways.
+Firstly, ex-
+isting baseline models with any form of context only cap-
+ture short-range dependencies of entities.
+In contrast, our
+model uses long-range entity dependencies derived from on-
+tology reasoning to outperform all baselines on both biomed-
+ical datasets. Code is available at https://github.com/kracr/
+reonto-relation-extraction.
+ReOnto provides effective reasoning on given text and en-
+tity pair, which can tackle the challenges of biomedical text.
+It also considers expressive axioms of ontology to reason on
+RE. The aggregation of these axioms outperformed the base-
+lines.
+As a next step, we can consider using background
+knowlege on unsupervised data. An ontology reasoner can
+be used to infer more paths and perhaps these additional ax-
+ioms can improve the performance further.
+Acknowledgements. We express our sincere gratitude to
+the Infosys Centre for Artificial Intelligence (CAI) at IIIT-
+Delhi for their support throughout the duration of this project.
+References
+[Aghaebrahimian et al., 2022] Ahmad
+Aghaebrahimian,
+Maria Anisimova, and Manuel Gil.
+Ontology-aware
+biomedical relation extraction. bioRxiv, 2022.
+[Angell et al., 2021] Rico
+Angell,
+Nicholas
+Monath,
+Sunil Mohan, Nishant Yadav, and Andrew McCallum.
+Clustering-based inference for biomedical entity linking.
+In Proceedings of the 2021 Conference of the North
+American Chapter of the Association for Computational
+Linguistics:
+Human Language Technologies,
+pages
+2598–2608, 2021.
+[Balcilar et al., 2020] Muhammet Balcilar, Guillaume Ren-
+ton, Pierre Héroux, Benoit Gaüzère, Sébastien Adam, and
+Paul Honeine. Analyzing the expressive power of graph
+neural networks in a spectral perspective. In International
+Conference on Learning Representations, 2020.
+[Bastos et al., 2021] Anson
+Bastos,
+Abhishek
+Nadgeri,
+Kuldeep Singh, Isaiah Onando Mulang, Saeedeh Shekar-
+pour, Johannes Hoffart, and Manohar Kaul.
+Recon:
+relation extraction using knowledge graph context in
+a graph neural network.
+In Proceedings of the Web
+Conference 2021, pages 1673–1685, 2021.
+[Bastos et al., 2022] Anson
+Bastos,
+Abhishek
+Nadgeri,
+Kuldeep Singh, Hiroki Kanezashi, Toyotaro Suzumura,
+and Isaiah Onando Mulang’. How expressive are trans-
+formers in spectral domain for graphs?
+Transactions on
+Machine Learning Research, 2022.
+[Bodenreider, 2004] Olivier Bodenreider. The unified medi-
+cal language system (umls): integrating biomedical termi-
+nology. Nucleic acids research, 32(suppl_1):D267–D270,
+2004.
+[Bona et al., 2019] Jonathan P. Bona, Mathias Brochhausen,
+and William R. Hogan. Enhancing the drug ontology with
+semantically-rich representations of national drug codes
+and RxNorm unique concept identifiers. BMC Bioinfor-
+matics, 20(21), December 2019.
+[Cabot and Navigli, 2021] Pere-Lluís
+Huguet
+Cabot
+and
+Roberto Navigli. Rebel: Relation extraction by end-to-end
+language generation. In Findings of the Association for
+Computational Linguistics: EMNLP 2021, pages 2370–
+2381, 2021.
+[Crone, 2020] Phil Crone. Deeper task-specificity improves
+joint entity and relation extraction.
+arXiv preprint
+arXiv:2002.06424, 2020.
+[Eberts and Ulges, 2020] Markus Eberts and Adrian Ulges.
+Span-based joint entity and relation extraction with trans-
+former pre-training. In ECAI 2020, pages 2006–2013. IOS
+Press, 2020.
+[Fensel et al., 2020] Dieter Fensel, Umutcan ¸Sim¸sek, Kevin
+Angele, Elwin Huaman, Elias Kärle, Oleksandra Panasiuk,
+Ioan Toma, Jürgen Umbrich, and Alexander Wahler. Why
+we need knowledge graphs: Applications. In Knowledge
+Graphs, pages 95–112. Springer, 2020.
+[Gurulingappa et al., 2012] Harsha
+Gurulingappa,
+Ab-
+dul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin
+Hofmann-Apitius, and Luca Toldo.
+Development of a
+benchmark corpus to support the automatic extraction of
+drug-related adverse effects from medical case reports.
+Journal of Biomedical Informatics, 45(5):885 – 892,
+2012. Text Mining and Natural Language Processing in
+Pharmacogenomics.
+[Haq et al., 2022] Hasham Ul Haq, Veysel Kocaman, and
+David Talby. Mining adverse drug reactions from unstruc-
+tured mediums at scale, 2022. version: 2.
+[He et al., 2014] Yongqun He, Sirarat Sarntivijai, Yu Lin,
+Zuoshuang Xiang, Abra Guo, Shelley Zhang, Desikan Ja-
+gannathan, Luca Toldo, Cui Tao, and Barry Smith. OAE:
+The ontology of adverse events. Journal of Biomedical
+Semantics, 5:29, dec 2014.
+[Herrero-Zazo et al., 2015] María
+Herrero-Zazo,
+Isabel
+Segura-Bedmar, Janna Hastings, and Paloma Martínez.
+DINTO: Using OWL ontologies and SWRL rules to infer
+drug–drug interactions and their mechanisms. Journal of
+Chemical Information and Modeling, 55(8):1698–1707,
+aug 2015. Publisher: American Chemical Society.
+[Hong et al., 2004] Jia-Fei Hong, Xiang-Bing Li, and Chu-
+Ren Huang. Ontology-based prediction of compound re-
+lations : A study based on SUMO. In Proceedings of the
+18th Pacific Asia Conference on Language, Information
+and Computation, pages 151–160. Logico-Linguistic So-
+ciety of Japan, dec 2004.
+[Huynh et al., 2016] Trung-Tin Huynh, Yulan He, Alistair
+Willis, and Stefan M. Rüger. Adverse drug reaction classi-
+fication with deep neural networks. In International Con-
+ference on Computational Linguistics, 2016.
+[Karkaletsis et al., 2011] Vangelis
+Karkaletsis,
+Pavlina
+Fragkou, Georgios Petasis, and Elias Iosif.
+Ontology
+based information extraction from text.
+In Georgios
+Paliouras,
+Constantine D. Spyropoulos,
+and George
+Tsatsaronis, editors, Knowledge-Driven Multimedia Infor-
+mation Extraction and Ontology Evolution: Bridging the
+Semantic Gap, pages 89–109. Springer Berlin Heidelberg,
+2011.
+[Kumar and Smith, 2005] Anand Kumar and Barry Smith.
+Oncology ontology in the nci thesaurus. In Silvia Miksch,
+Jim Hunter, and Elpida T. Keravnou, editors, Artificial
+Intelligence in Medicine, pages 213–220, Berlin, Heidel-
+berg, 2005. Springer Berlin Heidelberg.
+[Li and Huan, 2008] D. Li and L. Huan. The ontology re-
+lation extraction for semantic web annotation. In Cluster
+Computing and the Grid, IEEE International Symposium
+on, pages 534–541, Los Alamitos, CA, USA, may 2008.
+IEEE Computer Society.
+[Lv et al., 2021] Xin Lv, Yixin Cao, Lei Hou, Juanzi Li,
+Zhiyuan Liu, Yichi Zhang, and Zelin Dai. Is multi-hop
+reasoning really explainable? towards benchmarking rea-
+soning interpretability. In Proceedings of the 2021 Con-
+ference on Empirical Methods in Natural Language Pro-
+cessing, pages 8899–8911, 2021.
+[Nadgeri et al., 2021] Abhishek Nadgeri,
+Anson Bastos,
+Kuldeep Singh, Isaiah Onando Mulang’, Johannes Hoffart,
+Saeedeh Shekarpour, and Vijay Saraswat. KGPool: Dy-
+namic knowledge graph context selection for relation ex-
+traction. In Findings of the Association for Computational
+Linguistics: ACL-IJCNLP 2021, pages 535–548, Online,
+August 2021. Association for Computational Linguistics.
+[Nguyen and Grishman, 2015] Thien
+Huu
+Nguyen
+and
+Ralph Grishman. Relation extraction: Perspective from
+convolutional neural networks.
+In VS@HLT-NAACL,
+2015.
+[Pan et al., 2019] Jeff Z Pan, Mei Zhang, Kuldeep Singh,
+Frank van Harmelen, Jinguang Gu, and Zhi Zhang. Entity
+enabled relation linking. In International Semantic Web
+Conference, pages 523–538. Springer, 2019.
+[Raffel et al., 2020] Colin Raffel, Noam Shazeer, Adam
+Roberts, Katherine Lee, Sharan Narang, Michael Matena,
+Yanqi Zhou, Wei Li, and Peter J. Liu. Exploring the limits
+of transfer learning with a unified text-to-text transformer,
+2020.
+[Rawat et al., 2022] Ashish Rawat, Mudasir Ahmad Wani,
+Mohammed ElAffendi, Ali Shariq Imran, Zenun Kas-
+trati, and Sher Muhammad Daudpota. Drug adverse event
+detection using text-based convolutional neural networks
+(textcnn) technique. Electronics, 11(20), 2022.
+[Santos et al., 2015] Cicero Nogueira dos Santos, Bing Xi-
+ang, and Bowen Zhou. Classifying relations by ranking
+with convolutional neural networks, 2015.
+[Schlichtkrull et al., 2017] Michael Schlichtkrull, Thomas N
+Kipf, Peter Bloem, Rianne van den Berg, Ivan Titov, and
+Max Welling. Modeling relational data with graph con-
+volutional networks.
+arXiv preprint arXiv:1703.06103,
+2017.
+[Shen and Huang, 2016] Yatian Shen and Xuanjing Huang.
+Attention-based convolutional neural network for seman-
+tic relation extraction. In Proceedings of COLING 2016,
+the 26th International Conference on Computational Lin-
+guistics:
+Technical Papers, pages 2526–2536, Osaka,
+Japan, December 2016. The COLING 2016 Organizing
+Committee.
+[Sorokin and Gurevych, 2017] Daniil
+Sorokin
+and
+Iryna
+Gurevych. Context-aware representations for knowledge
+base relation extraction.
+In Proceedings of the 2017
+Conference on Empirical Methods in Natural Language
+Processing, pages 1784–1789, Copenhagen, Denmark,
+September 2017. Association for Computational Linguis-
+tics.
+[T.Y.S.S et al., 2021] Santosh
+T.Y.S.S,
+Prantika
+Chakraborty, Sudakshina Dutta, Debarshi Kumar Sanyal,
+and Partha Pratim Das. Joint entity and relation extraction
+from scientific documents: Role of linguistic information
+and entity types. In EEKE@JCDL, 2021.
+[Vashishth et al., 2018] Shikhar Vashishth, Rishabh Joshi,
+Sai Suman Prayaga, Chiranjib Bhattacharyya, and Partha
+Talukdar. RESIDE: Improving distantly-supervised neural
+relation extraction using side information. In Proceedings
+of the 2018 Conference on Empirical Methods in Natural
+Language Processing, pages 1257–1266, Brussels, Bel-
+gium, October-November 2018. Association for Compu-
+tational Linguistics.
+[Wang et al., 2016] Linlin Wang, Zhu Cao, Gerard de Melo,
+and Zhiyuan Liu. Relation classification via multi-level at-
+tention CNNs. In Proceedings of the 54th Annual Meeting
+of the Association for Computational Linguistics (Volume
+1: Long Papers), pages 1298–1307, Berlin, Germany, Au-
+gust 2016. Association for Computational Linguistics.
+[Winnenburg et al., 2015] Rainer Winnenburg, Jonathan M
+Mortensen, and Olivier Bodenreider.
+Using description
+logics to evaluate the consistency of drug-class member-
+ship relations in NDF-RT. Journal of Biomedical Seman-
+tics, 6:13, 2015.
+[Xing et al., 2020] Rui Xing, Jie Luo, and Tengwei Song.
+BioRel: towards large-scale biomedical relation extrac-
+tion. BMC Bioinformatics, 21(16):543, 2020.
+[Yang, 2003] Jung-Jin Yang. An ontology-based intelligent
+agent system for semantic search in medicine. In Jaeho
+Lee and Mike Barley, editors, Intelligent Agents and Multi-
+Agent Systems, pages 182–193. Springer Berlin Heidel-
+berg, 2003.
+[Ye and Ling, 2019] Zhi-Xiu Ye and Zhen-Hua Ling. Distant
+supervision relation extraction with intra-bag and inter-bag
+attentions, 2019.
+[Zeng et al., 2014] Daojian Zeng, Kang Liu, Siwei Lai,
+Guangyou Zhou, and Jun Zhao.
+Relation classifica-
+tion via convolutional deep neural network. In Proceed-
+ings of COLING 2014, the 25th International Conference
+on Computational Linguistics: Technical Papers, pages
+2335–2344, Dublin, Ireland, August 2014. Dublin City
+University and Association for Computational Linguistics.
+[Zeng et al., 2015] Daojian Zeng, Kang Liu, Yubo Chen, and
+Jun Zhao. Distant supervision for relation extraction via
+piecewise convolutional neural networks. In Proceedings
+of the 2015 Conference on Empirical Methods in Natural
+Language Processing, pages 1753–1762, Lisbon, Portu-
+gal, September 2015. Association for Computational Lin-
+guistics.
+[Zhang and Wang, 2015] Dongxu Zhang and Dong Wang.
+Relation classification via recurrent neural network, 2015.
+[Zhang et al., 2022] Wen Zhang, Jiaoyan Chen, Juan Li,
+Zezhong Xu, Jeff Z Pan, and Huajun Chen. Knowledge
+graph reasoning with logics and embeddings: Survey and
+perspective. arXiv preprint arXiv:2202.07412, 2022.
+[Zhu et al., 2019] Hao Zhu, Yankai Lin, Zhiyuan Liu, Jie Fu,
+Tat-Seng Chua, and Maosong Sun. Graph neural networks
+with generated parameters for relation extraction. In Pro-
+ceedings of the 57th Annual Meeting of the Association for
+Computational Linguistics, pages 1331–1339, Florence,
+Italy, July 2019. Association for Computational Linguis-
+tics.

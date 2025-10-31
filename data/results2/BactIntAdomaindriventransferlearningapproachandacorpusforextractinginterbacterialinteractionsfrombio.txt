@@ -1,0 +1,770 @@
+BactInt: A domain driven transfer learning approach and a cor-
+pus for extracting inter-bacterial interactions from biomedical text
+Krishanu Das Baksi1, 2, Vatsala Pokhrel1, Kuntal Kumar Bhusan1, *, and Sharmila Mande1
+1TCS Research, Pune, India
+2School of Information Technology, IIT Delhi, India
+*Corresponding author; email: kuntal.bhusan@tcs.com
+April 2023
+Abstract
+The community of diﬀerent types of microbes present in a biological niche plays a very important role
+in functioning of the system. The crosstalk or interactions among the diﬀerent microbes contributes to the
+building blocks of such microbial community structures. Evidence reported in biomedical text serves as a
+reliable source for predicting such interactions. However, going through the vast and ever-increasing volume
+of biomedical literature is an intimidating and time consuming process. This necessitates development of
+automated methods capable of accurately extracting bacterial relations reported in biomedical literature. In
+this paper, we introduce a method for automated extraction of microbial interactions (speciﬁcally between
+bacteria) from biomedical literature along with ways of using transfer learning to improve its accuracy. We
+also describe a pipeline using which relations among speciﬁc bacteria groups can be mined. Additionally, we
+introduce the ﬁrst publicly available dataset which can be used to develop bacterial interaction extraction
+methods.
+1
+Introduction
+Microbes are one of the most important groups of organisms in all environments with bacteria being the dom-
+inant part. Understanding the microbial community structure and the roles that they play in their respective
+environments is a topic of interest in a diverse number of ﬁelds, including but not limited to medicine, agricul-
+ture, nutrition etc [4, 11, 21]. Such understanding can help us decipher more about an environment, and also
+potentially reveal strategies to manipulate the same for a desired objective. In recent years, with the realiza-
+tion of the importance of the microbiome, scientists have carried out a large number of experiments to obtain
+data pertaining to bacterial composition in diﬀerent ecosystems [50]. However, relationships inferred from such
+data using techniques like correlation between the count abundances are often subjected to certain limitations
+owing to the compositional nature of the data [16] as not all correlations can be ascertained to be interactions.
+Experimentally reported microbial interactions in biomedical literature still serve as the gold standard. Extrac-
+tion of such information from biomedical text can provide deeper insights into the microbial communities and
+potentially suggest how to manipulate them for industrial [20] and healthcare beneﬁts [11, 21]. However, due
+to the exponential increase in the size and scale of scientiﬁc literature [51], mining of this information manually
+is time consuming. Advanced search engines can partially help in this regard by ﬁnding the documents or in
+some cases, sentences containing mentions of one or more microbial names. However, the ﬁnal step of inferring
+inter bacterial associations and interactions can only be achieved using specialized techniques that work on top
+of the search engines. Methods have been developed for the identiﬁcation of abstracts and sentences reporting
+microbial associations using hand-crafted domain features [36]. Such methods can identify only the sentences
+reporting microbial relations without extracting the actual relations among them. Realizing the importance
+of extraction of inter-microbial associations from text, several scientiﬁc works has been done for mining the
+same [46, 28]. For example, EviMass [46] and MPLasso [28] identify signiﬁcant associations among microbes
+using their co-occurrence statistics, i.e., how many times they are mentioned in the same biomedical abstract.
+However, instead of extracting the actual reported interactions, these methods rely on the co-occurence statis-
+tics of microbial names in scientiﬁc literature. Although the co-occurence statistics may indicate some form of
+association (direct or indirect) between microbes, it is diﬃcult to predict whether these associations imply any
+direct biological interactions.
+Recent advances in natural language processing, especially the ﬁeld of information extraction holds promise
+for identifying microbial relations from scientiﬁc literature using automated techniques. Information extraction
+1
+arXiv:2305.07468v1  [cs.IR]  27 Apr 2023
+Figure 1: Example of an intermicrobial-interaction annotation, with marked bacterial entities and the inter-
+acting pair.
+broadly refers to the methods for extracting relationships among diﬀerent entities from natural language text.
+Current deep learning based information extraction approaches, albeit highly accurate, require large amount of
+manually labelled training data to perform well. However, creation of a manually annotated dataset is a time
+and eﬀort consuming process. Recent methods aimed at extracting inter-bacterial interactions or relations from
+biomedical scientiﬁc literature text has also been described [55, 49]. However, the datasets used to train the
+models are not available publicly.
+In this paper, we present a manually annotated dataset which can be utilized for developing machine learning
+methods for extracting bacterial interaction, and make it available publicly. Since the datasets are manually
+curated by highly trained domain experts, collecting a very large dataset was prohibitively expensive and time
+consuming. Consequently, the dataset we developed is limited in size, containing around 1400 data points.
+Usually, the performance of modern NLP models based on deep learning suﬀer when the datasets are not
+very large. In order to ensure high performance of the information extraction method, we devise a transfer
+learning strategy which exploits other publicly available biomedical information extraction datasets, and show
+its eﬀectiveness. Finally, we also present an end-to-end pipeline, including sentence segmentation, named entity
+recognition and information extraction for ﬁnding bacterial interactions reported in biomedical text.
+1.1
+Contributions
+In this paper, we make the following contributions:
+1. We present a manually annotated dataset for extraction of bacterial interactions from sentences belonging
+to relevant biomedical scientiﬁc literature, and make it publicly available. To the best of our knowledge, this is
+the ﬁrst publicly available dataset pertaining to extraction of inter bacterial interactions from biomedical text.
+2. We also develop and train a BERT [10] based information extraction model for the task. We acknowledge
+that the size of the dataset is not large, and that it is a limiting factor in the performance of the model,
+and additionally demonstrate an explicit transfer learning strategy for improving the model’s performance
+signiﬁcantly, exploiting other publicly available biomedical relation extraction datasets.
+3. We present an end-to-end pipeline for ﬁnding the interactions or relations among bacterial taxa in a
+biomedical text (e.g., biomedical literature abstracts or paragraphs), and evaluate the performance of each of
+the components of the pipeline.
+We expect that our contribution will serve as a useful methodology for microbiome researchers and engineers
+to ﬁnd the interactions among microbes of their interest. Additionally, we hope that the models and annotated
+data presented in this paper will serve as the base for the development of better techniques and architectures for
+the extraction of microbial interactions from biomedical text. Interested readers are requested to get in touch
+with the corresponding author for accessing the data.
+2
+Background
+2.1
+Information Extraction in Biomedical Domain
+Knowledge in the domain of biological sciences is primarily available in unstructured text form, making it
+diﬃcult for computer systems to extract useful information from the same [54, 48]. To enable mining and
+inference of new knowledge using known information present in these documents, it is necessary to capture this
+data and make it available in a structured format [48].
+Several studies and datasets were introduced in order to solve this problem in multiple subdomains of
+biomedical sciences. Since protein-protein interactions are very useful for many applications, multiple methods
+for extraction of the same from from biomedical literature have been reported [6, 38, 22, 37].
+Apart from
+protein protein interactions, datasets for the extraction of drug-drug interactions, viz ADE [17] and DDI [18],
+chemical-protein interactions viz. ChemProt [32] and several others are also available.
+2.2
+Methods for Information Extraction
+Diﬀerent types of methods have been developed for information extraction in the domain of biology. In the
+past, most of these methods relied on hand-crafted features [13, 15, 30] and rules [45, 40, 1, 27]. Creation
+2
+Figure 2: Diﬀerence between implicit and explicit transfer learning training regimens as followed in this work.
+of hand-crafted rules or features is a tedious process as a large number of possible syntactic (grammatical)
+variations [9] need to be taken into account. Therefore, with the rise in popularity of deep learning and the
+creation of large scale datasets, the focus shifted towards deep learning based methods which are capable of
+automatically learning features [26]. Currently, transformer [52] based architectures like BERT [10] outperform
+older neural architectures like recurrent neural networks and tree based recursive neural networks on several
+NLP problems including bacterial relation extraction [49].
+2.3
+BERT and BioBERT
+BERT [10, 23] makes use of encoder block of the transformer [52] architecture. It is based on the self-attention
+mechanism, which learns contextual relations between tokens (words or subwords) in a text. The BERT ar-
+chitecture and its constituent layers, as well as methods for unsupervised pretraining the model is described in
+detail in the original papers on transformers [52] and BERT [10]. The pretrained BERT models usually show
+strong performance [10] on multiple NLP tasks. Diﬀerent models pertaining to multiple domains and languages
+which are pretrained using the BERT methodologies have been described in literature. In the biomedical do-
+main, BERT model pretrained on biomedical domain speciﬁc scientiﬁc literature called BioBERT [23] has been
+described, and has been used for a variety of downstream applications in the domain of biomedical NLP.
+2.4
+GPT and BioGPT
+GPT [41, 42, 31] makes use of the decoder block of the transformer [52] architecture and is trained as an
+generative language model. Whereas the BERT model by design can primarily ﬁnd contextual embeddings of
+the tokens in an input text, GPT like models have the additional capacity of generating text. Additional details
+into the model architecture, training methodology and other details can be found in the original papers [41, 42].
+Like BERT, pretrained GPT models have also been shown to perform very well on a number of NLP, especially
+generative NLP tasks. The popular ChatGPT system is also based on the GPT architecture. Recently, BioGPT
+[31], a GPT2 [42] based model pretrained on biomedical scientiﬁc literature text has been shown to perform
+well on a variety of biomedical NLP tasks.
+2.5
+Transfer Learning
+Transfer learning pertains to training (learning the parameters of) a model on one task and then relearning or
+retraining the model on another related (having some common underlying structure) but diﬀerent task. Models
+show improved performance on the ﬁnal task after transfer learning, and can also work well when limited training
+data is available for the ﬁnal task [35]. The underlying rationale behind this pertains to the fact that the model
+can utilize what it ’learned’ in the ﬁrst task to perform better on the second task. Here it is important to note
+that for most BERT and GPT based neural architectures, transfer learning is implicit, as the ’learning’ during
+the pretraining step is ’transferred’ while the model is being ﬁne-tuned on the ﬁnal task. For example, the
+eﬀectiveness of a BERT model pretrained using biomedical literature text (such as BioBERT [23] or SciBERT
+3
+[3]) and further trained / ﬁne-tuned on the task of extraction of microbial interactions from text has been
+demonstrated [49]. This type of transfer learning is implicit in the pretraining methodology. However, transfer
+learning can also be more explicit, for example, a BERT model already pretrained using biomedical literature
+text (such as BioBERT [23]) can be further trained for the prediction of protein-protein interactions from text
+and further on the task of microbial interaction extraction from text. In the context of the current work, this
+distinction between explicit and implicit transfer learning is very important and worth noting. It has also been
+explained using Figure 1.1.
+Implicit transfer learning refers to the methodology where the pretrained model is ﬁne tuned on any
+downstream task. In this strategy, the model uses what it learnt during the initial pretraining process, for
+example, during the masked language modelling and next sentence prediction tasks in case of BERT, on the
+ﬁnal downstream task. Fine-tuning a BioBERT [23] or BioGPT [31] model on any downstream biomedical NLP
+task would belong to this category.
+Explicit transfer learning refers to explicitly training the already pretrained models on a task which
+is somewhat similar in structure to the ﬁnal task in certain characteristics. An example would be training a
+(already pretrained) BioBERT or BioGPT model for the task of protein-protein interaction extraction task, and
+then ﬁne-tuning on microbe-microbe interaction task. This example methodology is also the primary strategy
+followed in this work, in order to improve performance of the models on limited annotated data. In comparison
+to the implicit transfer learning method, there is an additional training regimen, but which is focused on a
+task similar (in structure) to the one at hand, for which substantial amount of data is available.
+2.6
+Information Extraction related to Bacteria and Microbes
+Since the relations among microbes can provide insights into the complex interactions among individual strains
+and species in a microbiome, datasets have also been developed for the extraction of microbial relations from
+biomedical text. In [55] and [49] two corpora (viz. MICorpus and MTMICorpus) focusing on microbe interaction
+extraction along with deep learning methods for the same have been described. While the MICorpus only focuses
+on the task of extraction of interacting microbes, MTMICorpus also contains the type of interaction between
+a pair of interacting microbes [49]. The performance of microbial relation extraction using implicit transfer
+learning, wherein a BioBERT [23] and SciBERT [3] models (pretrained on biomedical scientiﬁc literature) are
+ﬁne tuned for the dataset speciﬁc for the task has been illustrated [49]. However, it is important to note that
+the datasets described in these papers are not available publicly, therefore hindering further experimentation
+and progress towards solving this problem.
+Figure 3: The End-to-End Pipeline for bacterial interaction extraction from a given biomedical text passage.
+N.B. The last step is not done in this paper.
+3
+Methods
+3.1
+Bacterial Interaction Extraction Sentence Corpus
+The bacterial interaction sentence corpus, which we refer to as the ’BactInt Sentence Corpus’ is composed of
+around 1400 sentences annotated with all bacterial mentions as well as their interactions, if any. The primary
+motivation for annotating individual sentences rather than entire abstracts is that only a few sentences per
+abstract indicate some kind of interaction.
+Since annotation is done by highly trained biomedical experts,
+this is expensive, and annotating entire abstracts would essentially need annotating multiple sentences with no
+reported interaction, and probably a few with a reported interaction. This would take up a lot of time, but the
+number and diversity of sentences which report an annotation would not be optimized. However, in order to
+make the model generalize well, the goal to maximize the number and diversity of our dataset. Therefore, only
+sentences were annotated. The process is detailed in the following sections.
+3.1.1
+Identiﬁcation of Sentences for Annotation
+The dataset of sentences reported in [36] consisting of around 750 sentences, wherein multiple bacterial names
+are mentioned in each sentence, is taken as the initial dataset. Out of these sentences, while half of them report
+4
+at least one bacterial interaction (some report multiple) between the mentioned bacterial entities, the other
+half do not report any bacterial interaction. In addition, we identify several other sentences using the following
+method. A set of abstracts from PubMed (https://pubmed.ncbi.nlm.nih.gov) containing multiple bacterial
+mentions is selected, and subset of these abstracts are further ﬁltered using an ’Abstract classiﬁer’ described
+in [36]. These abstract passages are broken down into individual sentences using SpaCy (https://spacy.io),
+speciﬁcally the ’en core sci md’ (SciSpacy [34]) model.
+Finally, the sentences having a high probability of
+reporting a bacterial interaction are selected from this set using another ’Sentence classiﬁer’ described in [36].
+A total of around 650 sentences are identiﬁed. The combined set of these sentences with the initial ones (total
+1406 sentences) are further annotated.
+3.1.2
+Manual Annotation of the Sentences
+Each of the sentences were annotated manually by biomedical experts. The well-known open source information
+extraction annotation tool BRAT [47] was used for this purpose.
+The experts annotated every mention of
+bacterial names in the text, by labelling the span of the text that corresponded to a bacterial named entity.
+To infer whether the bacterial entities present in a sentence have an interaction, the sentences were required to
+have a clear mention of two or more bacterial entities exhibiting an eﬀect on each other, which were then ﬁnally
+annotated as an inter-bacterial interaction. Examples of the nature of such inter-bacterial interactions include
+bacterial entities inhibiting the growth of the other bacterial entities, bacteria promoting the growth of the other
+bacterial entities, bacterial entities having a synergistic or antagonistic eﬀect on each other, etc., all of which are
+collectively labelled as ‘interacts’. For instance, if a sentence has clear mention of two bacterial entities, ‘bac1’
+and ‘bac2’, and ‘bac1’ has any kind of eﬀect (inhibitory, growth promoting, synergistic, antagonistic, etc.) on
+‘bac2’, the annotation was labelled as ‘bac1’ ‘interacts’ with ‘bac2’, indicating an inter-bacterial interaction for
+that particular sentence. It must be noted that each text (sentence) can potentially have zero, one or multiple
+associations. In order to detect the maximum number of potential bacterial associations from biomedical text,
+the sentence corpus captures information from a diverse range of environment ranging from human host, marine
+ecosystem, soil microbiome, plant symbionts, etc. [36]. Fetching information from such diverse environments
+enables us to understand the various mechanisms of bacterial interactions that the bacterial entities utilize
+for survival like bioﬁlm formation, quorum sensing, production of volatile organic compounds, bacteriocins,
+polyketides, toxins, siderophores, etc. Thus, the manually annotated corpus had sentences capturing information
+from diverse environments involving bacterial interactions with the above-mentioned mechanisms of associations.
+It is important to note that out of the various inter-microbial associations present in diﬀerent environments,
+only bacteria-bacteria associations have been considered for the current work and information pertaining to
+the viral, fungal and protozoan interactions have not been included. A glimpse (visualization) of an annotated
+sentence can be found in Figure 2.6. This dataset is henceforth referred to as the ’BactInt Sentence Corpus’.
+3.2
+Bacterial Interaction Extraction End to End Corpus
+The BactInt Sentence corpus is designed to train models which can predict the interactions reported among
+bacterial named entities in a single sentence. However, an end-to-end pipeline, which can take in a text passage,
+for e.g. a scientiﬁc abstract and predict all the individual interactions reported in the entire abstract, is desirable.
+Such an end-to-end pipeline would be typically composed of a sentence tokenizer, which breaks down the passage
+into a sentence, followed by a bacterial named entity recognition methodology which tags the bacterial mentions
+in the sentences, followed by a methodology that can identify the interactions reported among a pair of bacterial
+mentions in a given sentence.
+Since the end-to-end pipeline is composed of several individual components with each having its set of
+limitations, the performance of the entire pipeline also need to be evaluated.
+For this, a small set of 25
+biomedical scientiﬁc literature abstracts containing multiple bacterial named entity mentions were selected.
+Among these abstracts, 10 report at-least one microbial interaction and 15 report no microbial interactions.
+The bacterial named entities and the interactions reported among them were manually annotated. Care was
+taken to ensure that each of the annotated interactions can be inferred from one particular sentence of the
+passage. This was done to ensure that the dataset does not contain interactions that need multiple sentences
+together to be inferred, as this is beyond the scope of the current methodology. This dataset is henceforth
+referred to as the ’BactInt E2E Corpus’. This dataset is quite small compared to the sentence corpus, as its
+utility is not to train any models but to understand the performance of the pipeline, and analyse the possible
+sources of errors.
+3.3
+Transfer Learning Datasets
+In order to exploit available biomedical information extraction data with the goal of improving the performance
+of the model, the following corpora were identiﬁed: BioInfer [39], HPDR50 [14], LLL [33], IEPA [12], AiMED
+5
+[7], Gene Regulation [8] and DDI 2011 [44]. While BioInfer, HPDR50, LLL, IEPA and AiMED pertain to
+protein protein interactions, the Gene Regulation corpus, as the name suggests, is targeted towards extraction
+of gene regulatory information, and DDI 2011 corpus focuses on extraction of reported drug-drug interactions.
+Some of the text passages provided in the datasets were composed of multiple sentences. However, the BactInt
+Sentence Corpus focuses on extraction of interactions from a single sentence at a time. In order to make the
+pretraining corpus similar to the BactInt Sentence Corpus, each individual text in the corpus were broken
+down into individual sentences by SpaCy (https://spacy.io), speciﬁcally the ’en core sci md’ (SciSpacy [34])
+model. All the annotations (named entities and interactions/relations) present in a single sentence were added.
+Annotations reported interactions/relation among entities present in diﬀerent sentences were ignored. In total
+there were more than 9 thousand individual sentences reporting more than 8 thousand interactions (each sentence
+may have zero, one or multiple reported interactions/relations). This combined dataset is henceforth referred
+to as the ’Pretraining Corpus’.
+3.4
+Our Approach - Explicit Transfer Learning
+3.4.1
+Model
+Since Transformer [52] based neural network architectures like BERT [10] and GPT [41] are known to outperform
+older neural architectures like recurrent neural networks and tree based recursive neural networks on several
+NLP problems including bacterial relation extraction, in this paper, the performance of BioBERT [23]) as well as
+BioGPT [31] is analysed, and other deep learning architectures are ignored. The BioBERT and BioGPT models
+were selected as the base model and was further used in implicit transfer learning as well as explicit transfer
+learning settings, as explained in the subsequent sections. For all our experiments, we used the implementation
+(of BERT and BioGPT) and model parameters (of BioBERT and BioGPT) from the HuggingFace library
+(https://huggingface.co).
+3.4.2
+Methodology
+In our approach, we ﬁrst trained the BioBERT and BioGPT models on the task of relation extraction between
+biomedical entities from biomedical text sentences, using the transfer learning datasets as explained in a previous
+section, viz. BioInfer [39], HPDR50 [14], LLL [33], IEPA [12], AiMED [7], Gene Regulation [8] and DDI 2011
+[44]. After combined training on this ﬁrst set of transfer learning datasets, the models were ﬁne tuned on the
+BactInt Sentence dataset. This training regime is referred to as explicit transfer learning and the trained models
+are referred to as BioBERT Explicit and BioGPT Explicit.
+3.5
+Data Transformation for Training and Inference
+For every text or data point in our annotated corpora, we transformed the data such that the information
+extraction problem can be converted into a binary classiﬁcation problem [25]. In brief, each sentence is tagged
+using the annotated bacterial named entity information. For every pair of unique bacterial named entities, a
+data-point (sentences with suitably tagged pair of entity mentions) is created, and they are assigned a binary
+target variable based on whether an interaction is annotated between the aforementioned pair of entities.
+The interaction extraction machine learning model had to take the transformed data-point as input and
+essentially classify it to the correct target category. Therefore, the task of information extraction was converted
+to binary classiﬁcation, a well known machine learning problem.
+3.6
+Data Split
+The ’BactInt Sentence Corpus’ dataset was randomly split into two datasets, the larger comprising of 85%
+annotated sentences was used for training, and a smaller set of 15% annotated sentences was used for testing
+the performance of the trained models.
+3.7
+Training
+The training of the BioBERT and BioGPT model was carried out in the following way:
+1. The input data was transformed as explained above, before being input to the BioBERT or BioGPT
+model.
+2. The embedding vector of the ”[CLS]” token computed by the BioBERT model was used for classiﬁcation.
+On the other hand, for BioGPT model, the embedding of the last token (”¡s/¿”) was used for classiﬁcation.
+The embeddings produced by the BioBERT or BioGPT model were passed through logistic regression classiﬁer
+heads (learn-able linear transformation followed by a sigmoid activation function) to produce the ﬁnal output
+score (which can be thought of as the probability of the positive class).
+6
+3. The loss between the predicted output score (probability) and the target was computed using the cross-
+entropy loss function.
+4. The loss was minimized using back-propagation, like most neural classiﬁer methods. This in turn updates
+the model parameters of the BioBERT and BioGPT models (along with the parameters of the classiﬁer head).
+This is done for several passes through the entire training dataset.
+5. Early stopping was used to reduce over-ﬁtting.
+3.8
+Baselines
+3.8.1
+Implicit Transfer Learning Models
+In this category, BioBERT and BioGPT models were ﬁne tuned on the ﬁnal task viz. bacterial interaction
+extraction, without any explicit transfer learning step. Therefore, the training methodology, in principle, is
+identical to the one described in [49]. As explained before, since these models have been pretrained on biomedical
+literature corpus, it is a transfer learning model, and is referred to as implicit transfer learning models. The
+BioBERT and BioGPT models trained using this methodology are named BioBERT Implicit and BioGPT
+Implicit.
+3.8.2
+Non Fine-Tuned Models
+In order to analyse how much the models learn from the transfer learning tasks, we train both the BioBERT and
+BioGPT models on the transfer learning datasets, and without any ﬁne tuning, analyse their performance on
+the bacterial information extraction task. These models are named BioBERT Non-FT and BioGPT Non-FT
+respectively.
+3.9
+End-to-End Bacterial Interaction Extraction Pipeline
+The models discussed in the previous sections can only extract reported bacterial interactions in individual
+sentences where the bacterial named entities are already marked / annotated. However, in practice, end-users
+would be interested in extracting the interactions reported in a passages (consisting of several sentences without
+any bacterial named entities). Therefore, the bacterial interaction extraction model from sentences would need
+some auxiliary methods, viz. a bacterial named entity recognition method, which can identify and mark all
+the bacterial named entities in the provided text, and a sentence tokenizer, which can accurately break down
+the entire passage into individual sentences. The model can then take in the individual sentences with marked
+bacterial named entities as input and predict the interactions reported, if any, as output.
+The following methods were used in the end-to-end pipeline. A schematic diagram is provided in Figure 2.6:
+1. The SciSpacy library [34], speciﬁcally the ’en core sci md’ model was used for segmenting a passage into
+a set of individual sentences.
+2. A BioBERT [23] based microbial named entity recognition model (BioBERT BNER)[24] was used to
+predict the bacterial named entities.
+3. The bacterial interaction extraction model viz. BioBERT Explicit or BioGPT Explicit was used to extract
+the interactions from the individual sentences with marked bacterial named entities as described previously.
+3.9.1
+Bacterial Named Entity Recognition Model
+The BioBERT based bacterial NER model described in [24] was used to extract the bacterial named entities
+from the individual sentences. Since the trained model and code were unavailable publicly, the dataset described
+in the paper [24] was used to train a BioBERT based bacterial named entity recognition model, based on the
+descriptions found in the paper [24].
+4
+Experiments and Results
+4.1
+Evaluating the Gain in Performance due to Explicit Transfer Learning
+In order to evaluate the utility of our approach, viz. Explicit Transfer Learning, BioBERT [23] and BioGPT
+[31] models were ﬁrst trained on the ’Pretraining Corpus’, followed by ﬁne-tuning on the task-speciﬁc ’BactInt
+Sentence Corpus’ training split.
+These model trained using this methodology are referred to as ’BioBERT
+Explicit’ and ’BioGPT Explicit’. Additionally baseline models were also trained as explained in Section 3.8.
+The precision, recall and F1 score of each of the models on the test dataset were computed. In order to take
+into account random variations (due to steps like model initialization, training-validation split etc.), each of
+the training steps were repeated three times. A comparison of the performance of the models can be found
+7
+Table 1: Comparison of the performance of the diﬀerent training methodologies on the test set. The average
+value of each of the metrics over 3 runs and the standard deviations are provided.
+BioBERT
+Implicit
+Not Fine Tuned
+BioBERT
+Implicit
+BioBERT
+Explicit
+BioGPT
+Implicit
+Not Fine Tuned
+BioGPT
+Implicit
+BioGPT
+Explicit
+Precision
+0.7 ± 0.02
+0.84 ± 0.03
+0.87 ± 0.03
+0.61 ± 0.13
+0.78 ± 0.07
+0.83 ± 0.02
+Recall
+0.7 ± 0.07
+0.77 ± 0.02
+0.9 ± 0.02
+0.56 ± 0.13
+0.8 ± 0.06
+0.87 ± 0.05
+F1
+0.7 ± 0.03
+0.8 ± 0.01
+0.89 ± 0.02
+0.57 ± 0.08
+0.79 ± 0.06
+0.85 ± 0.02
+in Table 3.9.1. Overall, it can be observed that the explicit transfer-learning models outperform the implicit
+transfer learning and the non ﬁne-tuned models by a signiﬁcant margin. Results clearly indicate a signiﬁcant
+improvement in performance due to the explicit transfer learning methodology. Moreover, it can be seen that
+the BioBERT explicit model performs better than BioGPT explicit model. Also, it is interesting to note that
+the non-ﬁne-tuned models also show decent performance. This highlights the positive impact of the transfer
+learning tasks on the ﬁnal bacterial interaction extraction task. In case of non ﬁne-tuned models, BioBERT
+shows better performance as compared to BioGPT, which also explains the reason why the BioBERT explicit
+model outperforms the BioGPT explicit model.
+4.2
+Evaluating the Performance of the End-to-End Pipeline
+The end-to-end pipeline was constructed as described in the Section 3.9. As the bacterial interaction extraction
+model, the BioBERT Explicit models were used, as they were the best performing models in the previous
+evaluation. The interactions predicted by the pipeline were compared to the manually annotated ones. Firstly,
+a pipeline with all components, viz. the sentence segmentation (”SS”), named entity recognition and tagging
+(”NER”), and information extraction (”IE”) models was used, which is referred to as ”SS + NER + IE” . In
+order to evaluate the loss in performance due to the sentence segmentation module, a pipeline which consisted
+of the NER model and the information extraction model, but without the sentence segmentation module was
+used, which is referred to as ”NER + IE”. The gold standard ground truth sentences from the end-to-end
+corpus were provided to this pipeline. Finally, a pipeline which consisted of only the information extraction
+model was used, in order to evaluate the loss in performance due to the NER and SS modules. This is referred
+to as ”Only IE”, and the ground truth sentences with the ground truth named entity tags were provided to this
+pipeline. The precision, recall and F1 score of each of the pipelines were recorded and depicted in Table 4.2.
+This analysis gives an indication of the loss in performance caused by each of the diﬀerent components. For
+e.g. the performance drop caused by the NER module can be inferred by comparing the performance of the
+”NER + IE” and the ”Only IE” pipelines. Similarly, the performance drop caused by the SS module can be
+inferred by comparing the performance of the ”SS + NER + IE” with that of ”NER + IE” modules. Finally,
+the performance drop due to the IE module can be inferred by the performance of the ”Only IE” pipeline.
+Analysing the results in Table 4.2 reveals that the precision falls signiﬁcantly (0.89 vs 0.63) when the pipeline
+uses the NER model (”NER + IE”) as compared to the one where ground truth named entities are provided
+(”Only IE”). Although recall also falls (0.93 vs 0.84) but the drop is not as drastic as that of precision. This
+indicates that the BioBERT NER model is a major source of errors, and that it produces more false positives
+than false negatives. A closer manual examination of the results reveals that the NER model often predicts
+non-bacterial names as bacterial named entities. For e.g. the NER model often predicted terms representing
+non-bacterial taxa like ’Caenorhabditis elegans’ as bacterial named entities. Here it is important to note that
+the IE model inherently doesn’t diﬀerentiate between bacterial and non-bacterial entities and primarily aims
+to predict the interactions between the tagged named entities. Therefore if an interaction exists between a
+bacterial and a non-bacterial entity, if the NER model predicts the non-bacterial entity as a bacterial one, then
+the IE model will also predict an interaction, leading to an erroreous prediction. This type of errors cause a
+large drop in precision of the ”IE + NER” pipeline in comparison to the ”Only IE” pipeline. In addition to
+these, it was seen that in very rare cases, the sentence segmentation module segments the sentences incorrectly.
+For example, the sentence segmentation model at times splits sentences between abbreviated bacterial named
+entities like ’Lb. oligofermentans’ (Lactobacillus oligofermentans), ’Lc. piscium’ (Lactococcus piscium). These
+results clearly demonstrate the importance of having an accurate bacterial named entity recognition method
+and sentence segmentation methods in the end-to-end bacterial interaction extraction pipeline.
+8
+Table 2: The contribution of each of the components to the errors of the end-to-end pipeline. P.S. If a compo-
+nent is not there, the gold standard annotations are used for that component and only the other components
+of the pipeline are run. For e.g. in IE + NER, the gold standard segmented sentences are used, named enti-
+ties are predicted by NER model and interactions are predicted by IE model. Similarly in Only IE, ground
+truth segmented as well as NER annotated sentences are used, and only the ﬁnal interactions are predicted
+by the IE model.
+Precision
+Recall
+F1
+Only IE
+0.89
+0.93
+0.91
+IE + NER
+0.63
+0.84
+0.72
+SS + IE + NER
+0.62
+0.84
+0.71
+4.3
+Case Study and Error Analysis
+The models and pipelines that were developed can be used for multiple purposes. One potential application
+area is to validate statistically predicted relations among microbes, obtained using metagenomic data analysis.
+This forms the basis of the case study and is detailed further.
+In the domain of microbiome research, one commonly used methodology is ﬁnding the associations or inter-
+actions among pairs of bacterial taxa using cross-sectional or longitudinal metagenomic data. Such statistical
+methods often predict erroneous or spurious associations [16].
+Therefore, there is a need to validate such
+reported associations using preexisting information present in biomedical literature.
+4.3.1
+Methodology for Case Study
+The initial starting point is an interaction network of microbes obtained from a cross sectional microbiome
+study of Americans’ gut, which has been detailed in [29]. The network is composed of 155 pairwise associations
+among taxa. Our case study is composed of the following steps:
+1. Using each of the predicted interacting pairs of bacterial taxa, we conduct a text search to identify a
+number of scientiﬁc literature sentences mentioning the two bacterial taxa. Litsense [2] which aims at semantic
+search was used.
+2. The end-to-end pipeline was run on the sentences obtained from the previous step. The interacting pairs
+of bacterial mentions which match our initial pair of bacterial taxa are captured, along with the sentences they
+occur in.
+3. The above two steps are repeated for every pair of interacting/associated bacterial taxa. Using this
+compiled data, a list of sentences corresponding to every pair of predicted associations. This list of sentences is
+hereby referred to as probable sentences.
+Using the above pipeline, sentences reporting interactions among 29 bacterial pairs (out of the starting 155)
+can be obtained. These 29 associated pairs of taxa had at least one probable sentences reporting some relation.
+Therefore, it can be assumed that these pairs have a high probability of having an actual interaction.
+4.3.2
+Error Analysis
+However, not all of the interacting pairs as suggested by the probable sentences are true predictions. Manual
+analysis of the probable sentences revealed that 79% of the predictions were correct i.e. 21% of the relations
+were false positives, i.e. the models predict an interaction between a pair of taxa, whereas, manual analysis of
+the sentence reveals the contrary. Despite manual analysis, no systematic errors, i.e. repeated error patterns
+were found. A few of the errors are tabulated in Table 4.3.2. Using the above analysis only an idea about the
+false positive rates or precision could be obtained. However, the false negative rate or recall of the methodology
+could not be analysed.
+5
+Discussions
+Extraction of bacterial interactions reported in biomedical literature can help scientists better understand and
+exploit the microbiome for a variety of use cases.
+In this paper, a method for the extraction of pairwise
+interactions among bacteria is illustrated. These pairwise interactions can be used to construct or supplement
+knowledge graphs [19] in the domain of microbiology. In this aspect it is important to note that the BactInt
+datasets and interaction extraction methods trained using it can only predict an interaction among bacterial
+taxa. However, it cannot predict the type of interaction, i.e. whether the interaction is positive or negative or
+something more complex. In order to predict the interactions along with the type of interaction, more detailed
+9
+Table 3: Example of errors made by the pipeline.
+Sentence
+Entity 1
+Entity 2
+1
+Slight, but signiﬁcant (p <0.05) positive correlation was identiﬁed between Roseburia and
+Eubacterium and ASMI, indicating that these genera are less abundant in individuals with
+smaller muscle mass.
+Roseburia
+Eubacterium
+2
+In addition, signiﬁcant correlation was found between Anaerotruncus, Intestinimonas and
+Oscillibacter and steroid and terpenoid biosyntheses.
+Oscillibacter
+Anaerotruncus
+3
+Out of these families, Bacteroidaceae with genera Bacteroides or Mediterranea represent
+one of the most frequent Gram-negative colonisers of the distal intestinal tract.
+Bacteroides
+Mediterranea
+4
+In the present study, we observed co-clustering based on similar dynamics of Bacteroides
+and Parabacteroides species with Fusicatenibacter saccharivorans, a species within the
+family Lachnospiraceae.
+Bacteroides
+Fusicatenibacter
+datasets need to be created, similar to [49]. In order to construct a robust knowledge graph, the predictions
+made by the model should ideally be further inspected by a manual or crowd-sourcing eﬀort.
+For most deep learning models, one of the major factors that determines their accuracy and generalization
+ability is the size and variety of the training datasets. While constructing the BactInt Sentence Corpus, emphasis
+was put on developing a large corpus capturing diverse types of bacterial interactions. Manual annotation of
+a large corpus is time consuming, and in the domain of biomedical NLP, very expensive, as it needs to be
+done by trained biomedical experts. Therefore, the majority of biological domain NLP tasks has much smaller
+datasets compared to their general domain counterparts.
+Transfer learning can partially help alleviate the
+problem of small sized training data. In this work, a few publicly available datasets were used for explicit
+transfer learning and the utility of the method was demonstrated in the results. All the chosen datasets involve
+extracting interactions among the same type of entities e.g.
+protein-protein interactions or gene-regulation
+(where one gene is regulated by another) or drug-drug interactions. This is relatively similar to the problem
+of bacterial interaction extraction, in which interactions among the same entity type (bacteria) need to be
+extracted. However, certain domain speciﬁc interaction patterns make bacteria-bacteria interactions unique in
+their own way necessitating the enrichment of transfer learning with domain based learning. Several datasets
+(annotated corpora) for problems like microbe-disease association extraction [53] and bacteria-biotope extraction
+[5], which are speciﬁc to the domain of microbiology, are also available publicly. Including these datasets in the
+transfer learning training phase may improve the performance on the task of extracting bacterial interactions.
+However, a thorough evaluation is necessary for such a protocol.
+One interesting observation was the better performance of the BioBERT models over the BioGPT ones
+in the interaction extraction task. However, the BioGPT model (and GPT models in general) are perform
+quite well on many NLP tasks including information extraction [31]. One reason for this might be that in this
+paper, the BioGPT model was used as a discriminative (classiﬁer) model rather than a generative (end-to-end)
+model [31].
+BioGPT is pretrained like a language model and whereas it performs best on generative NLP
+tasks, its performance on discriminative tasks such as classiﬁcation may be limited as compared to BioBERT.
+One interesting future work would be using BioGPT as a generative end-to-end model for bacterial interaction
+extraction.
+While analysing the errors of the end-to-end pipeline, one interesting observation was that the bacterial
+NER model often predicted all the scientiﬁc names of taxa present in the text as bacterial named entities. This
+exposes a systemic drawback in the BioBERT BNER model [24], i.e. it does not really identify bacterial names
+(which is the intended task), but all types of scientiﬁc names. One alternative to trained machine learning
+models for bacterial NER is a simple dictionary lookup, using all bacterial names from NCBI Taxonomy [43]
+or similar sources. However, this would lead to reduction in accuracy as several bacterial strain and substrain
+names are not present in the taxonomies, and dictionaries would be unable to take into account slight variations
+in bacterial names.
+6
+Conclusion
+In this paper, a dataset for extracting bacterial interactions from biomedical scientiﬁc literature text was intro-
+duced. Additionally, a language model (BioBERT) based method to extract interactions from bacterial named
+entity marked sentences was described, along with a transfer learning based strategy to signiﬁcantly improve the
+performance using other interaction extraction datasets. Finally, an end-to-end pipeline for the extraction of
+bacterial interactions from a given biomedical text (multiple sentences without marked bacterial named entities)
+10
+was described and the performance was evaluated. The sources of errors in the pipeline were also analysed.
+We expect the dataset and the strategies described in this paper will lead to the further development of novel
+interesting strategies for the extraction of bacterial interactions from biomedical literature, and in turn be used
+to acquire and consolidate usable structured knowledge regarding bacterial interactions, thereby adding to the
+body of knowledge in the domain of microbiology. Interested readers are requested to get in touch with the
+corresponding author for access to the data.
+References
+[1] Syed Toufeeq Ahmed, Deepthi Chidambaram, Hasan Davulcu, and Chitta Baral.
+IntEx: A syntactic
+role driven protein-protein interaction extractor for bio-medical text. In Proceedings of the ACL-ISMB
+Workshop on Linking Biological Literature, Ontologies and Databases: Mining Biological Semantics, pages
+54–61, Detroit, June 2005. Association for Computational Linguistics.
+[2] Alexis Allot, Qingyu Chen, Sun Kim, Roberto Vera Alvarez, Donald C Comeau, W John Wilbur, and
+Zhiyong Lu. LitSense: making sense of biomedical literature at sentence level. Nucleic Acids Research,
+47(W1):W594–W599, 04 2019.
+[3] Iz Beltagy, Kyle Lo, and Arman Cohan. SciBERT: A pretrained language model for scientiﬁc text. In
+Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th In-
+ternational Joint Conference on Natural Language Processing (EMNLP-IJCNLP), pages 3615–3620, Hong
+Kong, China, November 2019. Association for Computational Linguistics.
+[4] Gabriele Berg, Martin Grube, Michael Schloter, and Kornelia Smalla.
+The plant microbiome and its
+importance for plant and human health, 2014.
+[5] Robert Bossy, Louise Del´eger, Estelle Chaix, Mouhamadou Ba, and Claire N´edellec. Bacteria biotope at
+BioNLP open shared tasks 2019. In Proceedings of The 5th Workshop on BioNLP Open Shared Tasks,
+pages 121–131, Hong Kong, China, November 2019. Association for Computational Linguistics.
+[6] Razvan Bunescu, Ruifang Ge, Rohit J Kate, Edward M Marcotte, Raymond J Mooney, Arun K Ramani,
+and Yuk Wah Wong. Comparative experiments on learning information extractors for proteins and their
+interactions. Artiﬁcial intelligence in medicine, 33(2):139–155, 2005.
+[7] Razvan Bunescu, Ruifang Ge, Rohit J Kate, Edward M Marcotte, Raymond J Mooney, Arun K Ramani,
+and Yuk Wah Wong. Comparative experiments on learning information extractors for proteins and their
+interactions. Artiﬁcial intelligence in medicine, 33(2):139–155, 2005.
+[8] Ekaterina Buyko, Elena Beisswanger, and Udo Hahn. The GeneReg corpus for gene expression regulation
+events — an overview of the corpus and its in-domain and out-of-domain interoperability. In Proceedings of
+the Seventh International Conference on Language Resources and Evaluation (LREC’10), Valletta, Malta,
+May 2010. European Language Resources Association (ELRA).
+[9] L. Chiticariu, Yunyao Li, and F.R. Reiss.
+Rule-based information extraction is dead!
+long live rule-
+based information extraction systems! EMNLP 2013 - 2013 Conference on Empirical Methods in Natural
+Language Processing, Proceedings of the Conference, October:827–832, 01 2013.
+[10] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirec-
+tional transformers for language understanding. arXiv preprint arXiv:1810.04805, 2018.
+[11] Rodney R Dietert and Janice M Dietert.
+The microbiome and sustainable healthcare.
+In Healthcare,
+volume 3, pages 100–129. MDPI, 2015.
+[12] Jing Ding, Daniel Berleant, Dan Nettleton, and Eve Wurtele. Mining medline: abstracts, sentences, or
+phrases? In Biocomputing 2002, pages 326–337. World Scientiﬁc, 2001.
+[13] Katrin Fundel, Robert K¨uﬀner, and Ralf Zimmer. Relex—relation extraction using dependency parse trees.
+Bioinformatics, 23(3):365–371, 2007.
+[14] Katrin Fundel, Robert K¨uﬀner, and Ralf Zimmer. Relex—relation extraction using dependency parse trees.
+Bioinformatics, 23(3):365–371, 2007.
+[15] Claudio Giuliano, Alberto Lavelli, and Lorenza Romano. Exploiting shallow linguistic information for rela-
+tion extraction from biomedical literature. In 11th Conference of the European Chapter of the Association
+for Computational Linguistics, pages 401–408, Trento, Italy, April 2006. Association for Computational
+Linguistics.
+11
+[16] Gregory B. Gloor, Jean M. Macklaim, Vera Pawlowsky-Glahn, and Juan Jos´e Egozcue. Microbiome datasets
+are compositional: And this is not optional. Frontiers in Microbiology, 8, 2017.
+[17] Harsha Gurulingappa, Abdul Mateen Rajput, Angus Roberts, Juliane Fluck, Martin Hofmann-Apitius,
+and Luca Toldo. Development of a benchmark corpus to support the automatic extraction of drug-related
+adverse eﬀects from medical case reports. Journal of biomedical informatics, 45(5):885–892, 2012.
+[18] Mar´ıa Herrero-Zazo, Isabel Segura-Bedmar, Paloma Mart´ınez, and Thierry Declerck.
+The ddi corpus:
+An annotated corpus with pharmacological substances and drug–drug interactions. Journal of biomedical
+informatics, 46(5):914–920, 2013.
+[19] Aidan Hogan, Eva Blomqvist, Michael Cochez, Claudia D’amato, Gerard De Melo, Claudio Gutierrez,
+Sabrina Kirrane, Jos´e Emilio Labra Gayo, Roberto Navigli, Sebastian Neumaier, Axel-Cyrille Ngonga
+Ngomo, Axel Polleres, Sabbir M. Rashid, Anisa Rula, Lukas Schmelzeisen, Juan Sequeda, Steﬀen Staab,
+and Antoine Zimmermann. Knowledge graphs. ACM Comput. Surv., 54(4), jul 2021.
+[20] Li-Li Jiang, Jin-Jie Zhou, Chun-Shan Quan, and Zhi-Long Xiu. Advances in industrial microbiome based
+on microbial consortium for bioreﬁnery. Bioresources and bioprocessing, 4(1):1–10, 2017.
+[21] Coreen L Johnson and James Versalovic. The human microbiome and its potential importance to pediatrics.
+Pediatrics, 129(5):950–960, 2012.
+[22] Martin Krallinger, Florian Leitner, Carlos Rodriguez-Penagos, and Alfonso Valencia.
+Overview of the
+protein-protein interaction annotation extraction task of biocreative ii. Genome biology, 9(2):1–19, 2008.
+[23] Jinhyuk Lee, Wonjin Yoon, Sungdong Kim, Donghyeon Kim, Sunkyu Kim, Chan Ho So, and Jaewoo
+Kang.
+BioBERT: a pre-trained biomedical language representation model for biomedical text mining.
+Bioinformatics, 36(4):1234–1240, 09 2019.
+[24] Xusheng Li, Chengcheng Fu, Ran Zhong, Duo Zhong, Tingting He, and Xingpeng Jiang. Bacterial named
+entity recognition based on language model. In 2019 IEEE International Conference on Bioinformatics
+and Biomedicine (BIBM), pages 2715–2721, 2019.
+[25] Yijing Li, Yanping Chen, Yongbin Qin, Ying Hu, Ruizhang Huang, and Qinghua Zheng. Protein-protein in-
+teraction relation extraction based on multigranularity semantic fusion. Journal of Biomedical Informatics,
+123:103931, 2021.
+[26] Hong Liang, Xiao Sun, Yunlei Sun, and Yuan Gao. Text feature extraction based on deep learning: a
+review. EURASIP journal on wireless communications and networking, 2017(1):1–12, 2017.
+[27] Kun Ming Kenneth Lim, Chenhao Li, Kern Rei Chng, and Niranjan Nagarajan. @MInter: automated
+text-mining of microbial interactions. Bioinformatics, 32(19):2981–2987, 06 2016.
+[28] Chieh Lo and Radu Marculescu. Mplasso: Inferring microbial association networks using prior microbial
+knowledge. PLoS computational biology, 13(12):e1005915, 2017.
+[29] Mark Loftus, Sayf Al-Deen Hassouneh, and Shibu Yooseph. Bacterial associations in the healthy human
+gut microbiome across populations. Scientiﬁc reports, 11(1):2828, 2021.
+[30] Pei-Yau Lung, Zhe He, Tingting Zhao, Disa Yu, and Jinfeng Zhang. Extracting chemical–protein interac-
+tions from literature using sentence structure analysis and feature engineering. Database, 2019, 01 2019.
+bay138.
+[31] Renqian Luo, Liai Sun, Yingce Xia, Tao Qin, Sheng Zhang, Hoifung Poon, and Tie-Yan Liu. BioGPT:
+generative pre-trained transformer for biomedical text generation and mining. Brieﬁngs in Bioinformatics,
+23(6), 09 2022. bbac409.
+[32] Antonio Miranda, Farrokh Mehryary, Jouni Luoma, Sampo Pyysalo, Alfonso Valencia, and Martin
+Krallinger.
+Overview of drugprot biocreative vii track: quality evaluation and large scale text mining
+of drug- gene/protein relations. 2021.
+[33] Claire N´edellec. Learning language in logic-genic interaction extraction challenge. In 4. Learning language
+in logic workshop (LLL05). ACM-Association for Computing Machinery, 2005.
+[34] Mark Neumann, Daniel King, Iz Beltagy, and Waleed Ammar. ScispaCy: Fast and Robust Models for
+Biomedical Natural Language Processing. In Proceedings of the 18th BioNLP Workshop and Shared Task,
+pages 319–327, Florence, Italy, August 2019. Association for Computational Linguistics.
+12
+[35] Sinno Jialin Pan and Qiang Yang. A survey on transfer learning. IEEE Transactions on Knowledge and
+Data Engineering, 22(10):1345–1359, 2010.
+[36] Vatsala Pokhrel, Bhusan K. Kuntal, Divyanshu Srivastava, Sharmila S. Mande, and Krishanu Das Baksi.
+Utilizing domain-based features to improve classiﬁcation accuracy of biomedical text having bacterial as-
+sociations. In 2021 IEEE International Conference on Bioinformatics and Biomedicine (BIBM), pages
+2840–2847, 2021.
+[37] Sampo Pyysalo, Antti Airola, Juho Heimonen, Jari Bj¨orne, Filip Ginter, and Tapio Salakoski. Comparative
+analysis of ﬁve protein-protein interaction corpora. In BMC bioinformatics, volume 9, pages 1–11. BioMed
+Central, 2008.
+[38] Sampo Pyysalo, Filip Ginter, Juho Heimonen, Jari Bj¨orne, Jorma Boberg, Jouni J¨arvinen, and Tapio
+Salakoski. Bioinfer: a corpus for information extraction in the biomedical domain. BMC bioinformatics,
+8(1):1–24, 2007.
+[39] Sampo Pyysalo, Filip Ginter, Juho Heimonen, Jari Bj¨orne, Jorma Boberg, Jouni J¨arvinen, and Tapio
+Salakoski. Bioinfer: a corpus for information extraction in the biomedical domain. BMC bioinformatics,
+8(1):1–24, 2007.
+[40] Sampo Pyysalo, Filip Ginter, Tapio Pahikkala, Jorma Boberg, Jouni J¨arvinen, and Tapio Salakoski. Evalua-
+tion of two dependency parsers on biomedical corpus targeted at protein–protein interactions. International
+Journal of Medical Informatics, 75(6):430–442, 2006.
+[41] Alec Radford, Karthik Narasimhan, Tim Salimans, Ilya Sutskever, et al. Improving language understanding
+by generative pre-training. 2018.
+[42] Alec Radford, Jeﬀrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al.
+Language
+models are unsupervised multitask learners. OpenAI blog, 1(8):9, 2019.
+[43] Conrad L. Schoch, Stacy Ciufo, Mikhail Domrachev, Carol L. Hotton, Sivakumar Kannan, Rogneda Kho-
+vanskaya, Detlef D. Leipe, Richard McVeigh, Kathleen O’Neill, Barbara Robbertse, Shobha Sharma,
+Vladimir Soussov, John P. Sullivan, Lu Sun, Se´an Turner, and Ilene Karsch-Mizrachi. Ncbi taxonomy:
+a comprehensive update on curation, resources and tools. Database : the journal of biological databases
+and curation, 2020, 2020.
+[44] Isabel Segura-Bedmar, Paloma Martinez Fernandez, and Daniel Sanchez Cisneros. The 1st ddiextraction-
+2011 challenge task: Extraction of drug-drug interactions from biomedical texts. 2011.
+[45] Rania Ahmed Abdel Azeem Abul Seoud, Abou-Baker M. Youssef, and Yasser M. Kadah. Extraction of
+protein interaction information from unstructured text using a link grammar parser. 2007 International
+Conference on Computer Engineering & Systems, pages 70–75, 2007.
+[46] Divyanshu Srivastava, Krishanu D Baksi, Bhusan K Kuntal, and Sharmila S Mande. “evimass”: a literature
+evidence-based miner for human microbial associations. Frontiers in genetics, 10:849, 2019.
+[47] Pontus Stenetorp, Sampo Pyysalo, Goran Topi´c, Tomoko Ohta, Sophia Ananiadou, and Jun’ichi Tsujii.
+brat: a web-based tool for NLP-assisted text annotation. In Proceedings of the Demonstrations Session at
+EACL 2012, Avignon, France, April 2012. Association for Computational Linguistics.
+[48] L. Venkata Subramaniam, Sougata Mukherjea, Pankaj Kankar, Biplav Srivastava, Vishal S. Batra, Pa-
+sumarti V. Kamesam, and Ravi Kothari. Information extraction from biomedical literature: Methodology,
+evaluation and an application. In Proceedings of the Twelfth International Conference on Information and
+Knowledge Management, CIKM ’03, page 410–417, New York, NY, USA, 2003. Association for Computing
+Machinery.
+[49] Xia Sun, Chengcheng Fu, Suoqi Liu, Wenjie Chen, Ran Zhong, Tingting He, and Xingpeng Jiang. Multi-
+type microbial relation extraction by transfer learning. In 2021 IEEE International Conference on Bioin-
+formatics and Biomedicine (BIBM), pages 266–269, 2021.
+[50] Luke R Thompson, Jon G Sanders, Daniel McDonald, Amnon Amir, Joshua Ladau, Kenneth J Locey,
+Robert J Prill, Anupriya Tripathi, Sean M Gibbons, Gail Ackermann, et al. A communal catalogue reveals
+earth’s multiscale microbial diversity. Nature, 551(7681):457–463, 2017.
+[51] Konstantinos Z. Vardakas, Grigorios Tsopanakis, Alexandra Poulopoulou, and Matthew E. Falagas. An
+analysis of factors contributing to pubmed’s growth. Journal of Informetrics, 9(3):592–617, 2015.
+13
+[52] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez,  L ukasz
+Kaiser, and Illia Polosukhin. Attention is all you need. In I. Guyon, U. Von Luxburg, S. Bengio, H. Wallach,
+R. Fergus, S. Vishwanathan, and R. Garnett, editors, Advances in Neural Information Processing Systems,
+volume 30. Curran Associates, Inc., 2017.
+[53] Chengkun Wu, Xinyi Xiao, Canqun Yang, JinXiang Chen, Jiacai Yi, and Yanlong Qiu. Mining microbe–
+disease interactions from literature via a transfer learning model. BMC bioinformatics, 22(1):1–15, 2021.
+[54] Rui Xing, Jie Luo, and Tengwei Song. Biorel: towards large-scale biomedical relation extraction. BMC
+bioinformatics, 21(16):1–13, 2020.
+[55] Ran Zhong, Xusheng Li, Xia Sun, Chengcheng Fu, Tingting He, and Xingpeng Jiang. Microbial interac-
+tion extraction from biomedical literature using max-bi-lstm. In 2019 IEEE International Conference on
+Bioinformatics and Biomedicine (BIBM), pages 723–726, 2019.
+14
