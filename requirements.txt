@@ -4,3 +4,10 @@ pandas
 scikit-learn
 streamlit
 plotly
+datasets
+evaluate
+accelerate
+PyMuPDF
+networkx
+pytesseract
+Pillow

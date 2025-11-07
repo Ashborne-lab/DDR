@@ -1,0 +1,13 @@
+## Streamlit configuration for this project
+## Disables the file watcher to avoid introspection of some packages
+## (e.g. PyTorch's custom attribute proxies) that can raise runtime
+## errors when Streamlit enumerates modules on startup.
+
+[server]
+# Disable the file watcher entirely. Allowed values: "auto", "watchdog",
+# "poll", or "none". Setting to "none" prevents Streamlit from trying to
+# access package internals while discovering module paths.
+fileWatcherType = "none"
+
+# Avoid automatic reruns on save (optional; helps with long model loads)
+runOnSave = false
