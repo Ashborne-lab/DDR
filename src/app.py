@@ -1013,9 +1013,9 @@ def main():
 
         col1, col2 = st.columns([3, 1])
         with col1:
-            analyze_btn = st.button("🔍 Analyze Report", type="primary", use_container_width=True)
+            analyze_btn = st.button("🔍 Analyze Report", type="primary", width="stretch")
         with col2:
-            clear_btn = st.button("🧹 Clear", use_container_width=True)
+            clear_btn = st.button("🧹 Clear", width="stretch")
 
         if clear_btn:
             st.session_state.findings = []
@@ -1078,7 +1078,7 @@ def main():
                                 csv,
                                 "drug_analysis_report.csv",
                                 "text/csv",
-                                use_container_width=True
+                                width="stretch"
                             )
                     else:
                         st.info("ℹ️ No drug-symptom relationships found above the confidence threshold.")
@@ -1095,33 +1095,34 @@ def main():
                 st.markdown("#### Relationship Overview")
                 chart = create_relationship_chart(findings)
                 if chart:
-                    st.plotly_chart(chart, use_container_width=True)
+                    st.plotly_chart(chart, width="stretch")
 
             with col2:
                 st.markdown("#### Confidence Distribution")
                 dist_chart = create_confidence_distribution(findings)
                 if dist_chart:
-                    st.plotly_chart(dist_chart, use_container_width=True)
+                    st.plotly_chart(dist_chart, width="stretch")
 
             st.markdown("#### Entity Network Graph")
             network_chart = create_entity_network_graph(findings)
             if network_chart:
-                st.plotly_chart(network_chart, use_container_width=True)
+                st.plotly_chart(network_chart,width="stretch")
 
             st.markdown("#### Entity Type Distribution")
             entity_chart = create_entity_type_distribution(findings)
             if entity_chart:
-                st.plotly_chart(entity_chart, use_container_width=True)
+                st.plotly_chart(entity_chart, )
 
             st.markdown("#### 📋 Summary Table")
             df_table = pd.DataFrame(findings)
             st.dataframe(
                 df_table[['drug', 'effect', 'relationship', 'confidence', 'evidence']],
-                use_container_width=True,
+                width="stretch",
                 hide_index=True
             )
         else:
             st.info("📊 Run an analysis first to see visualizations here.")
+            
 
     with tab3:
         st.markdown("### 🔍 Drug Database Explorer")
@@ -1176,7 +1177,7 @@ def main():
             relation_counts = df_relations.groupby(['drug', 'effect']).size().reset_index(name='count')
             relation_counts = relation_counts.sort_values('count', ascending=False).head(10)
 
-            st.dataframe(relation_counts, use_container_width=True, hide_index=True)
+            st.dataframe(relation_counts, width="stretch", hide_index=True)
 
 if __name__ == '__main__':
     main()
