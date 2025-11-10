@@ -37,6 +37,7 @@ from plotting import (
     create_entity_network_graph,
     create_entity_type_distribution
 )
+st.set_page_config(initial_sidebar_state="expanded")
 
 @st.cache_resource
 def load_model():
