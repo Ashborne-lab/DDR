@@ -1,7 +1,3 @@
-text,label
-"Patient developed dry cough after starting lisinopril.",adverse
-"Medication improved blood pressure and headache resolved.",treatment
-"Started ibuprofen and developed stomach pain the next day.",adverse
-"Taking loratadine reduced allergy symptoms.",treatment
-"Patient reports dizziness after beginning amlodipine.",adverse
-"Metformin helped control blood glucose levels.",treatment
+version https://git-lfs.github.com/spec/v1
+oid sha256:4e90259628aae70e298ad955ac0d46298fb817f00ec7d5ed4744ce7ed5f397c2
+size 401

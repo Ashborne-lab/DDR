@@ -1,5 +1,3 @@
-text,label
-"Patient reports cough and fatigue after medication.",adverse
-"Therapy with aspirin relieved pain.",treatment
-"New onset nausea since starting sertraline.",adverse
-"Treatment with omeprazole improved reflux.",treatment
+version https://git-lfs.github.com/spec/v1
+oid sha256:7fa79267215b91216bd83ba9ceb356ebaaba3c32cfbabe5cbdbfdc8d1f6f6227
+size 235
