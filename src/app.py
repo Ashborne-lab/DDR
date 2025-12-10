@@ -1,45 +1,59 @@
 import sys
 import os
+import re
+import numpy as np
+import pandas as pd
+import streamlit as st
+from typing import List, Dict, Tuple
+import io
 
+# --- 1. SYSTEM SETUP & PATCHES ---
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
 os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
 
 def _patch_torch_classes():
     try:
         import torch
-        if hasattr(torch, '_classes'):
-            class _SafeClassesProxy:
-                def __init__(self):
-                    pass
-                def __getattr__(self, name):
-                    if name == '__path__':
-                        path_obj = type('path', (), {})()
-                        path_obj._path = []
-                        return path_obj
-                    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-            try:
-                torch._classes = _SafeClassesProxy()
-            except (RuntimeError, AttributeError, TypeError):
-                pass
+        class SafeClasses:
+            class PathObj:
+                _path = []
+            __path__ = PathObj()
+            def __getattr__(self, name):
+                return None
+
+        if hasattr(torch, 'classes'):
+            torch.classes = SafeClasses()
+            
     except ImportError:
         pass
 
 _patch_torch_classes()
 
-import streamlit as st
-import pandas as pd
-import re
-from pathlib import Path
-from typing import List, Dict, Tuple
-from plotting import (
-    create_relationship_chart,
-    create_confidence_distribution,
-    create_entity_network_graph,
-    create_entity_type_distribution
-)
-st.set_page_config(initial_sidebar_state="expanded")
+# Try importing plotting functions
+try:
+    from plotting import (
+        create_relationship_chart,
+        create_confidence_distribution,
+        create_entity_network_graph,
+        create_entity_type_distribution
+    )
+except ImportError:
+    def create_relationship_chart(f): return None
+    def create_confidence_distribution(f): return None
+    def create_entity_network_graph(f): return None
+    def create_entity_type_distribution(f): return None
 
-@st.cache_resource
+# --- 2. PAGE CONFIGURATION ---
+st.set_page_config(
+    page_title="Drug-Disease Analyzer | Premium Medical AI",
+    page_icon="💊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- 3. CACHED RESOURCE LOADING ---
+
+@st.cache_resource(show_spinner=False, max_entries=1)
 def load_model():
     try:
         from transformers import pipeline
@@ -59,11 +73,14 @@ def load_model():
             models['ner'] = None
 
         try:
-            models['classifier'] = pipeline(
-                "text-classification",
-                model="outputs/pubmedbert-finetuned",
-                device=-1
-            )
+            if os.path.exists("outputs/pubmedbert-finetuned"):
+                models['classifier'] = pipeline(
+                    "text-classification",
+                    model="outputs/pubmedbert-finetuned",
+                    device=-1
+                )
+            else:
+                models['classifier'] = None
         except Exception:
             models['classifier'] = None
 
@@ -72,65 +89,212 @@ def load_model():
 
     return models if models.get('ner') or models.get('classifier') else None
 
-def extract_entities_with_biobert(text: str, models: Dict) -> Tuple[List[str], List[str]]:
-    if not models or not models.get('ner'):
-        return [], []
+@st.cache_resource(ttl=3600, show_spinner=False, max_entries=1)
+def load_drug_symptom_database():
+    database = {'drugs': set(), 'symptoms': set(), 'relations': [], 'drug_info': {}, 'search_index': {}}
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    data_folder = os.path.join(project_root, 'data')
+    
+    if not os.path.exists(data_folder): data_folder = 'data'
+    if not os.path.exists(data_folder): return database
 
-    try:
-        entities = models['ner'](text)
+    # 1. PROCESS ALL FILES IN DATA FOLDER
+    files = [f for f in os.listdir(data_folder) if f.endswith(('.csv', '.tsv'))]
+    print(f"📂 Found {len(files)} datasets: {files}") # Debug print to terminal
+    
+    for filename in files:
+        filepath = os.path.join(data_folder, filename)
+        
+        try:
+            # === CASE A: Handle TSV Files (train.tsv, dev.tsv, test.tsv) ===
+            if filename.endswith('.tsv'):
+                # Read without header (standard for these NLP datasets)
+                df = pd.read_csv(filepath, sep='\t', header=None, on_bad_lines='skip', engine='python')
+                
+                # Regex to extract tagged entities
+                # Finds: @TypeSrc$ EntityName @/TypeSrc$
+                source_pattern = re.compile(r'@.*?Src\$\s*(.*?)\s*@/.*?Src\$')
+                target_pattern = re.compile(r'@.*?Tgt\$\s*(.*?)\s*@/.*?Tgt\$')
+                
+                # Use name=None to get simple tuples (faster/safer)
+                for row in df.itertuples(index=False, name=None):
+                    # Text is typically in the last or 8th column (index 7)
+                    if len(row) < 8: continue
+                    text_content = str(row[7]) 
+                    
+                    src_match = source_pattern.search(text_content)
+                    tgt_match = target_pattern.search(text_content)
+                    
+                    if src_match and tgt_match:
+                        entity_a = src_match.group(1).lower().strip() # Source (often Symptom/Disease)
+                        entity_b = tgt_match.group(1).lower().strip() # Target (often Drug/Gene)
+                        
+                        # Add to master lists
+                        database['drugs'].add(entity_b)
+                        database['symptoms'].add(entity_a)
+                        
+                        # Build Search Index
+                        first_word = entity_b.split()[0]
+                        if len(first_word) > 3:
+                            if first_word not in database['search_index']:
+                                database['search_index'][first_word] = set()
+                            database['search_index'][first_word].add(entity_b)
 
-        drugs = []
-        symptoms = []
+                        # Add Proven Relationship
+                        database['relations'].append({
+                            'drug': entity_b.title(),
+                            'effect': entity_a.title(),
+                            'relationship': 'associated', # Derived from research paper
+                            'confidence': 0.95, # Very high confidence
+                            'evidence': f'Research Paper (from {filename})',
+                            'sentence': text_content[:200] + "..."
+                        })
+                        
+                        # Add Info if missing
+                        if entity_b not in database['drug_info']:
+                            database['drug_info'][entity_b] = {
+                                'class': 'Research Entity',
+                                'common_use': entity_a.title(),
+                                'known_effects': [entity_a],
+                                'substitutes': [],
+                                'mechanism': 'Extracted from biomedical literature'
+                            }
 
-        for entity in entities:
-            entity_text = entity['word'].lower()
-            entity_type = entity.get('entity_group', '').upper()
+            # === CASE B: Handle Standard CSV (medicines_global.csv) ===
+            elif filename.endswith('.csv'):
+                df = pd.read_csv(
+                    filepath, 
+                    low_memory=False,
+                    usecols=lambda col: any(kw in col.lower() for kw in ['name', 'sideeffect', 'substitute', 'therapeutic', 'class', 'use'])
+                )
+                df.columns = df.columns.str.lower().str.strip()
+                headers = list(df.columns)
+                
+                name_idx = next((i for i, c in enumerate(headers) if 'name' in c), -1)
+                if name_idx == -1: continue
+                
+                side_effect_indices = [i for i, c in enumerate(headers) if 'sideeffect' in c]
+                substitute_indices = [i for i, c in enumerate(headers) if 'substitute' in c]
+                use_indices = [i for i, c in enumerate(headers) if 'use' in c and 'user' not in c]
+                class_idx = next((i for i, c in enumerate(headers) if 'therapeutic' in c or 'class' in c), -1)
 
-            if entity_type in ['MEDICATION', 'DRUG', 'CHEMICAL']:
-                drugs.append(entity_text)
-            elif entity_type in ['SYMPTOM', 'DISEASE', 'CONDITION', 'ADVERSE_EVENT']:
-                symptoms.append(entity_text)
-            elif 'drug' in entity_text or any(d in entity_text for d in ['medication', 'pill', 'tablet']):
-                drugs.append(entity_text)
-            elif any(s in entity_text for s in ['pain', 'headache', 'nausea', 'fever', 'rash']):
-                symptoms.append(entity_text)
+                for row in df.itertuples(index=False, name=None):
+                    drug_name = str(row[name_idx]).lower().strip()
+                    if not drug_name or drug_name == 'nan': continue
+                    
+                    database['drugs'].add(drug_name)
+                    
+                    # Search Index
+                    first_word = drug_name.split()[0]
+                    if len(first_word) > 3:
+                        if first_word not in database['search_index']: database['search_index'][first_word] = set()
+                        database['search_index'][first_word].add(drug_name)
 
-        return list(set(drugs)), list(set(symptoms))
+                    # Info gathering
+                    found_effects = [str(row[i]).lower().strip() for i in side_effect_indices if str(row[i]).lower() != 'nan']
+                    found_uses = [str(row[i]).lower().strip() for i in use_indices if str(row[i]).lower() != 'nan']
+                    for f in found_effects + found_uses: database['symptoms'].add(f)
+                    
+                    drug_class = str(row[class_idx]) if class_idx != -1 and str(row[class_idx]).lower() != 'nan' else "Unknown"
+                    primary_use = found_uses[0].title() if found_uses else drug_class
 
-    except Exception as e:
-        st.warning(f"⚠️ BioBERT NER error: {e}. Using rule-based fallback.")
-        return [], []
+                    # Merge with existing info if present (e.g. if loaded from TSV first)
+                    existing = database['drug_info'].get(drug_name, {})
+                    merged_effects = list(set(existing.get('known_effects', []) + found_effects[:5]))
+                    
+                    database['drug_info'][drug_name] = {
+                        'class': drug_class,
+                        'common_use': primary_use,
+                        'known_effects': merged_effects,
+                        'substitutes': existing.get('substitutes', []) or ([str(row[i]).strip() for i in substitute_indices if str(row[i]).lower()!='nan'][:3]),
+                        'mechanism': 'See medical guide'
+                    }
 
-def extract_text_from_image(image_bytes, file_format="PNG") -> str:
+        except Exception as e:
+            print(f"⚠️ Error loading {filename}: {e}")
+            continue
+
+    return database
+# --- 4. OCR FUNCTIONS ---
+
+def validate_tesseract_installed() -> bool:
     try:
         import pytesseract
-        from PIL import Image
-        import io
+        pytesseract.get_tesseract_version()
+        return True
+    except:
+        return False
+
+def extract_text_from_image(image_bytes, aggressive_preprocessing=True) -> str:
+    try:
+        import pytesseract
+        import cv2
+        import numpy as np
         
-        image = Image.open(io.BytesIO(image_bytes))
-        text = pytesseract.image_to_string(image, lang='eng')
-        return text.strip()
-    except ImportError:
-        st.error("OCR libraries not installed. Please install: pip install pytesseract Pillow")
-        st.info("Note: You also need to install Tesseract OCR engine on your system.")
+        file_bytes = np.asarray(bytearray(image_bytes), dtype=np.uint8)
+        image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if image is None: return ""
+        
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        if aggressive_preprocessing:
+            gray = cv2.fastNlMeansDenoising(gray, h=10)
+            try:
+                coords = np.column_stack(np.where(gray > 0))
+                angle = cv2.minAreaRect(coords)[-1]
+                if angle < -45: angle = 90 + angle
+                if abs(angle) > 1.0:
+                    (h, w) = gray.shape
+                    center = (w // 2, h // 2)
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+            except: pass
+
+        try:
+            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        except:
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+        if aggressive_preprocessing:
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+        configs = [r'--oem 3 --psm 6', r'--oem 3 --psm 4'] 
+        results = []
+        for config in configs:
+            try:
+                text = pytesseract.image_to_string(binary, config=config)
+                score = len(text.strip()) + len([c for c in text if c.isalnum()])
+                results.append((score, text))
+            except: continue
+                
+        if results: return max(results, key=lambda x: x[0])[1].strip()
         return ""
-    except Exception as e:
-        st.warning(f"OCR extraction error: {e}")
-        return ""
+
+    except ImportError: return ""
+    except Exception: return ""
 
 def extract_text_from_pdf(uploaded_file) -> str:
     try:
         import fitz
         uploaded_file.seek(0)
         file_bytes = uploaded_file.read()
-        if not file_bytes:
-            return ""
+        if not file_bytes: return ""
         
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         text = ""
         total_pages = len(doc)
         
+        show_progress = total_pages > 5
+        if show_progress:
+            progress_bar = st.progress(0)
+        
         for page_num in range(total_pages):
+            if show_progress:
+                progress_bar.progress((page_num + 1) / total_pages)
+            
             page = doc[page_num]
             page_text = page.get_text()
             
@@ -141,405 +305,144 @@ def extract_text_from_pdf(uploaded_file) -> str:
                     import pytesseract
                     from PIL import Image
                     import io
-                    
                     pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
                     img_data = pix.tobytes("png")
                     image = Image.open(io.BytesIO(img_data))
                     ocr_text = pytesseract.image_to_string(image, lang='eng')
-                    if ocr_text and ocr_text.strip():
-                        text += f"[OCR from page {page_num + 1}]\n{ocr_text}\n"
-                except ImportError:
-                    pass
-                except Exception:
-                    pass
+                    if ocr_text.strip():
+                        text += f"[OCR Page {page_num+1}]\n{ocr_text}\n"
+                except: pass
         
+        if show_progress: progress_bar.empty()
         doc.close()
         return text.strip()
-    except ImportError:
-        st.error("PyMuPDF (fitz) is not installed. Please install it: pip install PyMuPDF")
-        return ""
     except Exception as e:
-        st.error(f"Error reading PDF: {e}")
+        st.error(f"PDF Error: {e}")
         return ""
 
-@st.cache_data(ttl=3600)
-def load_drug_symptom_database():
-    database = {
-        'drugs': set(),
-        'symptoms': set(),
-        'relations': [],
-        'drug_info': {}
-    }
+# --- 5. CORE ANALYSIS LOGIC ---
 
-    default_drugs = {
-        'lisinopril', 'metformin', 'atorvastatin', 'ibuprofen',
-        'aspirin', 'omeprazole', 'sertraline', 'loratadine',
-        'amlodipine', 'amlodipine besylate', 'nsaid', 'nsaids',
-        'acetaminophen', 'paracetamol', 'naproxen', 'ondansetron',
-        'dolo', 'naxdom', 'ondem', 'electral', 'dulcoflex',
-        'naproxen sodium', 'ondansetron hcl', 'acetaminophen 650',
-        'electrolyte', 'electrolyte powder', 'dolo 650', 'naxdom 500',
-        'tablet', 'tab', 'capsule', 'cap', 'naydom', 'tab naxdom',
-        'tab ondem', 'tab dolo', 'electral powder'
-    }
-    database['drugs'].update(default_drugs)
-
-    default_symptoms = {
-        'headache', 'migraine', 'pain', 'nausea', 'dizziness',
-        'fatigue', 'cough', 'rash', 'fever', 'anxiety',
-        'depression', 'insomnia', 'vomiting', 'diarrhea',
-        'breathing difficulty', 'chest pain', 'muscle pain',
-        'joint pain', 'stomach pain', 'abdominal pain', 'bleeding',
-        'hypertension', 'diabetes', 'heartburn', 'swelling',
-        'dry mouth', 'gastritis'
-    }
-    database['symptoms'].update(default_symptoms)
-
+def extract_entities_with_biobert(text: str, models: Dict) -> Tuple[List[str], List[str]]:
+    if not models or not models.get('ner'):
+        return [], []
     try:
-        sample_dir = Path('data/sample')
-        if sample_dir.exists():
-            tsv_files = list(sample_dir.glob('*.tsv'))
-            for file in tsv_files:
-                try:
-                    df = pd.read_csv(file, sep='\t', on_bad_lines='skip')
-                    for _, row in df.iterrows():
-                        if 'drug' in df.columns and 'effect' in df.columns:
-                            drug = str(row['drug']).lower().strip()
-                            effect = str(row['effect']).lower().strip()
-                            if drug and effect:
-                                database['drugs'].add(drug)
-                                database['symptoms'].add(effect)
-                                database['relations'].append({
-                                    'drug': drug,
-                                    'effect': effect,
-                                    'type': row.get('type', 'adverse')
-                                })
-                except Exception:
-                    continue
-    except Exception:
-        pass
-
-    database['drug_info'] = {
-        'ibuprofen': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'abdominal pain', 'heartburn', 'nausea', 'gastritis'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'nsaid': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'abdominal pain', 'heartburn', 'nausea', 'gastritis'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'nsaids': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'abdominal pain', 'heartburn', 'nausea', 'gastritis'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'lisinopril': {
-            'class': 'ACE inhibitor',
-            'common_use': 'hypertension',
-            'known_effects': ['cough', 'dizziness', 'headache', 'fatigue'],
-            'mechanism': 'Angiotensin-converting enzyme inhibition'
-        },
-        'metformin': {
-            'class': 'Biguanide',
-            'common_use': 'diabetes',
-            'known_effects': ['nausea', 'diarrhea', 'vitamin b12 deficiency', 'stomach pain'],
-            'mechanism': 'Reduces hepatic glucose production'
-        },
-        'sertraline': {
-            'class': 'SSRI',
-            'common_use': 'depression',
-            'known_effects': ['nausea', 'insomnia', 'anxiety', 'headache'],
-            'mechanism': 'Selective serotonin reuptake inhibition'
-        },
-        'omeprazole': {
-            'class': 'Proton pump inhibitor',
-            'common_use': 'acid reflux',
-            'known_effects': ['headache', 'stomach pain', 'vitamin b12 deficiency'],
-            'mechanism': 'Gastric acid suppression'
-        },
-        'naproxen': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'headache', 'nausea', 'dizziness'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'naxdom': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'headache', 'nausea', 'dizziness'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'naydom': {
-            'class': 'NSAID',
-            'common_use': 'pain',
-            'known_effects': ['stomach pain', 'headache', 'nausea', 'dizziness'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'ondansetron': {
-            'class': 'Antiemetic',
-            'common_use': 'nausea',
-            'known_effects': ['headache', 'dizziness', 'fatigue'],
-            'mechanism': 'Serotonin receptor antagonist'
-        },
-        'ondem': {
-            'class': 'Antiemetic',
-            'common_use': 'nausea',
-            'known_effects': ['headache', 'dizziness', 'fatigue'],
-            'mechanism': 'Serotonin receptor antagonist'
-        },
-        'paracetamol': {
-            'class': 'Analgesic',
-            'common_use': 'fever',
-            'known_effects': ['nausea', 'rash', 'liver damage'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'acetaminophen': {
-            'class': 'Analgesic',
-            'common_use': 'fever',
-            'known_effects': ['nausea', 'rash', 'liver damage'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        },
-        'dolo': {
-            'class': 'Analgesic',
-            'common_use': 'fever',
-            'known_effects': ['nausea', 'rash'],
-            'mechanism': 'Cyclooxygenase inhibition'
-        }
-    }
-
-    return database
+        entities = models['ner'](text[:5000])
+        drugs, symptoms = [], []
+        for entity in entities:
+            entity_text = entity['word'].lower()
+            if entity['entity_group'] in ['MEDICATION', 'DRUG', 'CHEMICAL']:
+                drugs.append(entity_text)
+            elif entity['entity_group'] in ['SYMPTOM', 'DISEASE', 'CONDITION']:
+                symptoms.append(entity_text)
+        return list(set(drugs)), list(set(symptoms))
+    except Exception: return [], []
 
 def extract_drug_symptom_relations(text: str, use_ai: bool = True) -> List[Dict]:
-    if not text or not text.strip():
-        return []
+    """
+    Optimized relation extraction with Partial Matching for receipts.
+    """
+    if not text or not text.strip(): return []
 
     database = load_drug_symptom_database()
+    biobert_models = load_model() if use_ai else None
 
-    biobert_models = None
-    if use_ai:
-        biobert_models = load_model()
-
-    ADVERSE_PATTERNS = [
-        r'(?:caused|induced|triggered|developed|experienced|due to|because of|after taking|following|since starting)',
-        r'(?:side effect|adverse|reaction|complication)',
-        r'(?:worsened|aggravated|exacerbated)',
-        r'(?:discontinued|stopped|changed|stopped taking)',
-        r'(?:suspected|possible|likely|potential)',
-        r'(?:new onset|new-onset|newly developed)'
-    ]
-
-    TREATMENT_PATTERNS = [
-        r'(?:treated with|taking for|prescribed for|helps|helped|improved|resolved|controlled)',
-        r'(?:treatment|therapy|medication for|managing)',
-        r'(?:manages|controls|treats)',
-        r'(?:remains stable|well-controlled|effective)',
-        r'(?:for (?:the )?(?:treatment|management|control) of)',
-        r'(?:to (?:treat|manage|control))'
-    ]
-
-    adverse_pattern = re.compile('|'.join(ADVERSE_PATTERNS), re.IGNORECASE)
-    treatment_pattern = re.compile('|'.join(TREATMENT_PATTERNS), re.IGNORECASE)
-
-    symptoms = database['symptoms']
-    drugs = database['drugs']
-    known_relations = database['relations']
-    drug_info = database['drug_info']
-
-    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if s.strip()]
-    if not sentences:
-        sentences = [text.strip()]
-    
-    relations = []
-    seen_pairs = set()
-    
+    found_drugs_map = {}
     text_lower = text.lower()
-    all_found_drugs = set()
-    all_found_symptoms = set()
     
-    if biobert_models and biobert_models.get('ner'):
-        biobert_drugs, biobert_symptoms = extract_entities_with_biobert(text, biobert_models)
-        all_found_drugs.update(biobert_drugs if biobert_drugs else [])
-        all_found_symptoms.update(biobert_symptoms if biobert_symptoms else [])
+    # Clean tokens (alphanumeric only)
+    tokens = re.findall(r'[a-z0-9]+', text_lower)
     
-    for drug in drugs:
-        pattern = r'\b' + re.escape(drug) + r'\b'
-        if re.search(pattern, text_lower):
-            all_found_drugs.add(drug)
-    
-    for symptom in symptoms:
-        pattern = r'\b' + re.escape(symptom) + r'\b'
-        if re.search(pattern, text_lower):
-            all_found_symptoms.add(symptom)
-    
-    prescription_keywords = ['prescription', 'tab', 'tablet', 'capsule', 'cap', 'mg', 'od', 'bd', 'tds', 'sos', 'advice']
-    is_prescription_context = any(keyword in text_lower for keyword in prescription_keywords)
-    
-    if is_prescription_context and all_found_drugs and all_found_symptoms:
-        for drug in all_found_drugs:
-            for symptom in all_found_symptoms:
-                pair_key = (drug, symptom)
-                if pair_key in seen_pairs:
-                    continue
-                seen_pairs.add(pair_key)
+    # 1. Search Logic (Updated for Partial Matching)
+    for word in tokens:
+        # A. Exact Match
+        if len(word) > 2 and word in database['drugs']:
+            found_drugs_map[word] = "Exact Match"
+        # B. Partial/Index Match (Fix for "Abiros" -> "Abiros CA")
+        elif word in database.get('search_index', {}):
+            candidates = list(database['search_index'][word])
+            if candidates:
+                best_match = min(candidates, key=len)
+                found_drugs_map[best_match] = "Partial Match"
 
-                known_relation = None
-                for rel in known_relations:
-                    if rel['drug'] == drug and rel['effect'] == symptom:
-                        known_relation = rel['type']
-                        break
+    # 2. Multi-word Check
+    if len(tokens) > 1:
+        for n in range(2, 4):
+            for i in range(len(tokens) - n + 1):
+                gram = " ".join(tokens[i:i+n])
+                if gram in database['drugs']:
+                    found_drugs_map[gram] = "Exact Match"
 
-                confidence = 0.5
-                relationship = None
-                evidence_parts = []
+    # AI Fallback
+    if biobert_models and biobert_models.get('ner') and len(found_drugs_map) < 50:
+        try:
+            ai_drugs, _ = extract_entities_with_biobert(text, biobert_models)
+            for d in ai_drugs:
+                if d not in found_drugs_map: found_drugs_map[d] = "BioBERT AI"
+        except: pass
 
-                if drug in drug_info:
-                    info = drug_info[drug]
-                    if info['common_use'] == symptom:
-                        is_treatment = True
-                        confidence = 0.7
-                        evidence_parts.append(f"Known treatment: {drug} treats {symptom}")
-                        relationship = 'treatment'
-                    elif symptom in info['known_effects']:
-                        is_adverse = True
-                        confidence = 0.7
-                        evidence_parts.append(f"Known side effect: {drug} can cause {symptom}")
-                        relationship = 'adverse'
-                    else:
-                        is_treatment = True
-                        confidence = 0.5
-                        evidence_parts.append("Prescription context: implicit treatment relationship")
-                        relationship = 'treatment'
-                else:
-                    is_treatment = True
-                    confidence = 0.5
-                    evidence_parts.append("Prescription context: implicit treatment relationship")
-                    relationship = 'treatment'
-
-                if relationship:
-                    relations.append({
-                        'drug': drug.title(),
-                        'effect': symptom.title(),
-                        'relationship': relationship,
-                        'confidence': min(confidence, 1.0),
-                        'sentence': text[:200] + '...' if len(text) > 200 else text,
-                        'evidence': ' • '.join(evidence_parts)
-                    })
+    relations = []
+    
+    # Strategy A: Sentences
+    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if s.strip()]
+    adverse_pattern = re.compile(r'(?:caused|side effect|worsened|aggravated|due to)', re.IGNORECASE)
+    treatment_pattern = re.compile(r'(?:treated|taking|prescribed|helps|manages|for)', re.IGNORECASE)
     
     for sentence in sentences:
-        sentence_lower = sentence.lower()
-        found_drugs = {drug for drug in all_found_drugs if re.search(r'\b' + re.escape(drug) + r'\b', sentence_lower)}
-        found_symptoms = {symptom for symptom in all_found_symptoms if re.search(r'\b' + re.escape(symptom) + r'\b', sentence_lower)}
+        sent_lower = sentence.lower()
+        # Loose matching for sentence context
+        local_drugs = [d for d in found_drugs_map if d.split()[0] in sent_lower][:5]
+        
+        sent_tokens = set(re.findall(r'[a-z]+', sent_lower))
+        local_symptoms = list(sent_tokens & database['symptoms'])[:5]
+        
+        is_adverse = bool(adverse_pattern.search(sent_lower))
+        is_treatment = bool(treatment_pattern.search(sent_lower))
+        
+        for drug in local_drugs:
+            for symptom in local_symptoms:
+                rel_type = None
+                conf = 0.5
+                evidence = []
 
-        for drug in found_drugs:
-            for symptom in found_symptoms:
-                pair_key = (drug, symptom)
-                if pair_key in seen_pairs:
-                    continue
-                seen_pairs.add(pair_key)
-
-                known_relation = None
-                for rel in known_relations:
-                    if rel['drug'] == drug and rel['effect'] == symptom:
-                        known_relation = rel['type']
-                        break
-
-                is_adverse = bool(adverse_pattern.search(sentence_lower))
-                is_treatment = bool(treatment_pattern.search(sentence_lower))
-
-                confidence = 0.5
-                relationship = None
-                evidence_parts = []
-
-                if drug in drug_info:
-                    info = drug_info[drug]
-                    if info['common_use'] == symptom:
-                        is_treatment = True
-                        confidence = 0.7
-                        evidence_parts.append(f"Known treatment: {drug} treats {symptom}")
-                    if symptom in info['known_effects']:
-                        is_adverse = True
-                        confidence = 0.7
-                        evidence_parts.append(f"Known side effect: {drug} can cause {symptom}")
-
-                if is_prescription_context and not is_adverse and not is_treatment:
-                    if drug in drug_info:
-                        info = drug_info[drug]
-                        if info['common_use'] == symptom:
-                            is_treatment = True
-                            confidence = 0.6
-                            evidence_parts.append("Prescription context: drug prescribed for symptom")
-                        elif symptom in info['known_effects']:
-                            is_adverse = True
-                            confidence = 0.6
-                            evidence_parts.append("Prescription context: drug may cause symptom")
-                    else:
-                        is_treatment = True
-                        confidence = 0.5
-                        evidence_parts.append("Prescription context: implicit treatment relationship")
-
-                biobert_classification = None
-                if biobert_models and biobert_models.get('classifier'):
-                    try:
-                        classification_text = f"Drug: {drug}. Symptom: {symptom}. Context: {sentence}"
-                        result = biobert_models['classifier'](classification_text)
-                        if result and len(result) > 0:
-                            biobert_classification = result[0]
-                            if biobert_classification['score'] > 0.7:
-                                confidence += 0.2
-                                evidence_parts.append(f"BioBERT classification ({biobert_classification['label']})")
-                    except Exception:
-                        pass
-
-                if known_relation:
-                    relationship = known_relation
-                    confidence += 0.3
-                    evidence_parts.append("Database match")
-
-                if is_adverse and is_treatment:
-                    if any(word in sentence_lower for word in ['despite', 'although', 'but', 'however']):
-                        relationship = 'adverse'
-                        evidence_parts.append("Adverse reaction detected")
-                    else:
-                        relationship = 'treatment'
-                        evidence_parts.append("Treatment effect detected")
+                db_match = next((r for r in database['relations'] if r['drug'] == drug and r['effect'] == symptom), None)
+                if db_match:
+                    rel_type = db_match['relationship']
+                    conf = 0.9
+                    evidence.append("Validated by Medical Database")
                 elif is_adverse:
-                    relationship = 'adverse'
-                    confidence += 0.2
-                    evidence_parts.append("Adverse pattern match")
+                    rel_type = 'adverse'
+                    conf = 0.7
+                    evidence.append("Context implies side effect")
                 elif is_treatment:
-                    relationship = 'treatment'
-                    confidence += 0.2
-                    evidence_parts.append("Treatment pattern match")
-
-                if drug in drug_info:
-                    info = drug_info[drug]
-                    if symptom == info['common_use']:
-                        confidence += 0.2
-                        evidence_parts.append(f"Common use: {info['common_use']}")
-                    elif symptom in info['known_effects']:
-                        confidence += 0.2
-                        evidence_parts.append(f"Known {info['class']} effect")
-
-                if any(phrase in sentence_lower for phrase in [
-                    'after taking', 'since starting', 'developed after',
-                    'started after', 'began after', 'following', 'induced'
-                ]):
-                    confidence += 0.2
-                    evidence_parts.append("Strong temporal relationship")
-
-                if relationship:
+                    rel_type = 'treatment'
+                    conf = 0.7
+                    evidence.append("Context implies treatment")
+                
+                if rel_type:
                     relations.append({
-                        'drug': drug.title(),
-                        'effect': symptom.title(),
-                        'relationship': relationship,
-                        'confidence': min(confidence, 1.0),
-                        'sentence': sentence,
-                        'evidence': ' • '.join(evidence_parts)
+                        'drug': drug.title(), 'effect': symptom.title(),
+                        'relationship': rel_type, 'confidence': conf,
+                        'evidence': ' • '.join(evidence), 'sentence': sentence
+                    })
+
+    # Strategy B: Receipt Fallback
+    if len(relations) == 0 and len(found_drugs_map) > 0:
+        for drug in list(found_drugs_map.keys())[:20]:
+            info = database['drug_info'].get(drug)
+            if info:
+                if info.get('common_use') and info['common_use'] != 'Unknown':
+                    relations.append({
+                        'drug': drug.title(), 'effect': str(info['common_use']).title(),
+                        'relationship': 'treatment', 'confidence': 0.85,
+                        'evidence': 'Database Knowledge', 'sentence': f"Detected Item: {drug}"
+                    })
+                
+                if info.get('known_effects'):
+                    top_effect = info['known_effects'][0]
+                    relations.append({
+                        'drug': drug.title(), 'effect': str(top_effect).title(),
+                        'relationship': 'adverse', 'confidence': 0.6,
+                        'evidence': 'Potential Side Effect Warning', 'sentence': f"Warning: {drug} may cause {top_effect}"
                     })
 
     unique_relations = {}
@@ -550,635 +453,267 @@ def extract_drug_symptom_relations(text: str, use_ai: bool = True) -> List[Dict]
 
     return sorted(unique_relations.values(), key=lambda x: x['confidence'], reverse=True)
 
+# --- 6. UI & STYLING ---
+
+@st.cache_data(show_spinner=False)
 def load_premium_css():
     st.markdown("""
     <style>
-    :root {
-        --primary: #2563eb;
-        --primary-dark: #1e40af;
-        --primary-light: #3b82f6;
-        --secondary: #8b5cf6;
-        --success: #10b981;
-        --danger: #ef4444;
-        --warning: #f59e0b;
-        --text: #1f2937;
-        --text-light: #6b7280;
-        --bg: #ffffff;
-        --bg-alt: #f9fafb;
-        --border: #e5e7eb;
-        --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        --radius: 12px;
-        --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    :root { 
+        --primary: #2563eb; --primary-dark: #1e40af; 
+        --success: #10b981; --danger: #ef4444; 
+        --text: #1f2937; --text-light: #6b7280; 
+        --bg: #ffffff; --border: #e5e7eb; --radius: 12px; 
     }
-
-    * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
+    .main .block-container { padding-top: 2rem; max-width: 1400px; }
+    
+    .premium-card { 
+        background: #ffffff; 
+        border-radius: var(--radius); 
+        padding: 1.5rem; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+        border: 1px solid var(--border); 
+        margin-bottom: 1rem; 
+        color: #111827 !important; 
     }
-
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
-        background: var(--bg-alt);
-        color: var(--text);
-        line-height: 1.6;
+    .premium-card h3, .premium-card p, .premium-card strong { color: #111827 !important; }
+    
+    .hero-section { 
+        background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%); 
+        color: white; padding: 3rem; border-radius: var(--radius); 
+        text-align: center; margin-bottom: 2rem; 
     }
-
-    footer { visibility: hidden; }
-    header { visibility: hidden; }
-
-    .main .block-container {
-        padding-top: 3rem;
-        padding-bottom: 3rem;
-        max-width: 1400px;
+    .metric-item { 
+        background: #fff; padding: 1.5rem; border-radius: var(--radius); 
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; 
+        border-left: 4px solid var(--primary); 
     }
-
-    .premium-card {
-        background: var(--bg);
-        border-radius: var(--radius);
-        padding: 2rem;
-        box-shadow: var(--shadow-md);
-        border: 1px solid var(--border);
-        margin-bottom: 1.5rem;
-        transition: var(--transition);
+    .stButton > button { 
+        background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%); 
+        color: white; border: none; padding: 0.75rem 2rem; 
+        border-radius: var(--radius); width: 100%; 
     }
-
-    .premium-card:hover {
-        box-shadow: var(--shadow-lg);
-        transform: translateY(-2px);
-    }
-
-    .hero-section {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        color: white;
-        padding: 4rem 2rem;
-        border-radius: var(--radius);
-        text-align: center;
-        margin-bottom: 2rem;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .hero-section::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="20" cy="20" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="80" cy="80" r="2" fill="rgba(255,255,255,0.1)"/></svg>');
-        opacity: 0.3;
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 1;
-    }
-
-    .hero-section h1 {
-        font-size: 3rem;
-        font-weight: 700;
-        margin-bottom: 1rem;
-        letter-spacing: -0.02em;
-    }
-
-    .hero-section p {
-        font-size: 1.25rem;
-        opacity: 0.95;
-        max-width: 600px;
-        margin: 0 auto;
-    }
-
-    .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin: 1.5rem 0;
-    }
-
-    .metric-item {
-        background: var(--bg);
-        padding: 1.5rem;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        text-align: center;
-        border-left: 4px solid var(--primary);
-        transition: var(--transition);
-    }
-
-    .metric-item:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-    }
-
-    .metric-label {
-        font-size: 0.875rem;
-        color: var(--text-light);
-        margin-bottom: 0.5rem;
-        font-weight: 500;
-    }
-
-    .metric-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary);
-    }
-
-    .stButton > button {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-        color: white;
-        border: none;
-        border-radius: var(--radius);
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        transition: var(--transition);
-        box-shadow: var(--shadow);
-        width: 100%;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
-        background: linear-gradient(135deg, var(--primary-dark) 0%, var(--secondary) 100%);
-    }
-
-    .stTextArea > div > div > textarea,
-    .stTextInput > div > div > input {
-        border: 2px solid var(--border);
-        border-radius: var(--radius);
-        padding: 0.75rem;
-        transition: var(--transition);
-    }
-
-    .stTextArea > div > div > textarea:focus,
-    .stTextInput > div > div > input:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-        background: transparent;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background: var(--bg-alt);
-        border-radius: var(--radius) var(--radius) 0 0;
-        padding: 0.75rem 1.5rem;
-        font-weight: 600;
-        transition: var(--transition);
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: var(--bg);
-        color: var(--primary);
-        box-shadow: var(--shadow);
-    }
-
-    .badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .badge-adverse {
-        background: rgba(239, 68, 68, 0.1);
-        color: var(--danger);
-    }
-
-    .badge-treatment {
-        background: rgba(16, 185, 129, 0.1);
-        color: var(--success);
-    }
-
-    .badge-confidence {
-        background: rgba(37, 99, 235, 0.1);
-        color: var(--primary);
-    }
-
-    .finding-card {
-        background: var(--bg);
-        border-radius: var(--radius);
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid var(--primary);
-        box-shadow: var(--shadow);
-        transition: var(--transition);
-    }
-
-    .finding-card:hover {
-        box-shadow: var(--shadow-md);
-        transform: translateX(4px);
-    }
-
-    @media (max-width: 768px) {
-        .hero-section h1 { font-size: 2rem; }
-        .hero-section p { font-size: 1rem; }
-        .metric-grid { grid-template-columns: 1fr; }
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .fade-in {
-        animation: fadeIn 0.5s ease-out;
-    }
+    .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge-adverse { background: #fee2e2; color: #ef4444; }
+    .badge-treatment { background: #d1fae5; color: #10b981; }
     </style>
     """, unsafe_allow_html=True)
 
 def render_metric_card(label: str, value: str, icon: str = "", color: str = "primary"):
-    color_map = {
-        "primary": "var(--primary)",
-        "success": "var(--success)",
-        "danger": "var(--danger)",
-        "warning": "var(--warning)"
-    }
-    border_color = color_map.get(color, color_map["primary"])
-
+    colors = {"primary": "#2563eb", "success": "#10b981", "danger": "#ef4444", "warning": "#f59e0b"}
     st.markdown(f"""
-    <div class="metric-item" style="border-left-color: {border_color};">
-        <div class="metric-label">{icon} {label}</div>
-        <div class="metric-value">{value}</div>
+    <div class="metric-item" style="border-left-color: {colors.get(color, '#2563eb')};">
+        <div style="font-size: 0.85rem; color: #6b7280;">{icon} {label}</div>
+        <div style="font-size: 1.8rem; font-weight: 700; color: #1f2937;">{value}</div>
     </div>
     """, unsafe_allow_html=True)
 
 def render_finding_card(finding: Dict):
-    rel_type = finding['relationship']
-    badge_class = "badge-adverse" if rel_type == "adverse" else "badge-treatment"
-    badge_text = "⚠️ Adverse" if rel_type == "adverse" else "💊 Treatment"
-
-    confidence_pct = int(finding['confidence'] * 100)
-    confidence_color = "var(--success)" if confidence_pct >= 70 else "var(--warning)" if confidence_pct >= 50 else "var(--text-light)"
-
+    badge_cls = "badge-adverse" if finding['relationship'] == "adverse" else "badge-treatment"
+    icon = "⚠️" if finding['relationship'] == "adverse" else "💊"
+    
     st.markdown(f"""
-    <div class="finding-card fade-in">
-        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
-            <div>
-                <h4 style="margin: 0; color: var(--text); font-size: 1.25rem;">
-                    {finding['drug']} → {finding['effect']}
-                </h4>
-                <span class="badge {badge_class}" style="margin-top: 0.5rem; display: inline-block;">
-                    {badge_text}
-                </span>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 1.5rem; font-weight: 700; color: {confidence_color};">
-                    {confidence_pct}%
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-light);">Confidence</div>
-            </div>
+    <div class="premium-card">
+        <div style="display:flex; justify-content:space-between;">
+            <h4 style="margin:0; color:#111827;">{finding['drug']} → {finding['effect']}</h4>
+            <span class="badge {badge_cls}">{icon} {finding['relationship'].upper()}</span>
         </div>
-        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <div style="font-size: 0.875rem; color: var(--text-light); margin-bottom: 0.5rem;">
-                <strong>Evidence:</strong> {finding['evidence']}
-            </div>
-            <div style="font-size: 0.875rem; font-style: italic; color: var(--text-light);">
-                "{finding['sentence'][:150]}{'...' if len(finding['sentence']) > 150 else ''}"
-            </div>
+        <div style="margin-top:0.5rem; font-size:0.9rem; color:#4b5563;">
+            <strong>Confidence:</strong> {int(finding['confidence']*100)}% <br>
+            <strong>Evidence:</strong> {finding['evidence']}
+        </div>
+        <div style="margin-top:0.5rem; font-size:0.8rem; font-style:italic; color:#6b7280;">
+            "{finding['sentence'][:150]}..."
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+@st.cache_data(show_spinner=False)
+def generate_all_charts(findings_json):
+    findings = pd.read_json(findings_json, orient='records').to_dict('records')
+    return {
+        'relationship': create_relationship_chart(findings),
+        'confidence': create_confidence_distribution(findings),
+        'network': create_entity_network_graph(findings),
+        'entity_type': create_entity_type_distribution(findings)
+    }
+
+# --- 7. MAIN APPLICATION ---
+
 def main():
-    st.set_page_config(
-        page_title="Drug-Disease Analyzer | Premium Medical AI",
-        page_icon="💊",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-
     load_premium_css()
-
-    if 'analysis_count' not in st.session_state:
-        st.session_state.analysis_count = 0
-    if 'findings' not in st.session_state:
-        st.session_state.findings = []
+    
+    if 'analysis_count' not in st.session_state: st.session_state.analysis_count = 0
+    if 'findings' not in st.session_state: st.session_state.findings = []
 
     st.markdown("""
     <div class="hero-section">
-        <div class="hero-content">
-            <h1>💊 Drug-Disease Relation Analyzer</h1>
-            <p>Advanced AI-powered medical text analysis with intelligent relationship detection</p>
-        </div>
+        <h1>💊 Medical Receipt & Report Analyzer</h1>
+        <p>Advanced AI identification for Drugs, Symptoms, and Side Effects</p>
     </div>
     """, unsafe_allow_html=True)
 
     with st.sidebar:
-        st.markdown("""
-        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-radius: var(--radius); margin-bottom: 1.5rem; color: white;">
-            <h2 style="margin: 0; color: white;">🔬 Analysis Tools</h2>
-        </div>
-        """, unsafe_allow_html=True)
-
         st.markdown("### ⚙️ Settings")
-        show_details = st.checkbox("Show Detailed Analysis", value=True)
-        use_ai_models = st.checkbox(
-            "🤖 Use BioBERT AI Models",
-            value=False,
-            disabled=False,
-            help="Uses Hugging Face BioBERT for entity recognition and relation extraction. Falls back to rule-based if unavailable."
-        )
-        min_confidence = st.slider("Minimum Confidence", 0.0, 1.0, 0.3, 0.05)
-        max_results = st.slider("Max Results", 10, 50, 20)
-
-        st.info("ℹ️ (Optional) Install transformers + torch for AI-powered analysis: `pip install transformers torch`")
-
+        use_aggressive_ocr = st.checkbox("🔎 Enhanced OCR (Slower)", value=True, help="Use OpenCV to clean noisy images")
+        show_details = st.checkbox("Show Detailed Cards", value=True)
+        use_ai_models = st.checkbox("🤖 Use BioBERT AI", value=False)
+        min_confidence = st.slider("Min Confidence", 0.0, 1.0, 0.4, 0.05)
         st.markdown("---")
+        st.metric("Total Analyses", st.session_state.analysis_count)
 
-        st.markdown("### 📊 Session Stats")
-        st.metric("Analyses", st.session_state.analysis_count)
-
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📝 Analysis", "📊 Visualizations", "🔍 Database", "📈 Insights"
-    ])
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 Analysis", "📊 Analytics", "🔍 Database", "📈 Data Stats"])
 
     with tab1:
-        st.markdown("### Medical Report Input")
-
-        input_method = st.radio(
-            "Input Method",
-            ["Quick Input", "File Upload", "Sample Cases"],
-            horizontal=True
-        )
-
-        text = ""
-
-        if input_method == "Quick Input":
-            text = st.text_area(
-                "Enter medical report or symptoms",
-                height=250,
-                placeholder="Example: Patient presents with severe headache and nausea. Currently taking lisinopril for hypertension and reports dry cough that started after beginning medication..."
-            )
-
-            with st.expander("🎯 Quick Symptom Selector"):
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    symptoms_a = st.multiselect("Common Symptoms",
-                        ["Headache", "Nausea", "Fever", "Rash", "Dizziness", "Fatigue"])
-                with col_b:
-                    symptoms_b = st.multiselect("Additional",
-                        ["Pain", "Cough", "Anxiety", "Depression", "Insomnia", "Vomiting"])
-
-                if symptoms_a or symptoms_b:
-                    selected = ", ".join(symptoms_a + symptoms_b)
-                    if text:
-                        text += f"\nAdditional symptoms: {selected}"
-                    else:
-                        text = f"Symptoms present: {selected}"
-
-        elif input_method == "File Upload":
-            uploaded = st.file_uploader(
-                "Upload Medical Report", 
-                type=['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp'],
-                help="Supports: Text files, PDFs (text or scanned), and images (JPG, PNG, etc.)"
-            )
-            if uploaded is not None:
-                file_type = uploaded.type.lower() if uploaded.type else ""
-                file_name = uploaded.name.lower() if uploaded.name else ""
-                
-                if "pdf" in file_type or file_name.endswith('.pdf'):
-                    with st.spinner("📄 Extracting text from PDF..."):
-                        text = extract_text_from_pdf(uploaded)
-                    if not text or not text.strip():
-                        st.warning("⚠️ Could not extract text from PDF. Trying OCR on first page...")
-                        try:
-                            import fitz
-                            uploaded.seek(0)
-                            file_bytes = uploaded.read()
-                            doc = fitz.open(stream=file_bytes, filetype="pdf")
-                            if len(doc) > 0:
-                                page = doc[0]
-                                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                                img_data = pix.tobytes("png")
-                                text = extract_text_from_image(img_data)
-                            doc.close()
-                        except Exception:
-                            st.error("⚠️ PDF extraction failed. The PDF might be corrupted or password-protected.")
-                            text = ""
-                
-                elif any(img_type in file_type for img_type in ['image', 'png', 'jpg', 'jpeg', 'gif', 'bmp']) or \
-                     any(file_name.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']):
-                    with st.spinner("🔍 Scanning image with OCR..."):
+        st.markdown("### 📤 Input Data")
+        input_method = st.radio("Select Input:", ["Quick Text", "Upload File", "Sample Cases"], horizontal=True)
+        text_input = ""
+        
+        if input_method == "Quick Text":
+            text_input = st.text_area("Paste medical text or receipt items here:", height=200)
+        elif input_method == "Upload File":
+            uploaded = st.file_uploader("Upload Image (PNG/JPG) or PDF", type=['png','jpg','jpeg','pdf','txt'])
+            if uploaded:
+                if uploaded.name.endswith('.pdf'):
+                    with st.spinner("📄 Extracting PDF..."):
+                        text_input = extract_text_from_pdf(uploaded)
+                elif any(uploaded.name.endswith(ext) for ext in ['.png','.jpg','.jpeg']):
+                    with st.spinner("🔍 Scanning Image with OCR..."):
                         uploaded.seek(0)
-                        image_bytes = uploaded.read()
-                        text = extract_text_from_image(image_bytes)
-                    if not text or not text.strip():
-                        st.warning("⚠️ Could not extract text from image. Make sure the image is clear and contains readable text.")
-                
+                        text_input = extract_text_from_image(uploaded.read(), aggressive_preprocessing=use_aggressive_ocr)
                 else:
-                    try:
-                        uploaded.seek(0)
-                        text = uploaded.read().decode('utf-8')
-                    except Exception as e:
-                        st.error(f"Error reading file: {e}")
-                        text = ""
+                    text_input = uploaded.read().decode('utf-8')
                 
-                if text and text.strip():
-                    with st.expander("📋 Preview Extracted Text"):
-                        st.text_area("Content", text, height=200, disabled=True, key="preview_text")
+                if text_input:
+                    with st.expander("Show Extracted Text"):
+                        st.text_area("Raw Text", text_input, height=150, disabled=True)
                 else:
-                    text = ""
-
+                    st.warning("⚠️ No text could be extracted.")
         else:
             samples = {
-                "Cardiovascular Case": """
-                Patient presents with chest pain and shortness of breath.
-                Currently taking lisinopril 10mg daily for hypertension.
-                Reports dry cough that started 2 weeks after beginning lisinopril.
-                Also experiencing dizziness upon standing.
-                """,
-                "Pain Management Case": """
-                Patient reports severe joint pain and muscle aches.
-                Taking ibuprofen 400mg three times daily for pain relief.
-                Developed stomach pain and heartburn after 1 week of treatment.
-                """,
-                "Mental Health Case": """
-                Patient on sertraline 50mg daily for depression.
-                Reports increased anxiety and insomnia since starting medication.
-                Also experiencing nausea and dizziness in the morning.
-                """
+                "Cardio": "Patient prescribed lisinopril 10mg. Complaint of dry cough after 2 weeks.",
+                "Receipt": "1. Dolo 650  2. Azithral 500  3. Pantocid 40",
+                "Side Effect": "Patient taking ibuprofen 400mg. Reports severe stomach pain and acidity."
             }
+            sel = st.selectbox("Select Sample", list(samples.keys()))
+            text_input = samples[sel]
+            st.info(f"Sample: {text_input}")
 
-            selected = st.selectbox("Choose Sample Case", list(samples.keys()))
-            text = samples[selected]
-            with st.expander("Preview Sample"):
-                st.text_area("Sample Text", text, height=200, disabled=True)
-
-        col1, col2 = st.columns([3, 1])
+        col1, col2 = st.columns([1, 4])
         with col1:
-            analyze_btn = st.button("🔍 Analyze Report", type="primary", width="stretch")
+            if st.button("🧹 Clear", use_container_width=True):
+                st.session_state.findings = []
+                st.rerun()
         with col2:
-            clear_btn = st.button("🧹 Clear", width="stretch")
-
-        if clear_btn:
-            st.session_state.findings = []
-            st.rerun()
+            analyze_btn = st.button("🚀 Analyze Report", type="primary", use_container_width=True)
 
         if analyze_btn:
-            if not text or not text.strip():
-                st.warning("⚠️ Please enter a medical report or upload a file.")
+            if not text_input.strip():
+                st.warning("Please enter some text to analyze.")
             else:
-                with st.spinner("🔬 Analyzing medical text... This may take a few moments."):
-                    findings = extract_drug_symptom_relations(text, use_ai=use_ai_models)
-
+                with st.spinner("🧠 Processing Medical Data..."):
+                    findings = extract_drug_symptom_relations(text_input, use_ai=use_ai_models)
                     findings = [f for f in findings if f['confidence'] >= min_confidence]
-                    findings = findings[:max_results]
-
+                    
                     st.session_state.findings = findings
                     st.session_state.analysis_count += 1
-
+                    
                     if findings:
-                        st.success(f"✅ Found {len(findings)} drug-symptom relationships!")
-
-                        st.markdown("### 📈 Analysis Summary")
-                        col1, col2, col3, col4 = st.columns(4)
-
-                        adverse_count = sum(1 for f in findings if f['relationship'] == 'adverse')
-                        treatment_count = sum(1 for f in findings if f['relationship'] == 'treatment')
-                        avg_conf = sum(f['confidence'] for f in findings) / len(findings) if findings else 0
-                        unique_drugs = len(set(f['drug'].lower() for f in findings))
-
-                        with col1:
-                            render_metric_card("Adverse Reactions", str(adverse_count), "⚠️", "danger")
-                        with col2:
-                            render_metric_card("Treatment Effects", str(treatment_count), "💊", "success")
-                        with col3:
-                            render_metric_card("Avg Confidence", f"{avg_conf:.0%}", "📊", "warning")
-                        with col4:
-                            render_metric_card("Drugs Found", str(unique_drugs), "💉", "primary")
-
+                        st.success(f"Found {len(findings)} insights!")
+                        c1, c2, c3, c4 = st.columns(4)
+                        adv_count = sum(1 for f in findings if f['relationship'] == 'adverse')
+                        treat_count = len(findings) - adv_count
+                        uniq_drugs = len(set(f['drug'] for f in findings))
+                        
+                        with c1: render_metric_card("Adverse Events", str(adv_count), "⚠️", "danger")
+                        with c2: render_metric_card("Treatments", str(treat_count), "💊", "success")
+                        with c3: render_metric_card("Unique Drugs", str(uniq_drugs), "💉", "primary")
+                        
                         if show_details:
-                            st.markdown("### 🔍 Detailed Findings")
-
-                            adverse_findings = [f for f in findings if f['relationship'] == 'adverse']
-                            treatment_findings = [f for f in findings if f['relationship'] == 'treatment']
-
-                            if adverse_findings:
-                                st.markdown("#### ⚠️ Adverse Reactions")
-                                for finding in adverse_findings:
-                                    render_finding_card(finding)
-
-                            if treatment_findings:
-                                st.markdown("#### 💊 Treatment Effects")
-                                for finding in treatment_findings:
-                                    render_finding_card(finding)
-
-                            st.markdown("---")
-                            df_export = pd.DataFrame(findings)
-                            csv = df_export.to_csv(index=False)
-                            st.download_button(
-                                "📥 Download Analysis Report (CSV)",
-                                csv,
-                                "drug_analysis_report.csv",
-                                "text/csv",
-                                width="stretch"
-                            )
+                            st.markdown("#### Detailed Findings")
+                            for f in findings: render_finding_card(f)
+                        
+                        df = pd.DataFrame(findings)
+                        csv = df.to_csv(index=False).encode('utf-8')
+                        st.download_button("📥 Download Report", csv, "report.csv", "text/csv")
                     else:
-                        st.info("ℹ️ No drug-symptom relationships found above the confidence threshold.")
+                        st.info("No medical relationships found in the text.")
 
+    # TAB 2: VISUALIZATIONS
     with tab2:
-        st.markdown("### 📊 Data Visualizations")
-
-        findings = st.session_state.findings
-
-        if findings:
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("#### Relationship Overview")
-                chart = create_relationship_chart(findings)
-                if chart:
-                    st.plotly_chart(chart, width="stretch")
-
-            with col2:
-                st.markdown("#### Confidence Distribution")
-                dist_chart = create_confidence_distribution(findings)
-                if dist_chart:
-                    st.plotly_chart(dist_chart, width="stretch")
-
-            st.markdown("#### Entity Network Graph")
-            network_chart = create_entity_network_graph(findings)
-            if network_chart:
-                st.plotly_chart(network_chart,width="stretch")
-
-            st.markdown("#### Entity Type Distribution")
-            entity_chart = create_entity_type_distribution(findings)
-            if entity_chart:
-                st.plotly_chart(entity_chart, )
-
-            st.markdown("#### 📋 Summary Table")
-            df_table = pd.DataFrame(findings)
-            st.dataframe(
-                df_table[['drug', 'effect', 'relationship', 'confidence', 'evidence']],
-                width="stretch",
-                hide_index=True
-            )
-        else:
-            st.info("📊 Run an analysis first to see visualizations here.")
+        if st.session_state.findings:
+            findings_json = pd.DataFrame(st.session_state.findings).to_json(orient='records')
+            charts = generate_all_charts(findings_json)
             
+            # Row 1: Overview Charts
+            c1, c2 = st.columns(2)
+            with c1: 
+                st.subheader("Relationship Types")
+                if charts['relationship']: 
+                    st.plotly_chart(charts['relationship'], use_container_width=True)
+                else:
+                    st.info("No relationship data available.")
+            with c2: 
+                st.subheader("Confidence Scores")
+                if charts['confidence']: 
+                    st.plotly_chart(charts['confidence'], use_container_width=True)
+            
+            st.divider()
+
+            # Row 2: Network Graph (The "Cool" one that was missing)
+            st.subheader("🔗 Entity Network Graph")
+            if charts['network']:
+                st.plotly_chart(charts['network'], use_container_width=True)
+            else:
+                st.info("Not enough connections to form a network graph.")
+
+            st.divider()
+
+            # Row 3: Frequency Distribution (The other missing one)
+            st.subheader("📊 Top Drugs & Symptoms")
+            if charts['entity_type']:
+                st.plotly_chart(charts['entity_type'], use_container_width=True)
+
+            st.divider()
+                
+            # Row 4: Raw Data
+            st.subheader("📋 Raw Data Table")
+            st.dataframe(pd.DataFrame(st.session_state.findings), use_container_width=True)
+        else:
+            st.info("Run an analysis first to see visualizations.")
 
     with tab3:
-        st.markdown("### 🔍 Drug Database Explorer")
-
-        database = load_drug_symptom_database()
-        search_term = st.text_input("🔍 Search for a drug", placeholder="e.g., lisinopril, ibuprofen")
-
-        if search_term:
-            drug_info = database['drug_info']
-            matching = [drug for drug in drug_info.keys() if search_term.lower() in drug.lower()]
-
-            if matching:
-                selected = st.selectbox("Select Drug", matching)
-                if selected and selected in drug_info:
-                    info = drug_info[selected]
-
-                    st.markdown(f"""
-                    <div class="premium-card">
-                        <h3 style="color: var(--primary); margin-bottom: 1rem;">💊 {selected.title()}</h3>
-                        <p><strong>Drug Class:</strong> {info.get('class', 'Unknown')}</p>
-                        <p><strong>Mechanism:</strong> {info.get('mechanism', 'Unknown')}</p>
-                        <p><strong>Common Use:</strong> {info.get('common_use', 'Unknown').title()}</p>
-                        <p><strong>Known Effects:</strong> {', '.join([e.title() for e in info.get('known_effects', [])])}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+        st.markdown("### 🏥 Drug Knowledge Base")
+        db = load_drug_symptom_database()
+        search = st.text_input("Search Database (Brand or Generic name):")
+        if search:
+            if len(search) < 2: st.caption("Please type at least 2 characters...")
             else:
-                st.warning("No matching drugs found.")
-
-        with st.expander("📋 View All Drugs"):
-            all_drugs = sorted(list(database['drugs']))
-            cols = st.columns(3)
-            for i, drug in enumerate(all_drugs):
-                with cols[i % 3]:
-                    st.write(f"• {drug.title()}")
+                matches = [d for d in db['drug_info'].keys() if search.lower() in d][:100]
+                if matches:
+                    sel_drug = st.selectbox("Select Drug", matches)
+                    if sel_drug:
+                        info = db['drug_info'][sel_drug]
+                        st.markdown(f"""
+                        <div class="premium-card">
+                            <h3 style="color:#2563eb;">💊 {sel_drug.title()}</h3>
+                            <p><strong>Class:</strong> {info.get('class','Unknown')}</p>
+                            <p><strong>Primary Use:</strong> {info.get('common_use','Unknown')}</p>
+                            <p><strong>Substitutes:</strong> {', '.join(info.get('substitutes',[])[:5])}</p>
+                            <hr>
+                            <p style="color:#ef4444;"><strong>Known Side Effects:</strong><br>
+                            {', '.join(info.get('known_effects',[]))}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else: st.warning("No drugs found matching that name.")
 
     with tab4:
-        st.markdown("### 📈 Analytics & Insights")
-
-        database = load_drug_symptom_database()
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Drugs", len(database['drugs']))
-        with col2:
-            st.metric("Total Symptoms", len(database['symptoms']))
-        with col3:
-            st.metric("Relations", len(database['relations']))
-
-        if database['relations']:
-            st.markdown("#### Most Common Drug-Symptom Relations")
-            df_relations = pd.DataFrame(database['relations'])
-            relation_counts = df_relations.groupby(['drug', 'effect']).size().reset_index(name='count')
-            relation_counts = relation_counts.sort_values('count', ascending=False).head(10)
-
-            st.dataframe(relation_counts, width="stretch", hide_index=True)
+        db = load_drug_symptom_database()
+        st.markdown("### 🗄️ Database Statistics")
+        c1, c2, c3 = st.columns(3)
+        with c1: render_metric_card("Total Drugs", f"{len(db['drugs']):,}", "📚")
+        with c2: render_metric_card("Total Symptoms", f"{len(db['symptoms']):,}", "🤒")
+        with c3: render_metric_card("Cached Relations", f"{len(db['relations']):,}", "🔗")
 
 if __name__ == '__main__':
     main()
