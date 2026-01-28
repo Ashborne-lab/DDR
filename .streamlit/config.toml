@@ -4,10 +4,8 @@
 ## errors when Streamlit enumerates modules on startup.
 
 [server]
-# Disable the file watcher entirely. Allowed values: "auto", "watchdog",
-# "poll", or "none". Setting to "none" prevents Streamlit from trying to
-# access package internals while discovering module paths.
 fileWatcherType = "none"
+headless = true
 
-# Avoid automatic reruns on save (optional; helps with long model loads)
-runOnSave = false
+[browser]
+gatherUsageStats = false

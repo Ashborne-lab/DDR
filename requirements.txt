@@ -3,6 +3,7 @@ transformers
 pandas
 scikit-learn
 streamlit
+altair<5
 plotly
 datasets
 evaluate

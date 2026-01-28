@@ -3,31 +3,107 @@ import os
 import re
 import numpy as np
 import pandas as pd
+
+# CRITICAL: Patch torch.classes BEFORE importing streamlit
+# This prevents Streamlit's file watcher from crashing when it tries to access torch.classes.__path__._path
+def _patch_torch_classes_early():
+    """Patch torch.classes early to prevent Streamlit watcher errors."""
+    try:
+        import types
+        import torch
+
+        # Check if patch is needed
+        needs_patch = False
+        try:
+            # Try to access the problematic attribute that Streamlit's watcher uses
+            _ = list(torch.classes.__path__._path)  # type: ignore
+        except (AttributeError, RuntimeError, TypeError):
+            needs_patch = True
+
+        if needs_patch:
+            # Create a safe mock that mimics the expected structure
+            # Streamlit expects: list(torch.classes.__path__._path)
+            dummy_path_list = []
+            
+            # Create a namespace with _path as a list
+            class DummyPath:
+                def __init__(self):
+                    self._path = dummy_path_list
+                
+                def __iter__(self):
+                    return iter(self._path)
+                
+                def __getitem__(self, key):
+                    return self._path[key] if isinstance(key, int) else None
+            
+            dummy_path = DummyPath()
+            
+            # Create safe classes namespace
+            class SafeClasses:
+                def __init__(self):
+                    self.__path__ = dummy_path
+                
+                def __getattr__(self, name):
+                    # Return None for any attribute access to prevent errors
+                    return None
+            
+            torch.classes = SafeClasses()  # type: ignore[assignment]
+
+    except ImportError:
+        # torch not installed, nothing to patch
+        pass
+    except Exception:
+        # Best-effort patch; ignore if torch internals change
+        pass
+
+# Apply patch immediately
+_patch_torch_classes_early()
+
+# Now safe to import streamlit
 import streamlit as st
 from typing import List, Dict, Tuple
 import io
 
-# --- 1. SYSTEM SETUP & PATCHES ---
+# Ensure local imports work when launched from project root
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.append(CURRENT_DIR)
+
+from ddi_checker import DDIManager
+
 os.environ['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
 os.environ['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
 
-def _patch_torch_classes():
+# Additional safety: Suppress torch.classes errors in Streamlit watcher (backup)
+def _suppress_streamlit_torch_errors():
+    """Backup: Suppress torch.classes errors from Streamlit's file watcher."""
     try:
-        import torch
-        class SafeClasses:
-            class PathObj:
-                _path = []
-            __path__ = PathObj()
-            def __getattr__(self, name):
-                return None
-
-        if hasattr(torch, 'classes'):
-            torch.classes = SafeClasses()
+        # This runs after streamlit is imported, so we can patch its watcher
+        import streamlit.watcher.local_sources_watcher as watcher_module
+        
+        # Get the original extract_paths function
+        if hasattr(watcher_module, 'extract_paths'):
+            original_extract_paths = watcher_module.extract_paths
             
-    except ImportError:
+            def safe_extract_paths(module):
+                """Wrapper that catches torch.classes errors."""
+                try:
+                    return original_extract_paths(module)
+                except (RuntimeError, AttributeError) as e:
+                    # If it's the torch.classes error, return empty list silently
+                    error_str = str(e).lower()
+                    if 'torch' in str(module).lower() or 'torch.classes' in error_str or '__path__._path' in error_str:
+                        return []
+                    # Otherwise, re-raise the original error
+                    raise
+            
+            watcher_module.extract_paths = safe_extract_paths
+    except Exception:
+        # If patching fails, continue anyway - not critical
         pass
 
-_patch_torch_classes()
+# Apply backup patch after streamlit is imported
+_suppress_streamlit_torch_errors()
 
 # Try importing plotting functions
 try:
@@ -43,7 +119,7 @@ except ImportError:
     def create_entity_network_graph(f): return None
     def create_entity_type_distribution(f): return None
 
-# --- 2. PAGE CONFIGURATION ---
+
 st.set_page_config(
     page_title="Drug-Disease Analyzer | Premium Medical AI",
     page_icon="💊",
@@ -51,7 +127,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 3. CACHED RESOURCE LOADING ---
+
 
 @st.cache_resource(show_spinner=False, max_entries=1)
 def load_model():
@@ -88,7 +164,15 @@ def load_model():
         return None
 
     return models if models.get('ner') or models.get('classifier') else None
-
+@st.cache_resource(show_spinner=True)
+def load_ddi_manager():
+    """
+    Loads the DDI Manager separately. 
+    This is faster than the model loader and should be cached independently.
+    Note: First load may take 30-60 seconds due to processing large datasets.
+    """
+    with st.spinner("🔄 Loading Drug Interaction Database (this may take 30-60 seconds on first load)..."):
+        return DDIManager()
 @st.cache_resource(ttl=3600, show_spinner=False, max_entries=1)
 def load_drug_symptom_database():
     database = {'drugs': set(), 'symptoms': set(), 'relations': [], 'drug_info': {}, 'search_index': {}}
@@ -113,10 +197,11 @@ def load_drug_symptom_database():
                 # Read without header (standard for these NLP datasets)
                 df = pd.read_csv(filepath, sep='\t', header=None, on_bad_lines='skip', engine='python')
                 
-                # Regex to extract tagged entities
-                # Finds: @TypeSrc$ EntityName @/TypeSrc$
-                source_pattern = re.compile(r'@.*?Src\$\s*(.*?)\s*@/.*?Src\$')
-                target_pattern = re.compile(r'@.*?Tgt\$\s*(.*?)\s*@/.*?Tgt\$')
+                # More specific patterns to distinguish chemical/drug vs disease
+                # @ChemicalSrc$ or @DrugSrc$ = The DRUG (source of effect)
+                # @DiseaseTgt$ = The DISEASE/SYMPTOM (target of effect)
+                chemical_pattern = re.compile(r'@(Chemical|Drug)Src\$\s*(.*?)\s*@/(Chemical|Drug)Src\$', re.IGNORECASE)
+                disease_pattern = re.compile(r'@DiseaseTgt\$\s*(.*?)\s*@/DiseaseTgt\$', re.IGNORECASE)
                 
                 # Use name=None to get simple tuples (faster/safer)
                 for row in df.itertuples(index=False, name=None):
@@ -124,43 +209,48 @@ def load_drug_symptom_database():
                     if len(row) < 8: continue
                     text_content = str(row[7]) 
                     
-                    src_match = source_pattern.search(text_content)
-                    tgt_match = target_pattern.search(text_content)
+                    chem_match = chemical_pattern.search(text_content)
+                    disease_match = disease_pattern.search(text_content)
                     
-                    if src_match and tgt_match:
-                        entity_a = src_match.group(1).lower().strip() # Source (often Symptom/Disease)
-                        entity_b = tgt_match.group(1).lower().strip() # Target (often Drug/Gene)
+                    if chem_match and disease_match:
+                        # ✅ CORRECT: Chemical/Drug = Source (drug), Disease = Target (symptom)
+                        drug_entity = chem_match.group(2).lower().strip()
+                        disease_entity = disease_match.group(1).lower().strip()
                         
-                        # Add to master lists
-                        database['drugs'].add(entity_b)
-                        database['symptoms'].add(entity_a)
-                        
-                        # Build Search Index
-                        first_word = entity_b.split()[0]
-                        if len(first_word) > 3:
-                            if first_word not in database['search_index']:
-                                database['search_index'][first_word] = set()
-                            database['search_index'][first_word].add(entity_b)
+                        # Validate entities before adding
+                        if len(drug_entity) > 2 and len(disease_entity) > 2:
+                            # Extract base drug name (remove common suffixes/prefixes)
+                            base_drug = drug_entity.split()[0] if drug_entity.split() else drug_entity
+                            database['drugs'].add(drug_entity)
+                            database['drugs'].add(base_drug)  # Also add base name for better matching
+                            database['symptoms'].add(disease_entity)
+                            
+                            # Build Search Index for fast lookups
+                            first_word = drug_entity.split()[0]
+                            if len(first_word) > 3:
+                                if first_word not in database['search_index']:
+                                    database['search_index'][first_word] = set()
+                                database['search_index'][first_word].add(drug_entity)
 
-                        # Add Proven Relationship
-                        database['relations'].append({
-                            'drug': entity_b.title(),
-                            'effect': entity_a.title(),
-                            'relationship': 'associated', # Derived from research paper
-                            'confidence': 0.95, # Very high confidence
-                            'evidence': f'Research Paper (from {filename})',
-                            'sentence': text_content[:200] + "..."
-                        })
-                        
-                        # Add Info if missing
-                        if entity_b not in database['drug_info']:
-                            database['drug_info'][entity_b] = {
-                                'class': 'Research Entity',
-                                'common_use': entity_a.title(),
-                                'known_effects': [entity_a],
-                                'substitutes': [],
-                                'mechanism': 'Extracted from biomedical literature'
-                            }
+                            # Add proven relationship
+                            database['relations'].append({
+                                'drug': drug_entity.title(),
+                                'effect': disease_entity.title(),
+                                'relationship': 'associated', # Derived from research paper
+                                'confidence': 0.95, # Very high confidence
+                                'evidence': f'Research Paper (from {filename})',
+                                'sentence': text_content[:200] + "..."
+                            })
+                            
+                            # Add drug info if missing
+                            if drug_entity not in database['drug_info']:
+                                database['drug_info'][drug_entity] = {
+                                    'class': 'Research Entity',
+                                    'common_use': disease_entity.title(),
+                                    'known_effects': [disease_entity],
+                                    'substitutes': [],
+                                    'mechanism': 'Extracted from biomedical literature'
+                                }
 
             # === CASE B: Handle Standard CSV (medicines_global.csv) ===
             elif filename.endswith('.csv'):
@@ -215,6 +305,31 @@ def load_drug_symptom_database():
         except Exception as e:
             print(f"⚠️ Error loading {filename}: {e}")
             continue
+
+    # After all files are processed, validate the database
+    print(f"\n📊 Database Loading Summary:")
+    print(f"   Total drugs: {len(database['drugs'])}")
+    print(f"   Total symptoms: {len(database['symptoms'])}")
+    print(f"   Total relations: {len(database['relations'])}")
+
+    # CRITICAL: Check for common misclassifications
+    suspicious_drugs = [d for d in database['drugs'] if any(word in d for word in [
+        'infection', 'disease', 'disorder', 'syndrome', 'cholesterol', 'diabetes', 
+        'hypertension', 'fever', 'pain', 'headache', 'nausea', 'bacterial infection',
+        'bacterial infections', 'condition', 'inflammation', 'allergy', 'rash', 'diarrhea'
+    ])]
+
+    if suspicious_drugs:
+        print(f"\n⚠️ WARNING: Found {len(suspicious_drugs)} suspicious entries in drugs database:")
+        print(f"   {', '.join(list(suspicious_drugs)[:20])}")
+        print(f"   These may be misclassified symptoms. Removing...")
+        
+        # Clean up misclassifications
+        for susp in suspicious_drugs:
+            database['drugs'].discard(susp)
+            database['symptoms'].add(susp)
+        
+        print(f"   ✅ Cleaned: {len(database['drugs'])} drugs remain")
 
     return database
 # --- 4. OCR FUNCTIONS ---
@@ -337,121 +452,193 @@ def extract_entities_with_biobert(text: str, models: Dict) -> Tuple[List[str], L
         return list(set(drugs)), list(set(symptoms))
     except Exception: return [], []
 
-def extract_drug_symptom_relations(text: str, use_ai: bool = True) -> List[Dict]:
+def extract_drug_symptom_relations(text: str, use_ai: bool = False) -> List[Dict]:
     """
-    Optimized relation extraction with Partial Matching for receipts.
+    Production-ready drug-symptom extraction.
+    STRICT matching to avoid false positives.
     """
-    if not text or not text.strip(): return []
+    if not text or not text.strip():
+        return []
 
     database = load_drug_symptom_database()
-    biobert_models = load_model() if use_ai else None
-
-    found_drugs_map = {}
+    
+    # Build validated drug set (CRITICAL: only drugs, not symptoms)
+    valid_drugs = set()
+    
+    for drug in database['drugs']:
+        drug_lower = drug.lower()
+        # Skip if drug name looks like a symptom
+        if any(word in drug_lower for word in ['infection', 'disease', 'pain', 'fever', 'cholesterol', 'diabetes', 'syndrome', 'disorder']):
+            continue
+        # Only include drugs with 4+ chars to avoid noise
+        if len(drug_lower) >= 4:
+            valid_drugs.add(drug_lower)
+            
+            # Extract base drug name (first word) - this catches generic names
+            first_word = drug_lower.split()[0]
+            if len(first_word) >= 4 and len(first_word) <= 20:
+                # If first word is a standalone drug name (common patterns)
+                if not any(skip in first_word for skip in ['tablet', 'capsule', 'injection', 'spray', 'gel', 'cream', 'mg', 'ml']):
+                    valid_drugs.add(first_word)
+            
+            # Extract from compound names (split on common separators)
+            parts = re.split(r'[/\+\-\(\)]', drug_lower)
+            for part in parts:
+                part = part.strip()
+                # Extract first word from each part
+                if part and ' ' in part:
+                    part_first = part.split()[0]
+                    if len(part_first) >= 4 and len(part_first) <= 20:
+                        if not any(skip in part_first for skip in ['tablet', 'capsule', 'injection', 'mg', 'ml', 'mcg']):
+                            valid_drugs.add(part_first)
+    
+    print(f"📊 Validated drug set: {len(valid_drugs)} drugs")
+    
+    found_drugs = {}
     text_lower = text.lower()
     
-    # Clean tokens (alphanumeric only)
-    tokens = re.findall(r'[a-z0-9]+', text_lower)
+    # STRICT MATCHING: Only exact word boundaries
+    for drug in valid_drugs:
+        # Must match as whole word
+        if re.search(r'\b' + re.escape(drug) + r'\b', text_lower):
+            found_drugs[drug] = "Exact Match"
     
-    # 1. Search Logic (Updated for Partial Matching)
-    for word in tokens:
-        # A. Exact Match
-        if len(word) > 2 and word in database['drugs']:
-            found_drugs_map[word] = "Exact Match"
-        # B. Partial/Index Match (Fix for "Abiros" -> "Abiros CA")
-        elif word in database.get('search_index', {}):
-            candidates = list(database['search_index'][word])
-            if candidates:
-                best_match = min(candidates, key=len)
-                found_drugs_map[best_match] = "Partial Match"
-
-    # 2. Multi-word Check
-    if len(tokens) > 1:
-        for n in range(2, 4):
-            for i in range(len(tokens) - n + 1):
-                gram = " ".join(tokens[i:i+n])
-                if gram in database['drugs']:
-                    found_drugs_map[gram] = "Exact Match"
-
-    # AI Fallback
-    if biobert_models and biobert_models.get('ner') and len(found_drugs_map) < 50:
-        try:
-            ai_drugs, _ = extract_entities_with_biobert(text, biobert_models)
-            for d in ai_drugs:
-                if d not in found_drugs_map: found_drugs_map[d] = "BioBERT AI"
-        except: pass
-
+    print(f"🔍 Found {len(found_drugs)} drugs in text")
+    
+    if not found_drugs:
+        return []
+    
     relations = []
     
-    # Strategy A: Sentences
-    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if s.strip()]
-    adverse_pattern = re.compile(r'(?:caused|side effect|worsened|aggravated|due to)', re.IGNORECASE)
-    treatment_pattern = re.compile(r'(?:treated|taking|prescribed|helps|manages|for)', re.IGNORECASE)
+    # Extract sentences
+    sentences = [s.strip() for s in re.split(r'[.!?\n]+', text) if len(s.strip()) > 15]
+    
+    # Strict pattern matching
+    treatment_pattern = re.compile(r'\b(treat|treating|treated|prescribed|taking|for|used for|indicated for|manages|helps|relieves)\b', re.IGNORECASE)
+    adverse_pattern = re.compile(r'\b(caused|causing|side effect|adverse|reaction|developed|worsened|aggravated)\b', re.IGNORECASE)
     
     for sentence in sentences:
         sent_lower = sentence.lower()
-        # Loose matching for sentence context
-        local_drugs = [d for d in found_drugs_map if d.split()[0] in sent_lower][:5]
         
-        sent_tokens = set(re.findall(r'[a-z]+', sent_lower))
-        local_symptoms = list(sent_tokens & database['symptoms'])[:5]
+        # Find drugs in this sentence (whole word match)
+        local_drugs = [d for d in found_drugs if re.search(r'\b' + re.escape(d) + r'\b', sent_lower)]
         
-        is_adverse = bool(adverse_pattern.search(sent_lower))
+        if not local_drugs:
+            continue
+        
+        # Find symptoms (whole word match, must be in symptoms database)
+        local_symptoms = []
+        for symptom in database['symptoms']:
+            if len(symptom) < 4:  # Skip short symptoms
+                continue
+            symptom_lower = symptom.lower()
+            
+            # Try direct match
+            if re.search(r'\b' + re.escape(symptom_lower) + r'\b', sent_lower):
+                # Double check it's not actually a drug
+                if symptom_lower not in valid_drugs:
+                    local_symptoms.append(symptom)
+            
+            # Also try matching individual words from compound symptoms (e.g., "tachycardia/bradycardia")
+            elif '/' in symptom_lower or '-' in symptom_lower:
+                # Split on / or - and match each part
+                parts = re.split(r'[/\-]', symptom_lower)
+                for part in parts:
+                    part = part.strip()
+                    if len(part) >= 4 and re.search(r'\b' + re.escape(part) + r'\b', sent_lower):
+                        if part not in valid_drugs:
+                            # Add the full symptom name if any part matches
+                            if symptom not in local_symptoms:
+                                local_symptoms.append(symptom)
+                            break
+        
+        if not local_symptoms:
+            continue
+        
+        # Determine relationship
         is_treatment = bool(treatment_pattern.search(sent_lower))
+        is_adverse = bool(adverse_pattern.search(sent_lower))
         
-        for drug in local_drugs:
-            for symptom in local_symptoms:
-                rel_type = None
-                conf = 0.5
-                evidence = []
-
-                db_match = next((r for r in database['relations'] if r['drug'] == drug and r['effect'] == symptom), None)
+        for drug in local_drugs[:3]:  # Max 3 drugs per sentence
+            for symptom in local_symptoms[:3]:  # Max 3 symptoms per sentence
+                
+                # Check database first
+                db_match = next((r for r in database['relations'] 
+                               if r['drug'].lower() == drug.lower() 
+                               and r['effect'].lower() == symptom.lower()), None)
+                
                 if db_match:
-                    rel_type = db_match['relationship']
-                    conf = 0.9
-                    evidence.append("Validated by Medical Database")
-                elif is_adverse:
-                    rel_type = 'adverse'
-                    conf = 0.7
-                    evidence.append("Context implies side effect")
+                    relations.append({
+                        'drug': drug.title(),
+                        'effect': symptom.title(),
+                        'relationship': db_match['relationship'],
+                        'confidence': 0.95,
+                        'evidence': 'Validated by Database',
+                        'sentence': sentence[:200]
+                    })
                 elif is_treatment:
-                    rel_type = 'treatment'
-                    conf = 0.7
-                    evidence.append("Context implies treatment")
-                
-                if rel_type:
                     relations.append({
-                        'drug': drug.title(), 'effect': symptom.title(),
-                        'relationship': rel_type, 'confidence': conf,
-                        'evidence': ' • '.join(evidence), 'sentence': sentence
+                        'drug': drug.title(),
+                        'effect': symptom.title(),
+                        'relationship': 'treatment',
+                        'confidence': 0.80,
+                        'evidence': 'Treatment context detected',
+                        'sentence': sentence[:200]
                     })
-
-    # Strategy B: Receipt Fallback
-    if len(relations) == 0 and len(found_drugs_map) > 0:
-        for drug in list(found_drugs_map.keys())[:20]:
+                elif is_adverse:
+                    relations.append({
+                        'drug': drug.title(),
+                        'effect': symptom.title(),
+                        'relationship': 'adverse',
+                        'confidence': 0.75,
+                        'evidence': 'Adverse effect context detected',
+                        'sentence': sentence[:200]
+                    })
+    
+    # Receipt fallback: Only if NO relations found from text analysis
+    if not relations and found_drugs:
+        for drug in list(found_drugs.keys())[:10]:
             info = database['drug_info'].get(drug)
-            if info:
-                if info.get('common_use') and info['common_use'] != 'Unknown':
+            if info and info.get('common_use') and info['common_use'] != 'Unknown':
+                # Only add if common_use is actually in symptoms database
+                if info['common_use'].lower() in database['symptoms']:
                     relations.append({
-                        'drug': drug.title(), 'effect': str(info['common_use']).title(),
-                        'relationship': 'treatment', 'confidence': 0.85,
-                        'evidence': 'Database Knowledge', 'sentence': f"Detected Item: {drug}"
+                        'drug': drug.title(),
+                        'effect': info['common_use'].title(),
+                        'relationship': 'treatment',
+                        'confidence': 0.85,
+                        'evidence': 'Database: Known use',
+                        'sentence': f"Medicine: {drug}"
                     })
-                
-                if info.get('known_effects'):
-                    top_effect = info['known_effects'][0]
-                    relations.append({
-                        'drug': drug.title(), 'effect': str(top_effect).title(),
-                        'relationship': 'adverse', 'confidence': 0.6,
-                        'evidence': 'Potential Side Effect Warning', 'sentence': f"Warning: {drug} may cause {top_effect}"
-                    })
-
-    unique_relations = {}
-    for rel in relations:
+    
+        # CRITICAL: Final validation - remove any where drug is actually a symptom
+        validated = []
+        for rel in relations:
+            drug_lower = rel['drug'].lower()
+            effect_lower = rel['effect'].lower()
+            
+            # Skip if drug is in symptoms database (false positive)
+            if drug_lower in database['symptoms']:
+                continue
+            
+            # Skip if effect is in drugs database (reversed)
+            if effect_lower in valid_drugs:
+                continue
+            
+            # Lower confidence threshold for evaluation (was 0.70, now 0.50)
+            if rel['confidence'] < 0.50:
+                continue
+            
+            validated.append(rel)
+    
+    # Deduplicate
+    unique = {}
+    for rel in validated:
         key = (rel['drug'].lower(), rel['effect'].lower(), rel['relationship'])
-        if key not in unique_relations or rel['confidence'] > unique_relations[key]['confidence']:
-            unique_relations[key] = rel
-
-    return sorted(unique_relations.values(), key=lambda x: x['confidence'], reverse=True)
+        if key not in unique or rel['confidence'] > unique[key]['confidence']:
+            unique[key] = rel
+    
+    return sorted(unique.values(), key=lambda x: x['confidence'], reverse=True)
 
 # --- 6. UI & STYLING ---
 
@@ -530,7 +717,7 @@ def render_finding_card(finding: Dict):
 
 @st.cache_data(show_spinner=False)
 def generate_all_charts(findings_json):
-    findings = pd.read_json(findings_json, orient='records').to_dict('records')
+    findings = pd.read_json(io.StringIO(findings_json), orient='records').to_dict('records')
     return {
         'relationship': create_relationship_chart(findings),
         'confidence': create_confidence_distribution(findings),
@@ -542,7 +729,7 @@ def generate_all_charts(findings_json):
 
 def main():
     load_premium_css()
-    
+    ddi_manager = load_ddi_manager()
     if 'analysis_count' not in st.session_state: st.session_state.analysis_count = 0
     if 'findings' not in st.session_state: st.session_state.findings = []
 
@@ -609,35 +796,188 @@ def main():
 
         if analyze_btn:
             if not text_input.strip():
-                st.warning("Please enter some text to analyze.")
+                st.warning("⚠️ Please enter some text to analyze.")
             else:
                 with st.spinner("🧠 Processing Medical Data..."):
+                    # ====================================
+                    # STEP 1: EXTRACT DRUG-SYMPTOM RELATIONS
+                    # ====================================
                     findings = extract_drug_symptom_relations(text_input, use_ai=use_ai_models)
                     findings = [f for f in findings if f['confidence'] >= min_confidence]
                     
                     st.session_state.findings = findings
                     st.session_state.analysis_count += 1
                     
+                    # ====================================
+                    # STEP 2: DRUG-DRUG INTERACTION CHECK
+                    # ====================================
+                    
                     if findings:
-                        st.success(f"Found {len(findings)} insights!")
+                        # Extract drugs only (not symptoms)
+                        raw_drugs = set()
+                        for f in findings:
+                            if 'drug' in f:
+                                raw_drugs.add(f['drug'])
+                        
+                        if raw_drugs:
+                            # Clean drug names
+                            cleaned_drugs = []
+                            for drug in raw_drugs:
+                                clean = re.sub(r'\b(tablet|capsule|syrup|injection|drops|gel|ointment|cream|powder)\b', 
+                                             '', drug, flags=re.IGNORECASE)
+                                clean = re.sub(r'\d+\.?\d*\s*(mg|ml|g|mcg|iu)', '', clean, flags=re.IGNORECASE)
+                                clean = re.sub(r'[^\w\s]', '', clean).strip()
+                                
+                                if len(clean) > 2:
+                                    cleaned_drugs.append(clean)
+                            
+                            # Validate against database
+                            validated_drugs = ddi_manager.filter_valid_drugs(cleaned_drugs)
+                            
+                            # Debug output
+                            print(f"\n{'='*60}")
+                            print(f"🔍 DDI CHECK DEBUG:")
+                            print(f"   Raw drugs: {list(raw_drugs)}")
+                            print(f"   Cleaned: {cleaned_drugs}")
+                            print(f"   Validated: {validated_drugs}")
+                            print(f"{'='*60}\n")
+                            
+                            # Check interactions if 2+ drugs
+                            if len(validated_drugs) >= 2:
+                                interaction_alerts = ddi_manager.check_interactions(validated_drugs)
+                                
+                                # ====================================
+                                # DISPLAY DDI WARNINGS
+                                # ====================================
+                                
+                                if interaction_alerts:
+                                    st.error(f"🚨 **CRITICAL SAFETY ALERT:** {len(interaction_alerts)} Drug Interaction(s) Detected!")
+                                    
+                                    st.markdown("---")
+                                    st.markdown("### ⚠️ Drug Interaction Warnings")
+                                    
+                                    for alert in interaction_alerts:
+                                        # Severity styling
+                                        severity_config = {
+                                            'SEVERE': ('🔴', 'red', True),
+                                            'MODERATE': ('🟠', 'orange', True),
+                                            'CAUTION': ('🟡', 'yellow', False),
+                                            'MILD': ('🔵', 'blue', False)
+                                        }
+                                        icon, color, expand = severity_config.get(alert['severity'], ('⚪', 'gray', False))
+                                        
+                                        # Build header
+                                        if alert.get('is_internal'):
+                                            header = f"{icon} **{alert['severity']}**: {alert['pair']} *(Internal Conflict)*"
+                                        else:
+                                            header = f"{icon} **{alert['severity']}**: {alert['pair']}"
+                                        
+                                        with st.expander(header, expanded=expand):
+                                            col1, col2 = st.columns([3, 1])
+                                            
+                                            with col1:
+                                                st.markdown(f"**🔬 Active Components:**")
+                                                st.code(alert.get('components', 'Unknown'), language='text')
+                                                
+                                                if alert.get('is_internal'):
+                                                    st.warning(f"⚠️ {alert.get('note', 'Internal interaction detected')}")
+                                                
+                                                st.markdown("**⚕️ Clinical Description:**")
+                                                st.info(alert['message'])
+                                            
+                                            with col2:
+                                                st.metric("Severity", alert['severity'])
+                                            
+                                            # Action recommendations
+                                            st.markdown("**📋 Recommended Action:**")
+                                            if alert['severity'] == 'SEVERE':
+                                                st.error(
+                                                    "🚨 **URGENT:**\n\n"
+                                                    "• Do NOT take these drugs together\n"
+                                                    "• Contact your doctor immediately\n"
+                                                    "• This combination can cause serious harm"
+                                                )
+                                            elif alert['severity'] == 'MODERATE':
+                                                st.warning(
+                                                    "⚠️ **CAUTION:**\n\n"
+                                                    "• Consult your doctor before combining\n"
+                                                    "• Dosage adjustment may be needed\n"
+                                                    "• Close monitoring required"
+                                                )
+                                            else:
+                                                st.info(
+                                                    "ℹ️ **MONITOR:**\n\n"
+                                                    "• Generally safe to combine\n"
+                                                    "• Watch for unusual symptoms\n"
+                                                    "• Inform your doctor at next visit"
+                                                )
+                                    
+                                    st.markdown("---")
+                                
+                                else:
+                                    st.success(f"✅ **No Known Interactions:** Analyzed {len(validated_drugs)} drugs - no dangerous combinations found.")
+                            
+                            elif len(validated_drugs) == 1:
+                                st.info(f"ℹ️ Single drug detected: **{validated_drugs[0].title()}**\n\nNeed 2+ drugs to check for interactions.")
+                            
+                            else:
+                                st.warning("⚠️ No valid drugs identified for interaction checking.")
+                    
+                    # ====================================
+                    # STEP 3: DISPLAY ANALYSIS RESULTS
+                    # ====================================
+                    
+                    if findings:
+                        st.success(f"✅ Analysis Complete! Found {len(findings)} drug-symptom relationships.")
+                        
+                        # Summary metrics
+                        st.markdown("### 📊 Analysis Summary")
                         c1, c2, c3, c4 = st.columns(4)
+                        
                         adv_count = sum(1 for f in findings if f['relationship'] == 'adverse')
                         treat_count = len(findings) - adv_count
                         uniq_drugs = len(set(f['drug'] for f in findings))
+                        avg_conf = sum(f['confidence'] for f in findings) / len(findings) if findings else 0
                         
                         with c1: render_metric_card("Adverse Events", str(adv_count), "⚠️", "danger")
                         with c2: render_metric_card("Treatments", str(treat_count), "💊", "success")
                         with c3: render_metric_card("Unique Drugs", str(uniq_drugs), "💉", "primary")
+                        with c4: render_metric_card("Avg Confidence", f"{int(avg_conf*100)}%", "📊", "warning")
                         
+                        # Detailed findings
                         if show_details:
-                            st.markdown("#### Detailed Findings")
-                            for f in findings: render_finding_card(f)
+                            st.markdown("### 🔍 Detailed Analysis")
+                            
+                            adverse = [f for f in findings if f['relationship'] == 'adverse']
+                            treatment = [f for f in findings if f['relationship'] == 'treatment']
+                            
+                            if adverse:
+                                st.markdown("#### ⚠️ Adverse Effects")
+                                for f in adverse:
+                                    render_finding_card(f)
+                            
+                            if treatment:
+                                st.markdown("#### 💊 Treatment Effects")
+                                for f in treatment:
+                                    render_finding_card(f)
                         
+                        # Download option
+                        st.markdown("---")
                         df = pd.DataFrame(findings)
                         csv = df.to_csv(index=False).encode('utf-8')
-                        st.download_button("📥 Download Report", csv, "report.csv", "text/csv")
+                        st.download_button(
+                            "📥 Download Full Report (CSV)",
+                            csv,
+                            "medical_analysis_report.csv",
+                            "text/csv",
+                            use_container_width=True
+                        )
+                    
                     else:
-                        st.info("No medical relationships found in the text.")
+                        st.info("ℹ️ No drug-symptom relationships detected in the text. Try:\n"
+                               "- Including drug names (generic or brand)\n"
+                               "- Mentioning symptoms or conditions\n"
+                               "- Using keywords like 'taking', 'prescribed', 'for'")
 
     # TAB 2: VISUALIZATIONS
     with tab2:
